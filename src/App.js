@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+// ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://dnlvzwrujosuckdzmffx.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubHZ6d3J1am9zdWNrZHptZmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NTg0MzAsImV4cCI6MjA5MDIzNDQzMH0.Bhw_ws8XNzWxJXBn1TzLjNppBD9CRWDTuEb_t92G9ZE";
+
 
 // ─── DATOS REALES DEL BOLSO NARANJA ─────────────────────────────────────────
 const MEDICAMENTOS_INYECTABLES = [
@@ -513,7 +518,7 @@ function VistaBolsoNaranja() {
       <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.orange}12, ${C.surface})`, borderColor: C.orange + "40", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso de Medicamentos</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso Naranja</div>
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Medicamentos independientes del carro · 3 cajas internas</div>
           </div>
           <div style={{ display: "flex", gap: 20 }}>
@@ -962,11 +967,67 @@ function VistaAtenciones({ atenciones, setAtenciones, carros }) {
   );
 }
 
+// ─── LOGIN ───────────────────────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) { setError("Ingresa tu email y contraseña"); return; }
+    setLoading(true); setError("");
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError("Email o contraseña incorrectos"); setLoading(false); return; }
+      onLogin({ token: data.access_token, email: data.user?.email, nombre: data.user?.user_metadata?.nombre || data.user?.email });
+    } catch (e) { setError("Error de conexión"); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      <div style={{ width: 420, padding: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20 }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ fontSize: 38, fontWeight: 900, color: C.accent, letterSpacing: 1 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
+          <div style={{ fontSize: 13, color: C.textMuted, marginTop: 6 }}>Sistema Clínico Integral</div>
+          <div style={{ fontSize: 11, color: C.textFaint, marginTop: 3 }}>Powered by SGTRUMAO</div>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Email</label>
+          <input style={S.input} type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Contraseña</label>
+          <input style={S.input} type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
+        </div>
+        {error && <div style={{ background: C.redDim, border: `1px solid ${C.red}30`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.red, marginBottom: 16 }}>{error}</div>}
+        <button style={{ ...S.btn("primary"), width: "100%", padding: "12px", fontSize: 15, opacity: loading ? 0.7 : 1 }} onClick={handleLogin} disabled={loading}>
+          {loading ? "Ingresando..." : "Ingresar"}
+        </button>
+        <div style={{ marginTop: 20, padding: "12px 14px", background: C.surface2, borderRadius: 8, fontSize: 12, color: C.textMuted }}>
+          <strong>💡 Primera vez:</strong> Los usuarios son creados por el administrador en Supabase → Authentication → Users
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [atenciones, setAtenciones] = useState(ATENCIONES_INICIALES);
+  const [usuario, setUsuario] = useState(null);
+  const handleLogin = (user) => setUsuario(user);
+  const handleLogout = () => setUsuario(null);
+  if (!usuario) return <Login onLogin={handleLogin} />;
 
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const alertCarros = carros.flatMap(c => c.insumos).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
@@ -977,7 +1038,7 @@ export default function App() {
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
     { section: "Inventario" },
     { id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros },
-    { id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso },
+    { id: "bolso", label: "Bolso Naranja 🟠", icon: "bolso", badge: alertBolso },
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
     { id: "eventos", label: "Eventos", icon: "event" },
@@ -1008,7 +1069,8 @@ export default function App() {
         <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
           <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
-          <div style={{ fontSize: 10, color: C.textFaint, marginTop: 4 }}>v2.0 · 2026</div>
+          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>{usuario?.email}</div>
+          <button style={{ ...S.btn("ghost"), width: "100%", fontSize: 12, padding: "7px" }} onClick={handleLogout}>Cerrar sesión</button>
         </div>
       </div>
 
@@ -1026,7 +1088,7 @@ export default function App() {
         {tab === "bolso" && (
           <div>
             <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Bolso de Medicamentos 💊</div>
+              <div style={S.title}>Bolso Naranja 🟠</div>
               <div style={S.subtitle}>Medicamentos separados del carro · 3 cajas internas</div>
             </div>
             <VistaBolsoNaranja />
@@ -1083,7 +1145,7 @@ export default function App() {
                 ))}
               </div>
               <div style={S.card}>
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso de Medicamentos</div>
+                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso Naranja</div>
                 {[
                   { label: "💉 Inyectables", count: MEDICAMENTOS_INYECTABLES.length, color: C.blue },
                   { label: "💊 Orales", count: MEDICAMENTOS_ORALES.length, color: C.green },
