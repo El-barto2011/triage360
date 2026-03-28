@@ -1,5 +1,17 @@
 import { useState, useEffect } from "react";
 
+
+// ─── RESPONSIVE HOOK ─────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return isMobile;
+}
+
 // ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://dnlvzwrujosuckdzmffx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubHZ6d3J1am9zdWNrZHptZmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NTg0MzAsImV4cCI6MjA5MDIzNDQzMH0.Bhw_ws8XNzWxJXBn1TzLjNppBD9CRWDTuEb_t92G9ZE";
@@ -251,6 +263,34 @@ const StockBadge = ({ ins }) => {
 
 // ─── TABLA INSUMOS ───────────────────────────────────────────────────────────
 function TablaInsumos({ items, onEdit, onDelete }) {
+  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <div>
+        {items.length === 0 ? (
+          <div style={{ textAlign: "center", color: C.textMuted, padding: 32 }}>Sin insumos registrados</div>
+        ) : items.map(ins => (
+          <div key={ins.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{ins.nombre} {ins.dosis && <span style={{ color: C.textMuted, fontWeight: 400, fontSize: 13 }}>{ins.dosis}</span>}</div>
+                <div style={{ fontSize: 12, color: C.textFaint, marginTop: 2 }}>{ins.cajon}</div>
+                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: ins.stock < ins.minimo ? C.yellow : C.text }}>{ins.stock}/{ins.minimo} {ins.unidad}</span>
+                  <VencBadge v={ins.vencimiento} />
+                  <StockBadge ins={ins} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginLeft: 8 }}>
+                <button style={{ ...S.btn("ghost"), padding: "8px 10px" }} onClick={() => onEdit(ins)}><Icon name="edit" size={15} color={C.textMuted} /></button>
+                <button style={{ ...S.btn("ghost"), padding: "8px 10px" }} onClick={() => onDelete(ins.id)}><Icon name="trash" size={15} color={C.red} /></button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <table style={S.table}>
       <thead>
@@ -1057,6 +1097,7 @@ export default function App() {
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [atenciones, setAtenciones] = useState(ATENCIONES_INICIALES);
   const [usuario, setUsuario] = useState(null);
+  const isMobile = useIsMobile();
   const handleLogin = (user) => setUsuario(user);
   const handleLogout = () => setUsuario(null);
   if (!usuario) return <Login onLogin={handleLogin} />;
@@ -1065,12 +1106,21 @@ export default function App() {
   const alertCarros = carros.flatMap(c => c.insumos).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
+  const navItems = [
+    { id: "dashboard", label: "Inicio", icon: "dashboard" },
+    { id: "carros", label: "Carros", icon: "carro", badge: alertCarros },
+    { id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso },
+    { id: "atenciones", label: "Atenciones", icon: "event" },
+    { id: "eventos", label: "Eventos", icon: "event" },
+    { id: "reportes", label: "Reportes", icon: "report" },
+  ];
+
   const nav = [
     { section: "General" },
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
     { section: "Inventario" },
     { id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros },
-    { id: "bolso", label: "Bolso Naranja 🟠", icon: "bolso", badge: alertBolso },
+    { id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso },
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
     { id: "eventos", label: "Eventos", icon: "event" },
@@ -1078,35 +1128,47 @@ export default function App() {
   ];
 
   return (
-    <div style={S.app}>
+    <div style={{ ...S.app, flexDirection: isMobile ? "column" : "row" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-      <div style={S.sidebar}>
-        <div style={S.logo}>
-          <div style={{ fontSize: 20, fontWeight: 900, color: C.accent, letterSpacing: 1, lineHeight: 1 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
-          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Sistema Clínico Integral</div>
+      
+      {/* SIDEBAR - solo desktop */}
+      {!isMobile && (
+        <div style={S.sidebar}>
+          <div style={S.logo}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.accent, letterSpacing: 1, lineHeight: 1 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Sistema Clínico Integral</div>
+          </div>
+          <nav style={S.nav}>
+            {nav.map((item, i) =>
+              item.section ? (
+                <div key={i} style={S.navSection}>{item.section}</div>
+              ) : (
+                <div key={item.id} style={S.navItem(tab === item.id)} onClick={() => setTab(item.id)}>
+                  <Icon name={item.icon} size={15} color={tab === item.id ? C.accent : C.textMuted} />
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {item.badge > 0 && <span style={{ background: C.red, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 8, padding: "1px 5px" }}>{item.badge}</span>}
+                </div>
+              )
+            )}
+          </nav>
+          <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>{usuario?.email}</div>
+            <button style={{ ...S.btn("ghost"), width: "100%", fontSize: 12, padding: "7px" }} onClick={handleLogout}>Cerrar sesión</button>
+          </div>
         </div>
-        <nav style={S.nav}>
-          {nav.map((item, i) =>
-            item.section ? (
-              <div key={i} style={S.navSection}>{item.section}</div>
-            ) : (
-              <div key={item.id} style={S.navItem(tab === item.id)} onClick={() => setTab(item.id)}>
-                <Icon name={item.icon} size={15} color={tab === item.id ? C.accent : C.textMuted} />
-                <span style={{ flex: 1 }}>{item.label}</span>
-                {item.badge > 0 && <span style={{ background: C.red, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 8, padding: "1px 5px" }}>{item.badge}</span>}
-              </div>
-            )
-          )}
-        </nav>
-        <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
-          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>{usuario?.email}</div>
-          <button style={{ ...S.btn("ghost"), width: "100%", fontSize: 12, padding: "7px" }} onClick={handleLogout}>Cerrar sesión</button>
-        </div>
-      </div>
+      )}
 
-      <main style={S.main}>
+      {/* HEADER MÓVIL */}
+      {isMobile && (
+        <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: C.accent }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
+          <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "6px 12px" }} onClick={handleLogout}>Salir</button>
+        </div>
+      )}
+
+      <main style={{ ...S.main, padding: isMobile ? "16px 16px 80px" : 28 }}>
         {tab === "dashboard" && <Dashboard carros={carros} />}
         {tab === "carros" && (
           <div>
@@ -1193,6 +1255,19 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* BOTTOM NAV - solo móvil */}
+      {isMobile && (
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 200, paddingBottom: "env(safe-area-inset-bottom)" }}>
+          {navItems.map(item => (
+            <div key={item.id} onClick={() => setTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 4px 8px", cursor: "pointer", position: "relative", color: tab === item.id ? C.accent : C.textFaint }}>
+              {item.badge > 0 && <span style={{ position: "absolute", top: 6, right: "18%", background: C.red, color: "#fff", fontSize: 8, fontWeight: 700, borderRadius: 6, padding: "0 3px", minWidth: 14, textAlign: "center" }}>{item.badge}</span>}
+              <Icon name={item.icon} size={22} color={tab === item.id ? C.accent : C.textFaint} />
+              <span style={{ fontSize: 9, fontWeight: tab === item.id ? 700 : 400, marginTop: 3, textAlign: "center", lineHeight: 1.2 }}>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
