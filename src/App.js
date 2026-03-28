@@ -568,7 +568,7 @@ function VistaBolsoNaranja() {
       <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.orange}12, ${C.surface})`, borderColor: C.orange + "40", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso de Medicamentos</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso Naranja</div>
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Medicamentos independientes del carro · 3 cajas internas</div>
           </div>
           <div style={{ display: "flex", gap: 20 }}>
@@ -620,7 +620,7 @@ function VistaBolsoNaranja() {
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
-function Dashboard({ carros }) {
+function Dashboard({ carros, usuario, esAdmin }) {
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const todo = [...todosInsumos, ...todosMeds];
@@ -630,9 +630,22 @@ function Dashboard({ carros }) {
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
-        <div style={S.title}>Dashboard Operacional</div>
-        <div style={S.subtitle}>SGTRUMAO · {new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div>
+        <div style={S.title}>
+          {esAdmin ? "Dashboard Operacional" : `Bienvenido/a, ${usuario?.nombre?.split(" ")[0]}`}
+        </div>
+        <div style={S.subtitle}>
+          {esAdmin
+            ? `SGTRUMAO · ${new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`
+            : usuario?.evento_asignado
+              ? `📍 Evento asignado: ${usuario.evento_asignado}`
+              : "Sin evento asignado hoy"}
+        </div>
       </div>
+      {!esAdmin && (
+        <div style={{ background: C.blueDim, border: `1px solid ${C.blue}30`, borderRadius: 10, padding: "14px 18px", marginBottom: 24, fontSize: 14, color: C.blue }}>
+          👤 Estás ingresado como <strong>{usuario?.profesion}</strong> — solo puedes ver y registrar atenciones de tu evento asignado.
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))", gap: 14, marginBottom: 24 }}>
         {[
@@ -1057,7 +1070,22 @@ function Login({ onLogin }) {
       });
       const data = await res.json();
       if (!res.ok) { setError("Email o contraseña incorrectos"); setLoading(false); return; }
-      onLogin({ token: data.access_token, email: data.user?.email, nombre: data.user?.user_metadata?.nombre || data.user?.email });
+      const token = data.access_token;
+      const userId = data.user?.id;
+      // Obtener perfil con rol
+      const perfilRes = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${userId}`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
+      });
+      const perfiles = await perfilRes.json();
+      const perfil = perfiles?.[0] || {};
+      onLogin({
+        token,
+        email: data.user?.email,
+        nombre: perfil.nombre || data.user?.email,
+        rol: perfil.rol || 'profesional',
+        evento_asignado: perfil.evento_asignado || null,
+        profesion: perfil.profesion || '',
+      });
     } catch (e) { setError("Error de conexión"); }
     setLoading(false);
   };
@@ -1102,29 +1130,31 @@ export default function App() {
   const handleLogout = () => setUsuario(null);
   if (!usuario) return <Login onLogin={handleLogin} />;
 
+  const esAdmin = usuario?.rol === 'admin';
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const alertCarros = carros.flatMap(c => c.insumos).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
+  // Nav items según rol
   const navItems = [
     { id: "dashboard", label: "Inicio", icon: "dashboard" },
-    { id: "carros", label: "Carros", icon: "carro", badge: alertCarros },
-    { id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso },
+    ...(esAdmin ? [{ id: "carros", label: "Carros", icon: "carro", badge: alertCarros }] : []),
+    ...(esAdmin ? [{ id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso }] : []),
     { id: "atenciones", label: "Atenciones", icon: "event" },
-    { id: "eventos", label: "Eventos", icon: "event" },
-    { id: "reportes", label: "Reportes", icon: "report" },
+    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
+    ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
   ];
 
   const nav = [
     { section: "General" },
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
-    { section: "Inventario" },
-    { id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros },
-    { id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso },
+    ...(esAdmin ? [{ section: "Inventario" }] : []),
+    ...(esAdmin ? [{ id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros }] : []),
+    ...(esAdmin ? [{ id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso }] : []),
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
-    { id: "eventos", label: "Eventos", icon: "event" },
-    { id: "reportes", label: "Reportes", icon: "report" },
+    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
+    ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
   ];
 
   return (
@@ -1169,7 +1199,7 @@ export default function App() {
       )}
 
       <main style={{ ...S.main, padding: isMobile ? "16px 16px 80px" : 28 }}>
-        {tab === "dashboard" && <Dashboard carros={carros} />}
+        {tab === "dashboard" && <Dashboard carros={carros} usuario={usuario} esAdmin={esAdmin} />}
         {tab === "carros" && (
           <div>
             <div style={{ marginBottom: 24 }}>
@@ -1182,7 +1212,7 @@ export default function App() {
         {tab === "bolso" && (
           <div>
             <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Bolso de Medicamentos 💊</div>
+              <div style={S.title}>Bolso Naranja 🟠</div>
               <div style={S.subtitle}>Medicamentos separados del carro · 3 cajas internas</div>
             </div>
             <VistaBolsoNaranja />
@@ -1239,7 +1269,7 @@ export default function App() {
                 ))}
               </div>
               <div style={S.card}>
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso de Medicamentos</div>
+                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso Naranja</div>
                 {[
                   { label: "💉 Inyectables", count: MEDICAMENTOS_INYECTABLES.length, color: C.blue },
                   { label: "💊 Orales", count: MEDICAMENTOS_ORALES.length, color: C.green },
