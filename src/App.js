@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 
 // ─── DATOS REALES DEL BOLSO NARANJA ─────────────────────────────────────────
 const MEDICAMENTOS_INYECTABLES = [
@@ -36,55 +36,123 @@ const MEDICAMENTOS_AEROSOLES = [
   { id: 303, nombre: "Bromuro", dosis: "Puff", tipo: "aerosol", caja: "Caja 3 · Aerosoles", stock: 1, minimo: 1, unidad: "inhalador", vencimiento: "2026-11-01" },
 ];
 
+// Inventario base igual para todos los carros
+const INSUMOS_BASE = [
+  // CAJÓN 1
+  { nombre: "Mariposas N°21", cajon: "Cajón 1", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Mariposas N°23", cajon: "Cajón 1", stock: 2, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Termómetro", cajon: "Cajón 1", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Tapones nasales", cajon: "Cajón 1", stock: 2, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Pack alcohol", cajon: "Cajón 1", stock: 1, minimo: 1, unidad: "pack", vencimiento: "2027-01-01" },
+  { nombre: "Parche curita", cajon: "Cajón 1", stock: 1, minimo: 1, unidad: "caja", vencimiento: "2027-01-01" },
+  { nombre: "Llaves 3 pasos con alargador", cajon: "Cajón 1", stock: 3, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Llaves 3 pasos", cajon: "Cajón 1", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tapón antireflujo", cajon: "Cajón 1", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tapas rojas", cajon: "Cajón 1", stock: 10, minimo: 5, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Agujas N°18", cajon: "Cajón 1", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Jeringas 1ml", cajon: "Cajón 1", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Jeringas 3ml", cajon: "Cajón 1", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Jeringas 5ml", cajon: "Cajón 1", stock: 14, minimo: 5, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Jeringas 10ml", cajon: "Cajón 1", stock: 10, minimo: 5, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Jeringas 20ml", cajon: "Cajón 1", stock: 4, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cinta micropore 1 y 2 pulgada", cajon: "Cajón 1", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  // CAJÓN 2
+  { nombre: "Jeringa N°50", cajon: "Cajón 2", stock: 5, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tega Derm", cajon: "Cajón 2", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula 14", cajon: "Cajón 2", stock: 4, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula 16", cajon: "Cajón 2", stock: 4, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula 18", cajon: "Cajón 2", stock: 4, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula 20", cajon: "Cajón 2", stock: 2, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula 22", cajon: "Cajón 2", stock: 4, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula 24", cajon: "Cajón 2", stock: 4, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula de gas", cajon: "Cajón 2", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Ligadura", cajon: "Cajón 2", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Apósitos", cajon: "Cajón 2", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Parches 6x7", cajon: "Cajón 2", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Gasas", cajon: "Cajón 2", stock: 10, minimo: 5, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sueros fisiológicos 20ml", cajon: "Cajón 2", stock: 15, minimo: 5, unidad: "unid.", vencimiento: "2027-06-01" },
+  // CAJÓN 3
+  { nombre: "Tijera", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Tubo aspiración 1.8mt", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cánula Yancahuer", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tubo endotraquial 6", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tubo endotraquial 6.5", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tubo endotraquial 7", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tubo endotraquial 7.5", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tubo endotraquial 8", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Tubo endotraquial 8.5", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sonda aspiración 12", cajon: "Cajón 3", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sonda aspiración 14", cajon: "Cajón 3", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sonda aspiración 16", cajon: "Cajón 3", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Bajada macro goteo", cajon: "Cajón 3", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Ventury adulto", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Máscara nebulización adulto", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Naricera adulto", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Mascarilla alta concentración adulto", cajon: "Cajón 3", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  // CAJÓN 4
+  { nombre: "Guantes estériles N°6", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles N°6.5", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles N°7", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles N°7.5", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles N°8", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles sin látex N°6", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles sin látex N°6.5", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles sin látex N°7", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles sin látex N°7.5", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Guantes estériles sin látex N°8", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "pares", vencimiento: "2027-06-01" },
+  { nombre: "Cinta afrontamiento 6x75mm", cajon: "Cajón 4", stock: 3, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cinta afrontamiento 6x38mm", cajon: "Cajón 4", stock: 3, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Cinta afrontamiento 12x10mm", cajon: "Cajón 4", stock: 3, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sutura Nylon N°3", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sutura Nylon N°4", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sutura Nylon N°5", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sutura Nylon N°6", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sutura Vicryl N°3", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sutura Vicryl N°4", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Sutura Vicryl N°5", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Elastomul", cajon: "Cajón 4", stock: 8, minimo: 3, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Corchetera", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Kit curación", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Visturi", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Saca corchete", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Kit sutura N°3", cajon: "Cajón 4", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Campo estéril", cajon: "Cajón 4", stock: 4, minimo: 2, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Bicarbonato de sodio", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Clorhexidina gluconato 2% solución tópica", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Clorhexidina gluconato 2% jabón líquido", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Povidona yodada 10%", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Alcohol al 70%", cajon: "Cajón 4", stock: 1, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  // CAJÓN 5
+  { nombre: "AMBU", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Pqte electrodos 50 unid.", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "pqte", vencimiento: "2027-06-01" },
+  { nombre: "Máscara I-GEL 2.5", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Máscara I-GEL 3", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Máscara I-GEL 4", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Máscara I-GEL 5", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Ringer lactato 500ml", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Glucosa al 30% 500ml", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Suero 100ml", cajon: "Cajón 5", stock: 2, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Suero 200ml", cajon: "Cajón 5", stock: 2, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Suero 500ml", cajon: "Cajón 5", stock: 2, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Suero 1lt", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "frasco", vencimiento: "2027-06-01" },
+  { nombre: "Laringoscopio 4 hojas curvas", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Hoja recta N°2", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Tubo 5.5cms", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2027-06-01" },
+  { nombre: "Oftalmoscopio/Otoscopio", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+  { nombre: "Glucómetro", cajon: "Cajón 5", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
+];
+
+const crearInsumosCarro = (carroId) =>
+  INSUMOS_BASE.map((ins, idx) => ({ ...ins, id: carroId * 1000 + idx }));
+
 const CARROS_INICIALES = [
-  {
-    id: 1, nombre: "Carro 1", color: "#00c2a8", evento_asignado: "Torneo Nacional Fútbol Sub-17",
-    insumos: [
-      { id: 1, nombre: "Gasas estériles 10x10", cajon: "Cajón 1 · Curaciones", stock: 120, minimo: 30, unidad: "unid.", vencimiento: "2025-08-15" },
-      { id: 2, nombre: "Vendas elásticas 10cm", cajon: "Cajón 1 · Curaciones", stock: 25, minimo: 10, unidad: "unid.", vencimiento: "2026-12-01" },
-      { id: 3, nombre: "Guantes estériles T-M", cajon: "Cajón 1 · Curaciones", stock: 8, minimo: 20, unidad: "pares", vencimiento: "2026-06-30" },
-      { id: 4, nombre: "Tegaderm 6x7cm", cajon: "Cajón 1 · Curaciones", stock: 45, minimo: 20, unidad: "unid.", vencimiento: "2027-05-01" },
-      { id: 5, nombre: "Cánula EV N°18", cajon: "Cajón 3 · Vías venosas", stock: 15, minimo: 10, unidad: "unid.", vencimiento: "2027-03-15" },
-      { id: 6, nombre: "Suero fisiológico 500ml", cajon: "Cajón 3 · Vías venosas", stock: 6, minimo: 8, unidad: "frascos", vencimiento: "2026-01-20" },
-      { id: 7, nombre: "Bajada macrogoteo", cajon: "Cajón 3 · Vías venosas", stock: 12, minimo: 8, unidad: "unid.", vencimiento: "2027-06-01" },
-    ]
-  },
-  {
-    id: 2, nombre: "Carro 2", color: "#58a6ff", evento_asignado: "Media Maratón de Santiago",
-    insumos: [
-      { id: 8, nombre: "Mascarilla O2 adulto", cajon: "Cajón 5 · Emergencias", stock: 5, minimo: 3, unidad: "unid.", vencimiento: "2027-01-01" },
-      { id: 9, nombre: "AMBU adulto", cajon: "Cajón 5 · Emergencias", stock: 2, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
-      { id: 10, nombre: "Electrodos ECG", cajon: "Cajón 5 · Emergencias", stock: 30, minimo: 20, unidad: "unid.", vencimiento: "2026-07-15" },
-      { id: 11, nombre: "Bisturí N°10", cajon: "Cajón 4 · Cirugía menor", stock: 8, minimo: 5, unidad: "unid.", vencimiento: "2027-08-01" },
-      { id: 12, nombre: "Sutura Nylon 3-0", cajon: "Cajón 4 · Cirugía menor", stock: 12, minimo: 8, unidad: "unid.", vencimiento: "2026-11-01" },
-    ]
-  },
-  {
-    id: 3, nombre: "Carro 3", color: "#d29922", evento_asignado: "Sin asignar",
-    insumos: [
-      { id: 13, nombre: "Gasas estériles 10x10", cajon: "Cajón 1 · Curaciones", stock: 80, minimo: 30, unidad: "unid.", vencimiento: "2026-10-01" },
-      { id: 14, nombre: "Vendas elásticas 10cm", cajon: "Cajón 1 · Curaciones", stock: 18, minimo: 10, unidad: "unid.", vencimiento: "2027-01-01" },
-      { id: 15, nombre: "Cánula EV N°20", cajon: "Cajón 3 · Vías venosas", stock: 10, minimo: 8, unidad: "unid.", vencimiento: "2027-05-01" },
-    ]
-  },
-  {
-    id: 4, nombre: "Carro 4", color: "#f85149", evento_asignado: "Triatlón Región Metropolitana",
-    insumos: [
-      { id: 16, nombre: "Gasas estériles 10x10", cajon: "Cajón 1 · Curaciones", stock: 100, minimo: 30, unidad: "unid.", vencimiento: "2026-11-01" },
-      { id: 17, nombre: "Electrodos ECG", cajon: "Cajón 5 · Emergencias", stock: 20, minimo: 15, unidad: "unid.", vencimiento: "2027-01-01" },
-      { id: 18, nombre: "Suero fisiológico 500ml", cajon: "Cajón 3 · Vías venosas", stock: 4, minimo: 6, unidad: "frascos", vencimiento: "2026-04-01" },
-    ]
-  },
-  {
-    id: 5, nombre: "Carro 5", color: "#bc8cff", evento_asignado: "Partido Colo-Colo vs U. de Chile",
-    insumos: [
-      { id: 19, nombre: "Gasas estériles 10x10", cajon: "Cajón 1 · Curaciones", stock: 90, minimo: 30, unidad: "unid.", vencimiento: "2026-09-01" },
-      { id: 20, nombre: "AMBU adulto", cajon: "Cajón 5 · Emergencias", stock: 1, minimo: 1, unidad: "unid.", vencimiento: "2028-01-01" },
-      { id: 21, nombre: "Bisturí N°10", cajon: "Cajón 4 · Cirugía menor", stock: 5, minimo: 4, unidad: "unid.", vencimiento: "2027-06-01" },
-    ]
-  },
-  { id: 6, nombre: "Carro 6", color: "#3fb950", evento_asignado: "Sin asignar", insumos: [] },
-  { id: 7, nombre: "Carro 7", color: "#79c0ff", evento_asignado: "Sin asignar", insumos: [] },
+  { id: 1, nombre: "Carro 1", color: "#00c2a8", evento_asignado: "Sin asignar", insumos: crearInsumosCarro(1) },
+  { id: 2, nombre: "Carro 2", color: "#58a6ff", evento_asignado: "Sin asignar", insumos: crearInsumosCarro(2) },
+  { id: 3, nombre: "Carro 3", color: "#d29922", evento_asignado: "Sin asignar", insumos: crearInsumosCarro(3) },
+  { id: 4, nombre: "Carro 4", color: "#f85149", evento_asignado: "Sin asignar", insumos: crearInsumosCarro(4) },
+  { id: 5, nombre: "Carro 5", color: "#bc8cff", evento_asignado: "Sin asignar", insumos: crearInsumosCarro(5) },
+  { id: 6, nombre: "Carro 6", color: "#3fb950", evento_asignado: "Sin asignar", insumos: crearInsumosCarro(6) },
+  { id: 7, nombre: "Carro 7", color: "#79c0ff", evento_asignado: "Sin asignar", insumos: crearInsumosCarro(7) },
 ];
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
@@ -267,16 +335,29 @@ function ModalInsumo({ form, setForm, onSave, onClose, titulo, showDosis = false
 }
 
 // ─── VISTA CARROS ────────────────────────────────────────────────────────────
+const CAJONES_META = [
+  { id: "Cajón 1", emoji: "🩺", nombre: "Vías y accesos", color: C.blue },
+  { id: "Cajón 2", emoji: "💉", nombre: "Cánulas y sueros", color: C.accent },
+  { id: "Cajón 3", emoji: "🫁", nombre: "Vía aérea", color: C.purple },
+  { id: "Cajón 4", emoji: "🔪", nombre: "Cirugía y antisépticos", color: C.orange },
+  { id: "Cajón 5", emoji: "🚨", nombre: "Equipamiento especializado", color: C.red },
+];
+
 function VistaCarros({ carros, setCarros }) {
   const [carroSel, setCarroSel] = useState(carros[0]?.id);
+  const [cajonAbierto, setCajonAbierto] = useState(null);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
 
   const carro = carros.find(c => c.id === carroSel);
   const alertasCarro = (c) => c.insumos.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
+  const insumosCajon = (cajonId) => carro ? carro.insumos.filter(i => i.cajon === cajonId) : [];
+  const alertasCajon = (cajonId) => insumosCajon(cajonId).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
-  const abrirNuevo = () => {
-    setForm({ nombre: "", cajon: "Cajón 1 · Curaciones", stock: "", minimo: "", unidad: "unid.", vencimiento: "" });
+  const toggleCajon = (cajonId) => setCajonAbierto(prev => prev === cajonId ? null : cajonId);
+
+  const abrirNuevo = (cajonId) => {
+    setForm({ nombre: "", cajon: cajonId, stock: "", minimo: "", unidad: "unid.", vencimiento: "" });
     setModal("nuevo");
   };
   const abrirEditar = (ins) => { setForm({ ...ins }); setModal("editar"); };
@@ -307,7 +388,7 @@ function VistaCarros({ carros, setCarros }) {
           const alertas = alertasCarro(c);
           const activo = carroSel === c.id;
           return (
-            <div key={c.id} onClick={() => setCarroSel(c.id)} style={{ cursor: "pointer", background: activo ? C.surface : "transparent", border: `1px solid ${activo ? c.color + "50" : C.border}`, borderRadius: 10, padding: "11px 13px", marginBottom: 7, borderLeft: `3px solid ${c.color}`, transition: "all 0.12s" }}>
+            <div key={c.id} onClick={() => { setCarroSel(c.id); setCajonAbierto(null); }} style={{ cursor: "pointer", background: activo ? C.surface : "transparent", border: `1px solid ${activo ? c.color + "50" : C.border}`, borderRadius: 10, padding: "11px 13px", marginBottom: 7, borderLeft: `3px solid ${c.color}`, transition: "all 0.12s" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontWeight: 700, fontSize: 14, color: activo ? C.text : C.textMuted }}>{c.nombre}</span>
                 {alertas > 0 && <span style={{ background: C.red, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 8, padding: "1px 5px" }}>{alertas}</span>}
@@ -325,23 +406,60 @@ function VistaCarros({ carros, setCarros }) {
       <div style={{ flex: 1 }}>
         {carro && (
           <>
-            <div style={{ ...S.card, borderLeft: `3px solid ${carro.color}`, marginBottom: 16 }}>
+            {/* Header carro */}
+            <div style={{ ...S.card, borderLeft: `3px solid ${carro.color}`, marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: carro.color }}>{carro.nombre}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: carro.color }}>{carro.nombre}</div>
                   <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>
-                    Evento asignado: <span style={{ color: carro.evento_asignado === "Sin asignar" ? C.textFaint : C.text, fontWeight: 600 }}>{carro.evento_asignado}</span>
+                    Evento: <span style={{ color: carro.evento_asignado === "Sin asignar" ? C.textFaint : C.text, fontWeight: 600 }}>{carro.evento_asignado}</span>
+                    <span style={{ color: C.textFaint, marginLeft: 12 }}>· {carro.insumos.length} insumos totales</span>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={() => editarEvento(carro.id)}>✏️ Evento</button>
-                  <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevo}>+ Insumo</button>
-                </div>
+                <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={() => editarEvento(carro.id)}>✏️ Editar evento</button>
               </div>
             </div>
-            <div style={S.card}>
-              <TablaInsumos items={carro.insumos} onEdit={abrirEditar} onDelete={eliminar} />
+
+            {/* Tarjetas cajones */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 20 }}>
+              {CAJONES_META.map(cj => {
+                const items = insumosCajon(cj.id);
+                const alertas = alertasCajon(cj.id);
+                const abierto = cajonAbierto === cj.id;
+                return (
+                  <div key={cj.id} onClick={() => toggleCajon(cj.id)} style={{ cursor: "pointer", background: abierto ? cj.color + "15" : C.surface, border: `2px solid ${abierto ? cj.color : C.border}`, borderRadius: 12, padding: "16px 12px", textAlign: "center", transition: "all 0.15s", position: "relative" }}>
+                    {alertas > 0 && (
+                      <div style={{ position: "absolute", top: 8, right: 8, background: C.red, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 8, padding: "1px 5px" }}>{alertas}</div>
+                    )}
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>{cj.emoji}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: abierto ? cj.color : C.text, textTransform: "uppercase", letterSpacing: 0.5 }}>{cj.id}</div>
+                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, lineHeight: 1.3 }}>{cj.nombre}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: cj.color, marginTop: 8 }}>{items.length} insumos</div>
+                    <div style={{ fontSize: 11, marginTop: 4, color: alertas > 0 ? C.red : C.green }}>
+                      {alertas > 0 ? `⚠️ ${alertas} alertas` : "✅ OK"}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.textFaint, marginTop: 6 }}>{abierto ? "▲ Cerrar" : "▼ Ver insumos"}</div>
+                  </div>
+                );
+              })}
             </div>
+
+            {/* Detalle cajón expandido */}
+            {cajonAbierto && (
+              <div style={{ ...S.card, borderTop: `3px solid ${CAJONES_META.find(c => c.id === cajonAbierto)?.color}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 22 }}>{CAJONES_META.find(c => c.id === cajonAbierto)?.emoji}</span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 16, color: CAJONES_META.find(c => c.id === cajonAbierto)?.color }}>{cajonAbierto}</div>
+                      <div style={{ fontSize: 12, color: C.textMuted }}>{CAJONES_META.find(c => c.id === cajonAbierto)?.nombre} · {insumosCajon(cajonAbierto).length} insumos</div>
+                    </div>
+                  </div>
+                  <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={() => abrirNuevo(cajonAbierto)}>+ Agregar insumo</button>
+                </div>
+                <TablaInsumos items={insumosCajon(cajonAbierto)} onEdit={abrirEditar} onDelete={eliminar} />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -349,8 +467,8 @@ function VistaCarros({ carros, setCarros }) {
       {modal && (
         <ModalInsumo
           form={form} setForm={setForm} onSave={guardar} onClose={() => setModal(null)}
-          titulo={modal === "nuevo" ? `Nuevo insumo — ${carro?.nombre}` : "Editar insumo"}
-          cajones={["Cajón 1 · Curaciones", "Cajón 2 · Inmovilización", "Cajón 3 · Vías venosas", "Cajón 4 · Cirugía menor", "Cajón 5 · Emergencias"]}
+          titulo={modal === "nuevo" ? `Nuevo insumo — ${carro?.nombre} · ${cajonAbierto}` : "Editar insumo"}
+          cajones={CAJONES_META.map(c => c.id)}
         />
       )}
     </div>
@@ -890,7 +1008,6 @@ export default function App() {
         <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
           <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
-          
           <div style={{ fontSize: 10, color: C.textFaint, marginTop: 4 }}>v2.0 · 2026</div>
         </div>
       </div>
