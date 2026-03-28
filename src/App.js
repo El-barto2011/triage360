@@ -1249,6 +1249,7 @@ function Login({ onLogin }) {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <div style={{ width: 420, padding: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <img src="/SGTRUMAO-LOGO.PNG" alt="SGTRUMAO" style={{ height: 80, objectFit: "contain", marginBottom: 16 }} />
           <div style={{ fontSize: 38, fontWeight: 900, color: C.accent, letterSpacing: 1 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
           <div style={{ fontSize: 13, color: C.textMuted, marginTop: 6 }}>Sistema Clínico Integral</div>
           <div style={{ fontSize: 11, color: C.textFaint, marginTop: 3 }}>Powered by SGTRUMAO</div>
