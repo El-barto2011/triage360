@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 const SUPABASE_URL = "https://dnlvzwrujosuckdzmffx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubHZ6d3J1am9zdWNrZHptZmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NTg0MzAsImV4cCI6MjA5MDIzNDQzMH0.Bhw_ws8XNzWxJXBn1TzLjNppBD9CRWDTuEb_t92G9ZE";
 
+// ─── SUPABASE HELPER ─────────────────────────────────────────────────────────
+const sb = async (endpoint, options = {}, token = null) => {
+  const headers = { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Prefer": "return=representation" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, { ...options, headers: { ...headers, ...options.headers } });
+  if (!res.ok) { const e = await res.text(); console.error("Supabase error:", e); return null; }
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
+};
+
 
 // ─── DATOS REALES DEL BOLSO NARANJA ─────────────────────────────────────────
 const MEDICAMENTOS_INYECTABLES = [
@@ -518,7 +528,7 @@ function VistaBolsoNaranja() {
       <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.orange}12, ${C.surface})`, borderColor: C.orange + "40", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso de Medicamentos</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso Naranja</div>
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Medicamentos independientes del carro · 3 cajas internas</div>
           </div>
           <div style={{ display: "flex", gap: 20 }}>
@@ -673,12 +683,25 @@ const ATENCIONES_INICIALES = [
   },
 ];
 
-function VistaAtenciones({ atenciones, setAtenciones, carros }) {
+function VistaAtenciones({ carros, usuario }) {
+  const [atenciones, setAtenciones] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [filtroEvento, setFiltroEvento] = useState("Todos");
   const [filtroProfesion, setFiltroProfesion] = useState("Todas");
   const [fichaVer, setFichaVer] = useState(null);
+
+  // Cargar atenciones desde Supabase
+  useEffect(() => {
+    const cargar = async () => {
+      setLoading(true);
+      const data = await sb("atenciones?order=created_at.desc", {}, usuario?.token);
+      if (data) setAtenciones(data);
+      setLoading(false);
+    };
+    cargar();
+  }, [usuario]);
 
   const eventos = ["Todos", ...new Set(carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => c.evento_asignado))];
 
@@ -707,22 +730,31 @@ function VistaAtenciones({ atenciones, setAtenciones, carros }) {
     setModal("nueva");
   };
 
-  const guardar = () => {
+  const guardar = async () => {
     if (!form.paciente || !form.profesional) return;
+    const datos = { ...form, edad: +form.edad, usuario_email: usuario?.email };
+    delete datos.id;
     if (modal === "nueva") {
-      setAtenciones(prev => [...prev, { ...form, id: Date.now(), edad: +form.edad }]);
+      const res = await sb("atenciones", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
+      if (res) setAtenciones(prev => [res[0], ...prev]);
     } else {
-      setAtenciones(prev => prev.map(a => a.id === form.id ? { ...form, edad: +form.edad } : a));
+      const res = await sb(`atenciones?id=eq.${form.id}`, { method: "PATCH", body: JSON.stringify(datos) }, usuario?.token);
+      if (res) setAtenciones(prev => prev.map(a => a.id === form.id ? res[0] : a));
     }
     setModal(null);
   };
 
-  const eliminar = (id) => setAtenciones(prev => prev.filter(a => a.id !== id));
+  const eliminar = async (id) => {
+    await sb(`atenciones?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
+    setAtenciones(prev => prev.filter(a => a.id !== id));
+  };
 
   const coloresProfesion = {
     "Médico": C.red, "Enfermero/a": C.blue, "Paramédico": C.orange,
     "Kinesiólogo/a": C.green, "Masoterapeuta": C.purple
   };
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando atenciones...</div>;
 
   return (
     <div>
@@ -1038,7 +1070,7 @@ export default function App() {
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
     { section: "Inventario" },
     { id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros },
-    { id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso },
+    { id: "bolso", label: "Bolso Naranja 🟠", icon: "bolso", badge: alertBolso },
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
     { id: "eventos", label: "Eventos", icon: "event" },
@@ -1088,7 +1120,7 @@ export default function App() {
         {tab === "bolso" && (
           <div>
             <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Bolso de Medicamentos 💊</div>
+              <div style={S.title}>Bolso Naranja 🟠</div>
               <div style={S.subtitle}>Medicamentos separados del carro · 3 cajas internas</div>
             </div>
             <VistaBolsoNaranja />
@@ -1100,7 +1132,7 @@ export default function App() {
               <div style={S.title}>Atenciones en Carpa Médica 🏥</div>
               <div style={S.subtitle}>Registro por evento · Médico, Enfermero/a, Paramédico, Kinesiólogo/a, Masoterapeuta</div>
             </div>
-            <VistaAtenciones atenciones={atenciones} setAtenciones={setAtenciones} carros={carros} />
+            <VistaAtenciones carros={carros} usuario={usuario} />
           </div>
         )}
         {tab === "eventos" && (
@@ -1145,7 +1177,7 @@ export default function App() {
                 ))}
               </div>
               <div style={S.card}>
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso de Medicamentos</div>
+                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso Naranja</div>
                 {[
                   { label: "💉 Inyectables", count: MEDICAMENTOS_INYECTABLES.length, color: C.blue },
                   { label: "💊 Orales", count: MEDICAMENTOS_ORALES.length, color: C.green },
