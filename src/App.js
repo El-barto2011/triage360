@@ -727,6 +727,93 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
 
 // ─── ATENCIONES ──────────────────────────────────────────────────────────────
 const PROFESIONES = ["Médico", "Enfermero/a", "Paramédico", "Kinesiólogo/a", "Masoterapeuta"];
+// ─── CONFIGURACIÓN POR INDUSTRIA ─────────────────────────────────────────────
+const INDUSTRIAS = {
+  "eventos": {
+    nombre: "Eventos Deportivos y Masivos",
+    emoji: "🏟️",
+    paciente: "Paciente",
+    unidad: "Carpa Médica",
+    tipos_atencion: [
+      "Trauma deportivo", "Contusión / golpe", "Luxación",
+      "Esguince", "Fractura", "Laceración / herida",
+      "Deshidratación", "Insolación / golpe de calor",
+      "Crisis asmática", "Dolor torácico", "Síncope / desmayo",
+      "Convulsión", "Reacción alérgica", "Consulta general",
+      "Urgencia vital", "Derivación hospital"
+    ],
+    campos_extra: ["Disciplina deportiva", "Número de dorsal"],
+    color: "#00c2a8",
+  },
+  "mineria": {
+    nombre: "Minería e Industria",
+    emoji: "⛏️",
+    paciente: "Trabajador",
+    unidad: "Unidad Médica",
+    tipos_atencion: [
+      "Accidente laboral", "Trauma por impacto", "Aplastamiento",
+      "Quemadura química", "Quemadura térmica", "Intoxicación",
+      "Caída de altura", "Atrapamiento", "Corte / laceración",
+      "Inhalación de gases", "Cuerpo extraño", "Dolor lumbar",
+      "Crisis hipertensiva", "Deshidratación", "Urgencia vital",
+      "Accidente de tránsito en faena"
+    ],
+    campos_extra: ["RUT trabajador", "Empresa contratista", "Área de faena", "Turno"],
+    color: "#d29922",
+  },
+  "educacion": {
+    nombre: "Educación",
+    emoji: "🏫",
+    paciente: "Alumno",
+    unidad: "Enfermería",
+    tipos_atencion: [
+      "Caída / golpe", "Herida cortante", "Epistaxis / sangrado nasal",
+      "Fiebre", "Dolor abdominal", "Cefalea / dolor de cabeza",
+      "Crisis alérgica", "Crisis asmática", "Convulsión",
+      "Crisis emocional / ansiedad", "Desmayo", "Traumatismo dental",
+      "Cuerpo extraño", "Quemadura", "Accidente deportivo",
+      "Consulta general"
+    ],
+    campos_extra: ["Curso", "Apoderado notificado", "Edad"],
+    color: "#58a6ff",
+  },
+  "emergencias": {
+    nombre: "Servicios de Emergencia",
+    emoji: "🚒",
+    paciente: "Víctima",
+    unidad: "Puesto de Avanzada",
+    tipos_atencion: [
+      "Trauma múltiple", "PCR / paro cardiorrespiratorio",
+      "Quemadura", "Intoxicación", "Trauma craneal",
+      "Herida por arma", "Accidente de tránsito",
+      "Rescate en altura", "Ahogamiento", "Hipotermia",
+      "Crisis hipertensiva", "ACV / accidente cerebrovascular",
+      "Shock anafiláctico", "Urgencia obstétrica", "Urgencia pediátrica"
+    ],
+    campos_extra: ["Mecanismo de lesión", "Glasgow", "Prioridad triage"],
+    color: "#f85149",
+  },
+  "empresas": {
+    nombre: "Empresas y Corporativos",
+    emoji: "🏢",
+    paciente: "Colaborador",
+    unidad: "Sala Médica",
+    tipos_atencion: [
+      "Accidente laboral", "Enfermedad común", "Cefalea / estrés",
+      "Dolor musculoesquelético", "Crisis hipertensiva",
+      "Crisis de ansiedad / pánico", "Desmayo", "Herida cortante",
+      "Quemadura", "Cuerpo extraño", "Reacción alérgica",
+      "Dolor torácico", "Control de presión", "Consulta general",
+      "Urgencia vital"
+    ],
+    campos_extra: ["Área / departamento", "Cargo", "Jefatura notificada"],
+    color: "#bc8cff",
+  },
+};
+
+const getIndustria = (key) => INDUSTRIAS[key] || INDUSTRIAS["eventos"];
+
+
 
 // ─── PERMISOS POR PROFESIÓN ───────────────────────────────────────────────────
 const PERMISOS = {
@@ -767,7 +854,7 @@ const ATENCIONES_INICIALES = [
   },
 ];
 
-function VistaAtenciones({ carros, usuario, permisos }) {
+function VistaAtenciones({ carros, usuario, permisos, industria }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -877,7 +964,7 @@ function VistaAtenciones({ carros, usuario, permisos }) {
         <table style={S.table}>
           <thead>
             <tr>
-              {["Paciente", "Evento", "Profesional", "Tipo", "Horario", "Diagnóstico", "Derivación", ""].map(h => (
+              {[industria?.paciente || "Paciente", "Evento", "Profesional", "Tipo", "Horario", "Diagnóstico", "Derivación", ""].map(h => (
                 <th key={h} style={S.th}>{h}</th>
               ))}
             </tr>
@@ -982,7 +1069,7 @@ function VistaAtenciones({ carros, usuario, permisos }) {
               <div style={S.formRow}>
                 <label style={S.formLabel}>Tipo</label>
                 <select style={{ ...S.select, width: "100%" }} value={form.tipo || ""} onChange={e => F("tipo", e.target.value)}>
-                  {TIPOS_ATENCION.map(t => <option key={t}>{t}</option>)}
+                  {(industria?.tipos_atencion || TIPOS_ATENCION).map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
               <div style={S.formRow}>
@@ -1206,6 +1293,107 @@ function GestionUsuarios({ usuario, carros }) {
   );
 }
 
+
+// ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
+function Configuracion({ industriaKey, setIndustriaKey, usuario }) {
+  const industria = getIndustria(industriaKey);
+
+  return (
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <div style={S.title}>Configuración ⚙️</div>
+        <div style={S.subtitle}>Personaliza TRIAGE360 para tu organización</div>
+      </div>
+
+      {/* Selección de industria */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>🏭 Tipo de Organización</div>
+        <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
+          Define tu industria para adaptar los tipos de atención, nomenclatura y campos del sistema.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+          {Object.entries(INDUSTRIAS).map(([key, ind]) => (
+            <div
+              key={key}
+              onClick={() => setIndustriaKey(key)}
+              style={{
+                cursor: "pointer",
+                background: industriaKey === key ? ind.color + "15" : C.surface2,
+                border: `2px solid ${industriaKey === key ? ind.color : C.border}`,
+                borderRadius: 12, padding: "18px 20px",
+                transition: "all 0.15s",
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{ind.emoji}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: industriaKey === key ? ind.color : C.text }}>{ind.nombre}</div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
+                {ind.paciente} · {ind.unidad}
+              </div>
+              {industriaKey === key && (
+                <div style={{ marginTop: 8, fontSize: 11, color: ind.color, fontWeight: 700 }}>✓ Seleccionada</div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Vista previa de la configuración actual */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>
+          {industria.emoji} Configuración activa — {industria.nombre}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Nomenclatura</div>
+            {[
+              ["Persona atendida", industria.paciente],
+              ["Unidad clínica", industria.unidad],
+              ["Tipos de atención", `${industria.tipos_atencion.length} tipos`],
+              ["Campos adicionales", `${industria.campos_extra.length} campos`],
+            ].map(([label, valor]) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}15`, fontSize: 13 }}>
+                <span style={{ color: C.textMuted }}>{label}</span>
+                <span style={{ fontWeight: 600, color: C.text }}>{valor}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Tipos de Atención</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {industria.tipos_atencion.slice(0, 8).map(t => (
+                <span key={t} style={{ background: industria.color + "15", color: industria.color, border: `1px solid ${industria.color}30`, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
+                  {t}
+                </span>
+              ))}
+              {industria.tipos_atencion.length > 8 && (
+                <span style={{ color: C.textMuted, fontSize: 11, padding: "3px 6px" }}>
+                  +{industria.tipos_atencion.length - 8} más
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Info cuenta */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>👤 Información de Cuenta</div>
+        {[
+          ["Email", usuario?.email],
+          ["Nombre", usuario?.nombre],
+          ["Rol", usuario?.rol === "admin" ? "👑 Administrador" : "👤 Profesional"],
+          ["Profesión", usuario?.profesion],
+        ].map(([label, valor]) => (
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}15`, fontSize: 13 }}>
+            <span style={{ color: C.textMuted }}>{label}</span>
+            <span style={{ fontWeight: 600 }}>{valor || "—"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── LOGIN ───────────────────────────────────────────────────────────────────
 function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -1249,10 +1437,38 @@ function Login({ onLogin }) {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <div style={{ width: 420, padding: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <img src="/SGTRUMAO-LOGO.PNG" alt="SGTRUMAO" style={{ height: 80, objectFit: "contain", marginBottom: 16 }} />
-          <div style={{ fontSize: 38, fontWeight: 900, color: C.accent, letterSpacing: 1 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
-          <div style={{ fontSize: 13, color: C.textMuted, marginTop: 6 }}>Sistema Clínico Integral</div>
-          <div style={{ fontSize: 11, color: C.textFaint, marginTop: 3 }}>Powered by SGTRUMAO</div>
+          <svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: 300, margin: "0 auto 8px", display: "block" }}>
+            <defs>
+              <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00e5c8"/>
+                <stop offset="100%" stopColor="#00a896"/>
+              </linearGradient>
+              <filter id="gl">
+                <feGaussianBlur stdDeviation="2" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <radialGradient id="bgG" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#00c2a8" stopOpacity="0.12"/>
+                <stop offset="100%" stopColor="#00c2a8" stopOpacity="0"/>
+              </radialGradient>
+            </defs>
+            <circle cx="50" cy="50" r="42" fill="url(#bgG)"/>
+            <circle cx="50" cy="50" r="36" fill="none" stroke="#1e2d3d" strokeWidth="1.5"/>
+            <circle cx="50" cy="50" r="36" fill="none" stroke="url(#lg1)" strokeWidth="2.8"
+              strokeDasharray="170 56" strokeDashoffset="-28" strokeLinecap="round" filter="url(#gl)"/>
+            <circle cx="74" cy="26" r="2.5" fill="#00e5c8" filter="url(#gl)"/>
+            <circle cx="26" cy="26" r="2.5" fill="#00a896" filter="url(#gl)"/>
+            <rect x="38" y="45" width="24" height="8" rx="2.5" fill="url(#lg1)" filter="url(#gl)"/>
+            <rect x="46" y="37" width="8" height="24" rx="2.5" fill="url(#lg1)" filter="url(#gl)"/>
+            <polyline points="14,50 20,50 24,41 28,59 32,46 36,52 44,50 56,50 60,42 64,58 68,50 72,50 76,44 79,55 83,50 88,50"
+              fill="none" stroke="#00c2a8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.4"/>
+            <line x1="103" y1="22" x2="103" y2="78" stroke="#1e2d3d" strokeWidth="1"/>
+            <text x="118" y="44" fill="#e8f0f8" fontSize="26" fontFamily="Arial Black, sans-serif" fontWeight="900" letterSpacing="1">
+              TRIAGE<tspan fill="url(#lg1)">360</tspan>
+            </text>
+            <text x="118" y="60" fill="#7a90a8" fontSize="9" fontFamily="Arial, sans-serif" letterSpacing="3">GESTIÓN CLÍNICA INTELIGENTE</text>
+            <text x="118" y="78" fill="#2d3f52" fontSize="8" fontFamily="Arial, sans-serif" letterSpacing="1">Powered by <tspan fill="#00c2a8" fontWeight="700">SGTRUMAO</tspan></text>
+          </svg>
         </div>
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Email</label>
@@ -1280,6 +1496,8 @@ export default function App() {
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [atenciones, setAtenciones] = useState(ATENCIONES_INICIALES);
   const [usuario, setUsuario] = useState(null);
+  const [industriaKey, setIndustriaKey] = useState("eventos");
+  const industria = getIndustria(industriaKey);
   const isMobile = useIsMobile();
   const handleLogin = (user) => setUsuario(user);
   const handleLogout = () => setUsuario(null);
@@ -1299,6 +1517,7 @@ export default function App() {
     { id: "atenciones", label: "Atenciones", icon: "event" },
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
+    { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
   ];
 
@@ -1312,6 +1531,7 @@ export default function App() {
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
+    { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
   ];
 
@@ -1324,7 +1544,7 @@ export default function App() {
         <div style={S.sidebar}>
           <div style={S.logo}>
             <div style={{ fontSize: 20, fontWeight: 900, color: C.accent, letterSpacing: 1, lineHeight: 1 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
-            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Sistema Clínico Integral</div>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Gestión clínica inteligente, donde la necesites</div>
           </div>
           <nav style={S.nav}>
             {nav.map((item, i) =>
@@ -1382,7 +1602,7 @@ export default function App() {
               <div style={S.title}>Atenciones en Carpa Médica 🏥</div>
               <div style={S.subtitle}>Registro por evento · Médico, Enfermero/a, Paramédico, Kinesiólogo/a, Masoterapeuta</div>
             </div>
-            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} />
+            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} />
           </div>
         )}
         {tab === "eventos" && (
@@ -1409,6 +1629,9 @@ export default function App() {
               </table>
             </div>
           </div>
+        )}
+        {tab === "configuracion" && (
+          <Configuracion industriaKey={industriaKey} setIndustriaKey={setIndustriaKey} usuario={usuario} />
         )}
         {tab === "usuarios" && esAdmin && (
           <GestionUsuarios usuario={usuario} carros={carros} />
