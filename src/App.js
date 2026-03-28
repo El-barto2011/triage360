@@ -890,7 +890,7 @@ export default function App() {
         <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
           <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
-          <div style={{ fontSize: 11, color: C.textFaint, marginTop: 1 }}>Francia Muñoz López</div>
+          
           <div style={{ fontSize: 10, color: C.textFaint, marginTop: 4 }}>v2.0 · 2026</div>
         </div>
       </div>
