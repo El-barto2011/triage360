@@ -398,7 +398,7 @@ const CAJONES_META = [
   { id: "Cajón 5", emoji: "🚨", nombre: "Equipamiento especializado", color: C.red },
 ];
 
-function VistaCarros({ carros, setCarros }) {
+function VistaCarros({ carros, setCarros, permisos, esAdmin }) {
   const [carroSel, setCarroSel] = useState(carros[0]?.id);
   const [cajonAbierto, setCajonAbierto] = useState(null);
   const [modal, setModal] = useState(null);
@@ -510,7 +510,7 @@ function VistaCarros({ carros, setCarros }) {
                       <div style={{ fontSize: 12, color: C.textMuted }}>{CAJONES_META.find(c => c.id === cajonAbierto)?.nombre} · {insumosCajon(cajonAbierto).length} insumos</div>
                     </div>
                   </div>
-                  <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={() => abrirNuevo(cajonAbierto)}>+ Agregar insumo</button>
+                  {permisos?.modificarStock && <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={() => abrirNuevo(cajonAbierto)}>+ Agregar insumo</button>}
                 </div>
                 <TablaInsumos items={insumosCajon(cajonAbierto)} onEdit={abrirEditar} onDelete={eliminar} />
               </div>
@@ -620,7 +620,7 @@ function VistaBolsoNaranja() {
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
-function Dashboard({ carros, usuario, esAdmin }) {
+function Dashboard({ carros, usuario, esAdmin, permisos }) {
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const todo = [...todosInsumos, ...todosMeds];
@@ -642,8 +642,24 @@ function Dashboard({ carros, usuario, esAdmin }) {
         </div>
       </div>
       {!esAdmin && (
-        <div style={{ background: C.blueDim, border: `1px solid ${C.blue}30`, borderRadius: 10, padding: "14px 18px", marginBottom: 24, fontSize: 14, color: C.blue }}>
-          👤 Estás ingresado como <strong>{usuario?.profesion}</strong> — solo puedes ver y registrar atenciones de tu evento asignado.
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "18px 20px", marginBottom: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>
+            👤 {usuario?.profesion} — Permisos activos
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[
+              { label: "Registrar atenciones", ok: true },
+              { label: "Recetar medicamentos", ok: permisos?.recetarMedicamentos },
+              { label: "Ver inventario carro", ok: permisos?.verInventario },
+              { label: "Modificar stock", ok: permisos?.modificarStock },
+              { label: "Ver bolso medicamentos", ok: permisos?.verBolso },
+            ].map(({ label, ok }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                <span style={{ color: ok ? C.green : C.red, fontSize: 16 }}>{ok ? "✅" : "❌"}</span>
+                <span style={{ color: ok ? C.text : C.textMuted }}>{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -711,6 +727,21 @@ function Dashboard({ carros, usuario, esAdmin }) {
 
 // ─── ATENCIONES ──────────────────────────────────────────────────────────────
 const PROFESIONES = ["Médico", "Enfermero/a", "Paramédico", "Kinesiólogo/a", "Masoterapeuta"];
+
+// ─── PERMISOS POR PROFESIÓN ───────────────────────────────────────────────────
+const PERMISOS = {
+  "Médico":          { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true  },
+  "Enfermero/a":     { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true  },
+  "Paramédico":      { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true  },
+  "Kinesiólogo/a":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false },
+  "Masoterapeuta":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false },
+  "Administrador":   { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true  },
+};
+
+const getPermisos = (usuario) => {
+  if (usuario?.rol === "admin") return PERMISOS["Administrador"];
+  return PERMISOS[usuario?.profesion] || PERMISOS["Kinesiólogo/a"];
+};
 const TIPOS_ATENCION = ["Consulta general", "Urgencia", "Traumatología", "Kinesiología", "Masoterapia", "Evaluación", "Derivación"];
 
 const ATENCIONES_INICIALES = [
@@ -736,7 +767,7 @@ const ATENCIONES_INICIALES = [
   },
 ];
 
-function VistaAtenciones({ carros, usuario }) {
+function VistaAtenciones({ carros, usuario, permisos }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -975,6 +1006,16 @@ function VistaAtenciones({ carros, usuario }) {
               <label style={S.formLabel}>Insumos utilizados</label>
               <input style={S.input} value={form.insumos_usados || ""} onChange={e => F("insumos_usados", e.target.value)} placeholder="Ej: Venda x1, gasas x4" />
             </div>
+            {permisos?.recetarMedicamentos ? (
+              <div style={S.formRow}>
+                <label style={S.formLabel}>💊 Medicamentos recetados</label>
+                <input style={S.input} value={form.medicamentos_recetados || ""} onChange={e => F("medicamentos_recetados", e.target.value)} placeholder="Ej: Ibuprofeno 600mg, Paracetamol 500mg" />
+              </div>
+            ) : (
+              <div style={{ background: C.yellowDim, border: `1px solid ${C.yellow}30`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.yellow, marginBottom: 16 }}>
+                ⚠️ Solo el médico puede recetar medicamentos
+              </div>
+            )}
             <div style={S.grid2}>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Derivación</label>
@@ -1244,6 +1285,7 @@ export default function App() {
   if (!usuario) return <Login onLogin={handleLogin} />;
 
   const esAdmin = usuario?.rol === 'admin';
+  const permisos = getPermisos(usuario);
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const alertCarros = carros.flatMap(c => c.insumos).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
@@ -1251,8 +1293,8 @@ export default function App() {
   // Nav items según rol
   const navItems = [
     { id: "dashboard", label: "Inicio", icon: "dashboard" },
-    ...(esAdmin ? [{ id: "carros", label: "Carros", icon: "carro", badge: alertCarros }] : []),
-    ...(esAdmin ? [{ id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso }] : []),
+    ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros", icon: "carro", badge: alertCarros }] : []),
+    ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso }] : []),
     { id: "atenciones", label: "Atenciones", icon: "event" },
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
@@ -1263,8 +1305,8 @@ export default function App() {
     { section: "General" },
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
     ...(esAdmin ? [{ section: "Inventario" }] : []),
-    ...(esAdmin ? [{ id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros }] : []),
-    ...(esAdmin ? [{ id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso }] : []),
+    ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros }] : []),
+    ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso }] : []),
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
@@ -1314,14 +1356,14 @@ export default function App() {
       )}
 
       <main style={{ ...S.main, padding: isMobile ? "16px 16px 80px" : 28 }}>
-        {tab === "dashboard" && <Dashboard carros={carros} usuario={usuario} esAdmin={esAdmin} />}
+        {tab === "dashboard" && <Dashboard carros={carros} usuario={usuario} esAdmin={esAdmin} permisos={permisos} />}
         {tab === "carros" && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Carros Clínicos</div>
               <div style={S.subtitle}>7 carros · cada uno asignado a su evento</div>
             </div>
-            <VistaCarros carros={carros} setCarros={setCarros} />
+            <VistaCarros carros={carros} setCarros={setCarros} permisos={permisos} esAdmin={esAdmin} />
           </div>
         )}
         {tab === "bolso" && (
@@ -1339,7 +1381,7 @@ export default function App() {
               <div style={S.title}>Atenciones en Carpa Médica 🏥</div>
               <div style={S.subtitle}>Registro por evento · Médico, Enfermero/a, Paramédico, Kinesiólogo/a, Masoterapeuta</div>
             </div>
-            <VistaAtenciones carros={carros} usuario={usuario} />
+            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} />
           </div>
         )}
         {tab === "eventos" && (
