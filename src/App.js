@@ -568,7 +568,7 @@ function VistaBolsoNaranja() {
       <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.orange}12, ${C.surface})`, borderColor: C.orange + "40", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso Naranja</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>🟠 Bolso de Medicamentos</div>
             <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Medicamentos independientes del carro · 3 cajas internas</div>
           </div>
           <div style={{ display: "flex", gap: 20 }}>
@@ -1182,7 +1182,7 @@ export default function App() {
         {tab === "bolso" && (
           <div>
             <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Bolso Naranja 🟠</div>
+              <div style={S.title}>Bolso de Medicamentos 💊</div>
               <div style={S.subtitle}>Medicamentos separados del carro · 3 cajas internas</div>
             </div>
             <VistaBolsoNaranja />
@@ -1239,7 +1239,7 @@ export default function App() {
                 ))}
               </div>
               <div style={S.card}>
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso Naranja</div>
+                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso de Medicamentos</div>
                 {[
                   { label: "💉 Inyectables", count: MEDICAMENTOS_INYECTABLES.length, color: C.blue },
                   { label: "💊 Orales", count: MEDICAMENTOS_ORALES.length, color: C.green },
