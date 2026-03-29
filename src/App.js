@@ -747,6 +747,7 @@ function VistaBolsoKinesiologia({ usuario }) {
     </div>
   );
 // ═══════════════════════════════════════════════════════════════════════════
+}
 // COMPONENTE: VISTA GESTIÓN DE EVENTOS
 // Agregar este código DESPUÉS de VistaBolsoKinesiologia (línea ~742)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1163,7 +1164,6 @@ function VistaGestionEventos({ usuario }) {
     </div>
   );
 }
-}// ─── DASHBOARD ───────────────────────────────────────────────────────────────
 function Dashboard({ carros, usuario, esAdmin, permisos }) {
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
