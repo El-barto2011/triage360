@@ -2163,7 +2163,6 @@ export default function App() {
 </div>
 <VistaGestionEventos usuario={usuario} />
 </div>
-          </div>
         )}
         {tab === "configuracion" && (
           <Configuracion industriaKey={industriaKey} setIndustriaKey={setIndustriaKey} usuario={usuario} />
