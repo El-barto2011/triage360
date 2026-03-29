@@ -530,7 +530,7 @@ function VistaCarros({ carros, setCarros, permisos, esAdmin }) {
   );
 }
 
-// ─── VISTA BOLSO NARANJA ─────────────────────────────────────────────────────
+// ─── VISTA BOLSO MEDICAMENTOS ─────────────────────────────────────────────────────
 function VistaBolsoNaranja() {
   const [tabActiva, setTabActiva] = useState("inyectables");
   const [inyectables, setInyectables] = useState(MEDICAMENTOS_INYECTABLES);
@@ -618,8 +618,135 @@ function VistaBolsoNaranja() {
     </div>
   );
 }
+// ─── VISTA BOLSO KINESIOLOGÍA ────────────────────────────────────────────────
+function VistaBolsoKinesiologia({ usuario }) {
+  const [insumos, setInsumos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
 
-// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const cargar = async () => {
+      setLoading(true);
+      const data = await sb("insumos_kinesiologia?order=nombre", {}, usuario?.token);
+      if (data) setInsumos(data);
+      setLoading(false);
+    };
+    cargar();
+  }, [usuario]);
+
+  const alertas = insumos.filter(i => i.stock < i.minimo).length;
+  const abrirNuevo = () => { setForm({ nombre: "", stock: "", minimo: "", unidad: "unid." }); setModal("nuevo"); };
+  const abrirEditar = (ins) => { setForm({ ...ins }); setModal("editar"); };
+
+  const guardar = async () => {
+    if (!form.nombre) return;
+    const datos = { nombre: form.nombre, stock: +form.stock, minimo: +form.minimo, unidad: form.unidad };
+    if (modal === "nuevo") {
+      const res = await sb("insumos_kinesiologia", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
+      if (res) setInsumos(prev => [...prev, res[0]]);
+    } else {
+      const res = await sb(`insumos_kinesiologia?id=eq.${form.id}`, { method: "PATCH", body: JSON.stringify(datos) }, usuario?.token);
+      if (res) setInsumos(prev => prev.map(i => i.id === form.id ? res[0] : i));
+    }
+    setModal(null);
+  };
+
+  const eliminar = async (id) => {
+    await sb(`insumos_kinesiologia?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
+    setInsumos(prev => prev.filter(i => i.id !== id));
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando...</div>;
+
+  return (
+    <div>
+      <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.blue}12, ${C.surface})`, borderColor: C.blue + "40", marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>🏥 Bolso de Kinesiólogo/a</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Insumos de kinesiología</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: alertas > 0 ? C.yellow : C.blue }}>{insumos.length}</div>
+            <div style={{ fontSize: 11, color: C.textMuted }}>Insumos</div>
+            {alertas > 0 && <div style={{ fontSize: 10, color: C.yellow }}>⚠️ {alertas} alertas</div>}
+          </div>
+        </div>
+      </div>
+
+      <div style={S.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <span style={{ fontWeight: 700, color: C.blue }}>📦 Inventario</span>
+          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevo}>+ Agregar</button>
+        </div>
+
+        <table style={S.table}>
+          <thead><tr>{["Insumo", "Stock", "Estado", ""].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {insumos.length === 0 ? (
+              <tr><td colSpan={4} style={{ ...S.td, textAlign: "center", color: C.textMuted, padding: 32 }}>Sin insumos</td></tr>
+            ) : insumos.map(ins => (
+              <tr key={ins.id}>
+                <td style={S.td}><div style={{ fontWeight: 600 }}>{ins.nombre}</div></td>
+                <td style={S.td}>
+                  <span style={{ fontWeight: 700, color: ins.stock < ins.minimo ? C.yellow : C.text }}>{ins.stock}</span>
+                  <span style={{ fontSize: 11, color: C.textFaint }}> / {ins.minimo} {ins.unidad}</span>
+                </td>
+                <td style={S.td}>
+                  {ins.stock === 0 ? <span style={S.pill(C.red, C.redDim)}>Agotado</span> :
+                   ins.stock < ins.minimo ? <span style={S.pill(C.yellow, C.yellowDim)}>Bajo</span> :
+                   <span style={S.pill(C.green, C.greenDim)}>OK</span>}
+                </td>
+                <td style={S.td}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button style={{ ...S.btn("ghost"), padding: "4px 8px" }} onClick={() => abrirEditar(ins)}><Icon name="edit" size={13} color={C.textMuted} /></button>
+                    <button style={{ ...S.btn("ghost"), padding: "4px 8px" }} onClick={() => eliminar(ins.id)}><Icon name="trash" size={13} color={C.red} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {modal && (
+        <div style={S.modal} onClick={() => setModal(null)}>
+          <div style={S.modalBox} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>{modal === "nuevo" ? "Nuevo Insumo" : "Editar Insumo"}</div>
+              <button style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setModal(null)}><Icon name="close" size={20} color={C.textMuted} /></button>
+            </div>
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Nombre</label>
+              <input style={S.input} value={form.nombre || ""} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} />
+            </div>
+            <div style={S.grid2}>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Stock actual</label>
+                <input style={S.input} type="number" value={form.stock || ""} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Stock mínimo</label>
+                <input style={S.input} type="number" value={form.minimo || ""} onChange={e => setForm(p => ({ ...p, minimo: e.target.value }))} />
+              </div>
+            </div>
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Unidad</label>
+              <select style={{ ...S.select, width: "100%" }} value={form.unidad || "unid."} onChange={e => setForm(p => ({ ...p, unidad: e.target.value }))}>
+                {["unid.", "rollos", "spray", "pote", "frascos"].map(u => <option key={u}>{u}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
+              <button style={S.btn("primary")} onClick={guardar}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}// ─── DASHBOARD ───────────────────────────────────────────────────────────────
 function Dashboard({ carros, usuario, esAdmin, permisos }) {
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
@@ -817,13 +944,13 @@ const getIndustria = (key) => INDUSTRIAS[key] || INDUSTRIAS["eventos"];
 
 // ─── PERMISOS POR PROFESIÓN ───────────────────────────────────────────────────
 const PERMISOS = {
-  "Médico":          { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true  },
-  "Enfermero/a":     { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true  },
-  "Paramédico":      { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true  },
-  "Kinesiólogo/a":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false },
-  "Masoterapeuta":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false },
-  "Administrador":   { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true  },
-};
+  "Médico":          { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: false },
+  "Enfermero/a":     { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: false },
+  "Paramédico":      { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: false },
+  "Kinesiólogo/a":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false, verBolsoKine: true  },
+  "Masoterapeuta":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false, verBolsoKine: false },
+  "Administrador":   { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: true  },
+};};
 
 const getPermisos = (usuario) => {
   if (usuario?.rol === "admin") return PERMISOS["Administrador"];
@@ -1529,7 +1656,7 @@ export default function App() {
     ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso }] : []),
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
-    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
+    ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
@@ -1605,7 +1732,15 @@ export default function App() {
             <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} />
           </div>
         )}
-        {tab === "eventos" && (
+{tab === "bolsoKine" && (
+  <div>
+    <div style={{ marginBottom: 24 }}>
+      <div style={S.title}>Bolso de Kinesiólogo/a 🏥</div>
+      <div style={S.subtitle}>Insumos de kinesiología</div>
+    </div>
+    <VistaBolsoKinesiologia usuario={usuario} />
+  </div>
+)}        {tab === "eventos" && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Eventos</div>
