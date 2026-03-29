@@ -1164,6 +1164,1127 @@ function VistaGestionEventos({ usuario }) {
     </div>
   );
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPONENTE: ATENCIONES MÉDICAS (Para Médicos)
+// Agregar después de VistaGestionEventos
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VistaAtencionesMedicas({ usuario, carros }) {
+  const [atenciones, setAtenciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [eventos, setEventos] = useState([]);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [usuario]);
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    const [ats, evs] = await Promise.all([
+      sb("atenciones_medicas?order=created_at.desc&limit=50", {}, usuario?.token),
+      sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
+    ]);
+    if (ats) setAtenciones(ats);
+    if (evs) setEventos(evs);
+    setLoading(false);
+  };
+
+  const abrirNuevaAtencion = () => {
+    setForm({
+      paciente_nombre: "",
+      paciente_rut: "",
+      paciente_edad: "",
+      evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
+      motivo_consulta: "",
+      diagnostico: "",
+      tratamiento: "",
+      observaciones: "",
+      medicamentos_prescritos: [],
+      insumos_medico: [],
+      requiere_administracion: false
+    });
+    setModal("nueva");
+  };
+
+  const agregarMedicamento = () => {
+    const meds = form.medicamentos_prescritos || [];
+    setForm(f => ({
+      ...f,
+      medicamentos_prescritos: [...meds, { 
+        nombre: "", 
+        dosis: "", 
+        via: "Oral", 
+        cantidad: 1,
+        urgente: false 
+      }]
+    }));
+  };
+
+  const actualizarMedicamento = (index, campo, valor) => {
+    const meds = [...(form.medicamentos_prescritos || [])];
+    meds[index][campo] = valor;
+    setForm(f => ({ ...f, medicamentos_prescritos: meds }));
+  };
+
+  const eliminarMedicamento = (index) => {
+    const meds = [...(form.medicamentos_prescritos || [])];
+    meds.splice(index, 1);
+    setForm(f => ({ ...f, medicamentos_prescritos: meds }));
+  };
+
+  const agregarInsumo = () => {
+    const ins = form.insumos_medico || [];
+    setForm(f => ({
+      ...f,
+      insumos_medico: [...ins, { nombre: "", cantidad: 1, unidad: "unid." }]
+    }));
+  };
+
+  const actualizarInsumo = (index, campo, valor) => {
+    const ins = [...(form.insumos_medico || [])];
+    ins[index][campo] = valor;
+    setForm(f => ({ ...f, insumos_medico: ins }));
+  };
+
+  const eliminarInsumo = (index) => {
+    const ins = [...(form.insumos_medico || [])];
+    ins.splice(index, 1);
+    setForm(f => ({ ...f, insumos_medico: ins }));
+  };
+
+  const guardarAtencion = async () => {
+    if (!form.paciente_nombre || !form.evento || !form.motivo_consulta) {
+      alert("Por favor completa al menos: nombre del paciente, evento y motivo de consulta");
+      return;
+    }
+
+    const datos = {
+      medico_id: usuario.id,
+      medico_nombre: usuario.email,
+      paciente_nombre: form.paciente_nombre,
+      paciente_rut: form.paciente_rut || null,
+      paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
+      evento: form.evento,
+      motivo_consulta: form.motivo_consulta,
+      diagnostico: form.diagnostico || null,
+      tratamiento: form.tratamiento || null,
+      observaciones: form.observaciones || null,
+      medicamentos_prescritos: form.medicamentos_prescritos || [],
+      insumos_medico: form.insumos_medico || [],
+      requiere_administracion: form.requiere_administracion || false,
+      administracion_completada: false
+    };
+
+    const res = await sb("atenciones_medicas", { 
+      method: "POST", 
+      body: JSON.stringify(datos) 
+    }, usuario?.token);
+
+    if (res) {
+      setAtenciones(prev => [res[0], ...prev]);
+      setModal(null);
+      alert("Atención registrada exitosamente");
+    }
+  };
+
+  const verDetalleAtencion = (atencion) => {
+    setForm(atencion);
+    setModal("detalle");
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando atenciones...</div>;
+
+  const atencionesHoy = atenciones.filter(a => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const fecha = new Date(a.created_at).toISOString().split('T')[0];
+    return fecha === hoy;
+  });
+
+  const pendientesAdmin = atenciones.filter(a => 
+    a.requiere_administracion && !a.administracion_completada
+  );
+
+  return (
+    <div>
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>Atenciones Médicas</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+              {atencionesHoy.length} atenciones hoy · {pendientesAdmin.length} pendientes de administración
+            </div>
+          </div>
+          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
+            + Nueva Atención
+          </button>
+        </div>
+      </div>
+
+      {pendientesAdmin.length > 0 && (
+        <div style={{ ...S.card, marginBottom: 20, border: `2px solid ${C.orange}` }}>
+          <div style={{ fontWeight: 700, color: C.orange, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>⚠️</span>
+            <span>Pendientes de Administración ({pendientesAdmin.length})</span>
+          </div>
+          {pendientesAdmin.slice(0, 3).map(a => (
+            <div key={a.id} style={{ 
+              padding: 12, 
+              background: C.orangeDim, 
+              borderRadius: 6, 
+              marginBottom: 8,
+              fontSize: 13
+            }}>
+              <div style={{ fontWeight: 600 }}>{a.paciente_nombre}</div>
+              <div style={{ color: C.textMuted, fontSize: 12 }}>
+                Evento: {a.evento} · Médico: {a.medico_nombre}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12 }}>
+                Medicamentos: {a.medicamentos_prescritos?.length || 0} prescritos
+                {a.medicamentos_prescritos?.some(m => m.urgente) && (
+                  <span style={{ marginLeft: 8, color: C.red, fontWeight: 700 }}>🚨 URGENTE</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {atencionesHoy.length > 0 && (
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, color: C.blue, marginBottom: 12 }}>Atenciones de Hoy</div>
+          {atencionesHoy.map(atencion => (
+            <div key={atencion.id} style={{ 
+              padding: 16, 
+              border: `1px solid ${C.border}`, 
+              borderRadius: 8, 
+              marginBottom: 12,
+              background: C.surface,
+              cursor: "pointer"
+            }} onClick={() => verDetalleAtencion(atencion)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                    {atencion.paciente_nombre}
+                    {atencion.paciente_edad && <span style={{ color: C.textMuted, fontWeight: 400, marginLeft: 8 }}>({atencion.paciente_edad} años)</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>
+                    {new Date(atencion.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · 
+                    {atencion.evento}
+                  </div>
+                  <div style={{ fontSize: 13, marginBottom: 4 }}>
+                    <strong>Motivo:</strong> {atencion.motivo_consulta}
+                  </div>
+                  {atencion.diagnostico && (
+                    <div style={{ fontSize: 13, color: C.blue }}>
+                      <strong>Dx:</strong> {atencion.diagnostico}
+                    </div>
+                  )}
+                  {atencion.medicamentos_prescritos?.length > 0 && (
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>
+                      💊 {atencion.medicamentos_prescritos.length} medicamento(s) prescrito(s)
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {atencion.requiere_administracion && !atencion.administracion_completada && (
+                    <span style={{ ...S.badge(C.orange, C.orangeDim), fontSize: 10 }}>Pendiente admin.</span>
+                  )}
+                  {atencion.administracion_completada && (
+                    <span style={{ ...S.badge(C.green, C.greenDim), fontSize: 10 }}>Administrado</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {atenciones.filter(a => {
+        const hoy = new Date().toISOString().split('T')[0];
+        const fecha = new Date(a.created_at).toISOString().split('T')[0];
+        return fecha !== hoy;
+      }).length > 0 && (
+        <div style={{ ...S.card, marginTop: 20 }}>
+          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Atenciones Anteriores</div>
+          {atenciones.filter(a => {
+            const hoy = new Date().toISOString().split('T')[0];
+            const fecha = new Date(a.created_at).toISOString().split('T')[0];
+            return fecha !== hoy;
+          }).slice(0, 5).map(atencion => (
+            <div key={atencion.id} style={{ 
+              padding: 12, 
+              border: `1px solid ${C.border}`, 
+              borderRadius: 6, 
+              marginBottom: 8,
+              cursor: "pointer",
+              opacity: 0.7
+            }} onClick={() => verDetalleAtencion(atencion)}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
+              <div style={{ fontSize: 11, color: C.textMuted }}>
+                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <div style={S.modal} onClick={() => setModal(null)}>
+          <div style={{ ...S.modalBox, maxWidth: 800, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>
+                {modal === "nueva" ? "Nueva Atención Médica" : "Detalle de Atención"}
+              </div>
+              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>
+                ×
+              </button>
+            </div>
+
+            {modal === "nueva" && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Nombre del Paciente *</label>
+                    <input 
+                      style={S.input} 
+                      value={form.paciente_nombre || ""} 
+                      onChange={e => setForm(f => ({ ...f, paciente_nombre: e.target.value }))} 
+                      placeholder="Juan Pérez"
+                    />
+                  </div>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>RUT</label>
+                    <input 
+                      style={S.input} 
+                      value={form.paciente_rut || ""} 
+                      onChange={e => setForm(f => ({ ...f, paciente_rut: e.target.value }))} 
+                      placeholder="12.345.678-9"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16, marginBottom: 16 }}>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Edad</label>
+                    <input 
+                      style={S.input} 
+                      type="number"
+                      value={form.paciente_edad || ""} 
+                      onChange={e => setForm(f => ({ ...f, paciente_edad: e.target.value }))} 
+                      placeholder="35"
+                    />
+                  </div>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Evento *</label>
+                    <select 
+                      style={{ ...S.select, width: "100%" }} 
+                      value={form.evento || ""} 
+                      onChange={e => setForm(f => ({ ...f, evento: e.target.value }))}
+                    >
+                      {eventos.map(ev => (
+                        <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={S.formRow}>
+                  <label style={S.formLabel}>Motivo de Consulta *</label>
+                  <textarea 
+                    style={{ ...S.input, minHeight: 60 }} 
+                    value={form.motivo_consulta || ""} 
+                    onChange={e => setForm(f => ({ ...f, motivo_consulta: e.target.value }))} 
+                    placeholder="Descripción del motivo de consulta..."
+                  />
+                </div>
+
+                <div style={S.formRow}>
+                  <label style={S.formLabel}>Diagnóstico</label>
+                  <textarea 
+                    style={{ ...S.input, minHeight: 60 }} 
+                    value={form.diagnostico || ""} 
+                    onChange={e => setForm(f => ({ ...f, diagnostico: e.target.value }))} 
+                    placeholder="Diagnóstico médico..."
+                  />
+                </div>
+
+                <div style={S.formRow}>
+                  <label style={S.formLabel}>Tratamiento</label>
+                  <textarea 
+                    style={{ ...S.input, minHeight: 60 }} 
+                    value={form.tratamiento || ""} 
+                    onChange={e => setForm(f => ({ ...f, tratamiento: e.target.value }))} 
+                    placeholder="Tratamiento indicado..."
+                  />
+                </div>
+
+                <div style={{ marginTop: 20, marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ fontWeight: 700 }}>Medicamentos Prescritos</div>
+                    <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={agregarMedicamento}>
+                      + Agregar Medicamento
+                    </button>
+                  </div>
+                  {(form.medicamentos_prescritos || []).map((med, index) => (
+                    <div key={index} style={{ 
+                      padding: 12, 
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6, 
+                      marginBottom: 12,
+                      background: med.urgente ? C.redDim : C.surface
+                    }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                        <input 
+                          style={S.input}
+                          placeholder="Nombre del medicamento"
+                          value={med.nombre}
+                          onChange={e => actualizarMedicamento(index, "nombre", e.target.value)}
+                        />
+                        <input 
+                          style={S.input}
+                          placeholder="Dosis"
+                          value={med.dosis}
+                          onChange={e => actualizarMedicamento(index, "dosis", e.target.value)}
+                        />
+                        <select 
+                          style={S.select}
+                          value={med.via}
+                          onChange={e => actualizarMedicamento(index, "via", e.target.value)}
+                        >
+                          <option>Oral</option>
+                          <option>Intravenosa</option>
+                          <option>Intramuscular</option>
+                          <option>Subcutánea</option>
+                          <option>Tópica</option>
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                        <input 
+                          type="number"
+                          style={{ ...S.input, width: 80 }}
+                          placeholder="Cant."
+                          value={med.cantidad}
+                          onChange={e => actualizarMedicamento(index, "cantidad", parseInt(e.target.value) || 1)}
+                        />
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                          <input 
+                            type="checkbox"
+                            checked={med.urgente}
+                            onChange={e => actualizarMedicamento(index, "urgente", e.target.checked)}
+                          />
+                          <span style={{ color: med.urgente ? C.red : C.text }}>Urgente 🚨</span>
+                        </label>
+                        <button 
+                          style={{ ...S.btn("ghost"), fontSize: 12, marginLeft: "auto" }}
+                          onClick={() => eliminarMedicamento(index)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 20, marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ fontWeight: 700 }}>Insumos Utilizados (del Carro)</div>
+                    <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={agregarInsumo}>
+                      + Agregar Insumo
+                    </button>
+                  </div>
+                  {(form.insumos_medico || []).map((ins, index) => (
+                    <div key={index} style={{ 
+                      padding: 12, 
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6, 
+                      marginBottom: 8,
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "center"
+                    }}>
+                      <input 
+                        style={{ ...S.input, flex: 2 }}
+                        placeholder="Nombre del insumo"
+                        value={ins.nombre}
+                        onChange={e => actualizarInsumo(index, "nombre", e.target.value)}
+                      />
+                      <input 
+                        type="number"
+                        style={{ ...S.input, width: 80 }}
+                        placeholder="Cant."
+                        value={ins.cantidad}
+                        onChange={e => actualizarInsumo(index, "cantidad", parseInt(e.target.value) || 1)}
+                      />
+                      <select 
+                        style={{ ...S.select, width: 100 }}
+                        value={ins.unidad}
+                        onChange={e => actualizarInsumo(index, "unidad", e.target.value)}
+                      >
+                        <option>unid.</option>
+                        <option>ml</option>
+                        <option>mg</option>
+                        <option>amp.</option>
+                      </select>
+                      <button 
+                        style={{ ...S.btn("ghost"), fontSize: 12 }}
+                        onClick={() => eliminarInsumo(index)}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={S.formRow}>
+                  <label style={S.formLabel}>Observaciones</label>
+                  <textarea 
+                    style={{ ...S.input, minHeight: 60 }} 
+                    value={form.observaciones || ""} 
+                    onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} 
+                    placeholder="Observaciones adicionales..."
+                  />
+                </div>
+
+                <div style={{ marginTop: 16, marginBottom: 16 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+                    <input 
+                      type="checkbox"
+                      checked={form.requiere_administracion}
+                      onChange={e => setForm(f => ({ ...f, requiere_administracion: e.target.checked }))}
+                    />
+                    <span>Requiere administración por Enfermero/Paramédico</span>
+                  </label>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, marginLeft: 24 }}>
+                    Si marcas esta opción, la atención aparecerá en la lista de pendientes para enfermeros/paramédicos
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+                  <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
+                  <button style={S.btn("primary")} onClick={guardarAtencion}>
+                    Guardar Atención
+                  </button>
+                </div>
+              </>
+            )}
+
+            {modal === "detalle" && form && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{form.paciente_nombre}</div>
+                  {form.paciente_rut && <div style={{ fontSize: 13, color: C.textMuted }}>RUT: {form.paciente_rut}</div>}
+                  {form.paciente_edad && <div style={{ fontSize: 13, color: C.textMuted }}>Edad: {form.paciente_edad} años</div>}
+                  <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+                    Evento: {form.evento} · {new Date(form.created_at).toLocaleString('es-CL')}
+                  </div>
+                  <div style={{ fontSize: 13, color: C.textMuted }}>
+                    Médico: {form.medico_nombre}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>Motivo de Consulta:</div>
+                  <div style={{ fontSize: 14 }}>{form.motivo_consulta}</div>
+                </div>
+
+                {form.diagnostico && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Diagnóstico:</div>
+                    <div style={{ fontSize: 14 }}>{form.diagnostico}</div>
+                  </div>
+                )}
+
+                {form.tratamiento && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Tratamiento:</div>
+                    <div style={{ fontSize: 14 }}>{form.tratamiento}</div>
+                  </div>
+                )}
+
+                {form.medicamentos_prescritos && form.medicamentos_prescritos.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Medicamentos Prescritos:</div>
+                    {form.medicamentos_prescritos.map((med, i) => (
+                      <div key={i} style={{ 
+                        padding: 10, 
+                        background: med.urgente ? C.redDim : C.surface2, 
+                        borderRadius: 6, 
+                        marginBottom: 6,
+                        fontSize: 13
+                      }}>
+                        <div style={{ fontWeight: 600 }}>
+                          {med.nombre} - {med.dosis}
+                          {med.urgente && <span style={{ marginLeft: 8, color: C.red }}>🚨 URGENTE</span>}
+                        </div>
+                        <div style={{ color: C.textMuted, fontSize: 12 }}>
+                          Vía: {med.via} · Cantidad: {med.cantidad}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {form.insumos_medico && form.insumos_medico.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Insumos Utilizados:</div>
+                    {form.insumos_medico.map((ins, i) => (
+                      <div key={i} style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>
+                        • {ins.nombre} - {ins.cantidad} {ins.unidad}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {form.observaciones && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Observaciones:</div>
+                    <div style={{ fontSize: 14 }}>{form.observaciones}</div>
+                  </div>
+                )}
+
+                <div style={{ marginTop: 20, padding: 12, background: C.surface2, borderRadius: 6 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Estado de Administración:</div>
+                  {form.requiere_administracion ? (
+                    form.administracion_completada ? (
+                      <span style={{ ...S.badge(C.green, C.greenDim) }}>✅ Administrado</span>
+                    ) : (
+                      <span style={{ ...S.badge(C.orange, C.orangeDim) }}>⏳ Pendiente de administración</span>
+                    )
+                  ) : (
+                    <span style={{ color: C.textMuted, fontSize: 13 }}>No requiere administración</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPONENTE: ADMINISTRACIÓN DE MEDICAMENTOS (Para Enfermeros/Paramédicos)
+// Agregar después de VistaAtencionesMedicas
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VistaAdministracionMedicamentos({ usuario }) {
+  const [pendientes, setPendientes] = useState([]);
+  const [misCasos, setMisCasos] = useState([]);
+  const [historial, setHistorial] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  useEffect(() => {
+    cargarDatos();
+    const interval = setInterval(cargarDatos, 30000); // Actualizar cada 30 seg
+    return () => clearInterval(interval);
+  }, [usuario]);
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    
+    // Cargar atenciones pendientes
+    const pend = await sb(
+      "atenciones_medicas?requiere_administracion=eq.true&administracion_completada=eq.false&order=created_at.asc",
+      {},
+      usuario?.token
+    );
+
+    // Cargar administraciones completadas
+    const hist = await sb(
+      "administracion_medicamentos?order=created_at.desc&limit=50",
+      {},
+      usuario?.token
+    );
+
+    if (pend) setPendientes(pend);
+    if (hist) {
+      // Filtrar mis casos (que yo administré)
+      const mios = hist.filter(h => h.administrador_id === usuario.id);
+      setMisCasos(mios);
+      setHistorial(hist);
+    }
+
+    setLoading(false);
+  };
+
+  const tomarCaso = (atencion) => {
+    setForm({
+      atencion_id: atencion.id,
+      atencion: atencion,
+      medicamentos_administrados: atencion.medicamentos_prescritos?.map(m => ({
+        ...m,
+        administrado: false,
+        hora_admin: "",
+        observaciones: ""
+      })) || [],
+      insumos_administracion: [],
+      observaciones_generales: ""
+    });
+    setModal("administrar");
+  };
+
+  const toggleMedicamentoAdministrado = (index) => {
+    const meds = [...form.medicamentos_administrados];
+    meds[index].administrado = !meds[index].administrado;
+    if (meds[index].administrado && !meds[index].hora_admin) {
+      meds[index].hora_admin = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    }
+    setForm(f => ({ ...f, medicamentos_administrados: meds }));
+  };
+
+  const actualizarMedicamento = (index, campo, valor) => {
+    const meds = [...form.medicamentos_administrados];
+    meds[index][campo] = valor;
+    setForm(f => ({ ...f, medicamentos_administrados: meds }));
+  };
+
+  const agregarInsumo = () => {
+    const ins = form.insumos_administracion || [];
+    setForm(f => ({
+      ...f,
+      insumos_administracion: [...ins, { nombre: "", cantidad: 1, unidad: "unid." }]
+    }));
+  };
+
+  const actualizarInsumo = (index, campo, valor) => {
+    const ins = [...form.insumos_administracion];
+    ins[index][campo] = valor;
+    setForm(f => ({ ...f, insumos_administracion: ins }));
+  };
+
+  const eliminarInsumo = (index) => {
+    const ins = [...form.insumos_administracion];
+    ins.splice(index, 1);
+    setForm(f => ({ ...f, insumos_administracion: ins }));
+  };
+
+  const completarAdministracion = async () => {
+    const administrados = form.medicamentos_administrados.filter(m => m.administrado);
+    
+    if (administrados.length === 0) {
+      alert("Debes marcar al menos un medicamento como administrado");
+      return;
+    }
+
+    // 1. Registrar la administración
+    const datosAdmin = {
+      atencion_id: form.atencion_id,
+      administrador_id: usuario.id,
+      administrador_nombre: usuario.email,
+      administrador_tipo: usuario.profesion || "Enfermero/a",
+      medicamentos_administrados: form.medicamentos_administrados,
+      insumos_administracion: form.insumos_administracion || [],
+      observaciones: form.observaciones_generales || null
+    };
+
+    const resAdmin = await sb(
+      "administracion_medicamentos",
+      { method: "POST", body: JSON.stringify(datosAdmin) },
+      usuario?.token
+    );
+
+    // 2. Marcar la atención como completada
+    if (resAdmin) {
+      const resAtencion = await sb(
+        `atenciones_medicas?id=eq.${form.atencion_id}`,
+        { method: "PATCH", body: JSON.stringify({ administracion_completada: true }) },
+        usuario?.token
+      );
+
+      if (resAtencion) {
+        alert("Administración registrada exitosamente");
+        setModal(null);
+        cargarDatos(); // Recargar datos
+      }
+    }
+  };
+
+  const verDetalleAdministracion = (admin) => {
+    setForm(admin);
+    setModal("detalle");
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando pendientes...</div>;
+
+  const urgentes = pendientes.filter(p => 
+    p.medicamentos_prescritos?.some(m => m.urgente)
+  );
+
+  const hoy = new Date().toISOString().split('T')[0];
+  const administracionesHoy = misCasos.filter(a => {
+    const fecha = new Date(a.created_at).toISOString().split('T')[0];
+    return fecha === hoy;
+  });
+
+  return (
+    <div>
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>Administración de Medicamentos</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+              {pendientes.length} casos pendientes · {urgentes.length} urgentes · {administracionesHoy.length} administrados hoy por mí
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {urgentes.length > 0 && (
+        <div style={{ ...S.card, marginBottom: 20, border: `2px solid ${C.red}` }}>
+          <div style={{ fontWeight: 700, color: C.red, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>🚨</span>
+            <span>CASOS URGENTES ({urgentes.length})</span>
+          </div>
+          {urgentes.map(atencion => (
+            <div key={atencion.id} style={{ 
+              padding: 14, 
+              background: C.redDim, 
+              borderRadius: 8, 
+              marginBottom: 12,
+              cursor: "pointer"
+            }} onClick={() => tomarCaso(atencion)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                    {atencion.paciente_nombre}
+                    {atencion.paciente_edad && <span style={{ color: C.textMuted, fontWeight: 400, marginLeft: 8 }}>({atencion.paciente_edad} años)</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>
+                    Prescrito: {new Date(atencion.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · 
+                    Médico: {atencion.medico_nombre}
+                  </div>
+                  <div style={{ fontSize: 13, marginBottom: 6 }}>
+                    <strong>Diagnóstico:</strong> {atencion.diagnostico || "No especificado"}
+                  </div>
+                  <div style={{ fontSize: 13 }}>
+                    💊 {atencion.medicamentos_prescritos?.length || 0} medicamento(s)
+                    {atencion.medicamentos_prescritos?.filter(m => m.urgente).map(m => (
+                      <div key={m.nombre} style={{ fontSize: 12, color: C.red, marginTop: 4 }}>
+                        🚨 {m.nombre} - {m.dosis} ({m.via})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button 
+                  style={{ ...S.btn("primary"), fontSize: 12, background: C.red }}
+                  onClick={(e) => { e.stopPropagation(); tomarCaso(atencion); }}
+                >
+                  Tomar Caso
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pendientes.filter(p => !urgentes.includes(p)).length > 0 && (
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, color: C.blue, marginBottom: 12 }}>
+            Pendientes de Administración ({pendientes.filter(p => !urgentes.includes(p)).length})
+          </div>
+          {pendientes.filter(p => !urgentes.includes(p)).map(atencion => (
+            <div key={atencion.id} style={{ 
+              padding: 14, 
+              border: `1px solid ${C.border}`, 
+              borderRadius: 8, 
+              marginBottom: 12,
+              background: C.surface,
+              cursor: "pointer"
+            }} onClick={() => tomarCaso(atencion)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                    {atencion.paciente_nombre}
+                    {atencion.paciente_edad && <span style={{ color: C.textMuted, fontWeight: 400, marginLeft: 8 }}>({atencion.paciente_edad} años)</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>
+                    Prescrito: {new Date(atencion.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · 
+                    Médico: {atencion.medico_nombre} · Evento: {atencion.evento}
+                  </div>
+                  {atencion.diagnostico && (
+                    <div style={{ fontSize: 13, marginBottom: 6 }}>
+                      <strong>Dx:</strong> {atencion.diagnostico}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13 }}>
+                    💊 {atencion.medicamentos_prescritos?.length || 0} medicamento(s) prescritos
+                  </div>
+                </div>
+                <button 
+                  style={{ ...S.btn("primary"), fontSize: 12 }}
+                  onClick={(e) => { e.stopPropagation(); tomarCaso(atencion); }}
+                >
+                  Tomar Caso
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {administracionesHoy.length > 0 && (
+        <div style={{ ...S.card, marginTop: 20 }}>
+          <div style={{ fontWeight: 700, color: C.green, marginBottom: 12 }}>
+            Mis Administraciones de Hoy ({administracionesHoy.length})
+          </div>
+          {administracionesHoy.map(admin => (
+            <div key={admin.id} style={{ 
+              padding: 12, 
+              border: `1px solid ${C.border}`, 
+              borderRadius: 6, 
+              marginBottom: 8,
+              background: C.greenDim,
+              cursor: "pointer"
+            }} onClick={() => verDetalleAdministracion(admin)}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                Caso #{admin.atencion_id}
+              </div>
+              <div style={{ fontSize: 12, color: C.textMuted }}>
+                {new Date(admin.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · 
+                {admin.medicamentos_administrados?.filter(m => m.administrado).length || 0} medicamento(s) administrado(s)
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal === "administrar" && form.atencion && (
+        <div style={S.modal} onClick={() => setModal(null)}>
+          <div style={{ ...S.modalBox, maxWidth: 800, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>
+                Administrar Medicamentos
+              </div>
+              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 20, padding: 14, background: C.surface2, borderRadius: 8 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
+                Paciente: {form.atencion.paciente_nombre}
+              </div>
+              <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>
+                {form.atencion.paciente_edad && `${form.atencion.paciente_edad} años · `}
+                Evento: {form.atencion.evento}
+              </div>
+              <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>
+                Médico: {form.atencion.medico_nombre}
+              </div>
+              {form.atencion.diagnostico && (
+                <div style={{ fontSize: 13, marginTop: 8 }}>
+                  <strong>Diagnóstico:</strong> {form.atencion.diagnostico}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12 }}>Medicamentos Prescritos:</div>
+              {form.medicamentos_administrados.map((med, index) => (
+                <div key={index} style={{ 
+                  padding: 14, 
+                  border: `2px solid ${med.urgente ? C.red : med.administrado ? C.green : C.border}`, 
+                  borderRadius: 8, 
+                  marginBottom: 12,
+                  background: med.administrado ? C.greenDim : med.urgente ? C.redDim : C.surface
+                }}>
+                  <div style={{ display: "flex", gap: 12, alignItems: "start", marginBottom: 10 }}>
+                    <input 
+                      type="checkbox"
+                      checked={med.administrado}
+                      onChange={() => toggleMedicamentoAdministrado(index)}
+                      style={{ marginTop: 4 }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+                        {med.nombre} - {med.dosis}
+                        {med.urgente && <span style={{ marginLeft: 8, color: C.red, fontSize: 13 }}>🚨 URGENTE</span>}
+                      </div>
+                      <div style={{ fontSize: 13, color: C.textMuted }}>
+                        Vía: {med.via} · Cantidad: {med.cantidad}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {med.administrado && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12, marginBottom: 8 }}>
+                        <div>
+                          <label style={{ fontSize: 12, color: C.textMuted, display: "block", marginBottom: 4 }}>
+                            Hora de administración
+                          </label>
+                          <input 
+                            type="time"
+                            style={S.input}
+                            value={med.hora_admin || ""}
+                            onChange={e => actualizarMedicamento(index, "hora_admin", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, color: C.textMuted, display: "block", marginBottom: 4 }}>
+                            Observaciones
+                          </label>
+                          <input 
+                            style={S.input}
+                            placeholder="Reacción del paciente, efectos, etc."
+                            value={med.observaciones || ""}
+                            onChange={e => actualizarMedicamento(index, "observaciones", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontWeight: 700 }}>Insumos Utilizados (Jeringas, Agujas, etc.)</div>
+                <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={agregarInsumo}>
+                  + Agregar Insumo
+                </button>
+              </div>
+              {(form.insumos_administracion || []).map((ins, index) => (
+                <div key={index} style={{ 
+                  padding: 10, 
+                  border: `1px solid ${C.border}`, 
+                  borderRadius: 6, 
+                  marginBottom: 8,
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "center"
+                }}>
+                  <input 
+                    style={{ ...S.input, flex: 2 }}
+                    placeholder="Nombre del insumo"
+                    value={ins.nombre}
+                    onChange={e => actualizarInsumo(index, "nombre", e.target.value)}
+                  />
+                  <input 
+                    type="number"
+                    style={{ ...S.input, width: 80 }}
+                    placeholder="Cant."
+                    value={ins.cantidad}
+                    onChange={e => actualizarInsumo(index, "cantidad", parseInt(e.target.value) || 1)}
+                  />
+                  <select 
+                    style={{ ...S.select, width: 100 }}
+                    value={ins.unidad}
+                    onChange={e => actualizarInsumo(index, "unidad", e.target.value)}
+                  >
+                    <option>unid.</option>
+                    <option>ml</option>
+                    <option>amp.</option>
+                  </select>
+                  <button 
+                    style={{ ...S.btn("ghost"), fontSize: 12 }}
+                    onClick={() => eliminarInsumo(index)}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 8 }}>
+                Observaciones Generales
+              </label>
+              <textarea 
+                style={{ ...S.input, minHeight: 80 }}
+                placeholder="Reacciones del paciente, complicaciones, etc."
+                value={form.observaciones_generales || ""}
+                onChange={e => setForm(f => ({ ...f, observaciones_generales: e.target.value }))}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+              <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
+              <button 
+                style={S.btn("primary")}
+                onClick={completarAdministracion}
+                disabled={!form.medicamentos_administrados?.some(m => m.administrado)}
+              >
+                Completar Administración
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal === "detalle" && form && (
+        <div style={S.modal} onClick={() => setModal(null)}>
+          <div style={{ ...S.modalBox, maxWidth: 700, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>
+                Detalle de Administración
+              </div>
+              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>
+                Administrado por: {form.administrador_nombre} ({form.administrador_tipo})
+              </div>
+              <div style={{ fontSize: 13, color: C.textMuted }}>
+                Fecha: {new Date(form.created_at).toLocaleString('es-CL')}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Medicamentos Administrados:</div>
+              {form.medicamentos_administrados?.filter(m => m.administrado).map((med, i) => (
+                <div key={i} style={{ 
+                  padding: 12, 
+                  background: C.greenDim, 
+                  borderRadius: 6, 
+                  marginBottom: 8
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                    ✓ {med.nombre} - {med.dosis}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>
+                    Vía: {med.via} · Cantidad: {med.cantidad} · Hora: {med.hora_admin || "No especificada"}
+                  </div>
+                  {med.observaciones && (
+                    <div style={{ fontSize: 13, marginTop: 6 }}>
+                      <strong>Obs:</strong> {med.observaciones}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {form.insumos_administracion && form.insumos_administracion.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Insumos Utilizados:</div>
+                {form.insumos_administracion.map((ins, i) => (
+                  <div key={i} style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>
+                    • {ins.nombre} - {ins.cantidad} {ins.unidad}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {form.observaciones && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Observaciones:</div>
+                <div style={{ fontSize: 14 }}>{form.observaciones}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 function Dashboard({ carros, usuario, esAdmin, permisos }) {
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
