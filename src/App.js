@@ -950,10 +950,8 @@ const PERMISOS = {
   "Kinesiólogo/a":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false, verBolsoKine: true  },
   "Masoterapeuta":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false, verBolsoKine: false },
   "Administrador":   { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: true  },
-};};
-
-const getPermisos = (usuario) => {
-  if (usuario?.rol === "admin") return PERMISOS["Administrador"];
+};
+const getPermisos = (usuario) => {  if (usuario?.rol === "admin") return PERMISOS["Administrador"];
   return PERMISOS[usuario?.profesion] || PERMISOS["Kinesiólogo/a"];
 };
 const TIPOS_ATENCION = ["Consulta general", "Urgencia", "Traumatología", "Kinesiología", "Masoterapia", "Evaluación", "Derivación"];
