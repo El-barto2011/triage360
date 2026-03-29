@@ -4366,6 +4366,9 @@ export default function App() {
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
 ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
+...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
+...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaMasiva", label: "Masoterapia Masiva", icon: "bolso" }] : []),
+...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaEspecifica", label: "Masoterapia Específica", icon: "event" }] : []),
     ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
@@ -4475,6 +4478,33 @@ export default function App() {
 <div style={S.subtitle}>Pendientes de administración</div>
 </div>
 <VistaAdministracionMedicamentos usuario={usuario} />
+</div>
+)}
+{tab === "atencionKine" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Atenciones de Kinesiología</div>
+<div style={S.subtitle}>Registro de atenciones con bolso individual</div>
+</div>
+<VistaAtencionesKinesiologia usuario={usuario} />
+</div>
+)}
+{tab === "masoterapiaMasiva" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Masoterapia Masiva</div>
+<div style={S.subtitle}>Contador de masajes para eventos masivos</div>
+</div>
+<VistaMasoterapiaMasiva usuario={usuario} />
+</div>
+)}
+{tab === "masoterapiaEspecifica" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Masoterapia Específica</div>
+<div style={S.subtitle}>Fichas individuales para torneos</div>
+</div>
+<VistaMasoterapiaEspecifica usuario={usuario} />
 </div>
 )}
         {tab === "configuracion" && (
