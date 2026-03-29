@@ -3192,6 +3192,8 @@ export default function App() {
     ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso }] : []),
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
+...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
+...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
     ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
@@ -3285,6 +3287,24 @@ export default function App() {
 <VistaGestionEventos usuario={usuario} />
 </div>
         )}
+{tab === "atencionMedica" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Atenciones Médicas</div>
+<div style={S.subtitle}>Evaluación y prescripción médica</div>
+</div>
+<VistaAtencionesMedicas usuario={usuario} carros={carros} />
+</div>
+)}
+{tab === "adminMedicamentos" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Administración de Medicamentos</div>
+<div style={S.subtitle}>Pendientes de administración</div>
+</div>
+<VistaAdministracionMedicamentos usuario={usuario} />
+</div>
+)}
         {tab === "configuracion" && (
           <Configuracion industriaKey={industriaKey} setIndustriaKey={setIndustriaKey} usuario={usuario} />
         )}
