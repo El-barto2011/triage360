@@ -531,7 +531,7 @@ function VistaCarros({ carros, setCarros, permisos, esAdmin }) {
 }
 
 // ─── VISTA BOLSO MEDICAMENTOS ─────────────────────────────────────────────────────
-function VistaBolsoNaranja() {
+function VistaBolsoNaranja({ usuario }) {
   const [tabActiva, setTabActiva] = useState("inyectables");
 const [inyectables, setInyectables] = useState([]);
 const [orales, setOrales] = useState([]);
@@ -5089,7 +5089,7 @@ export default function App() {
               <div style={S.title}>Bolso Naranja 🟠</div>
               <div style={S.subtitle}>Medicamentos separados del carro · 3 cajas internas</div>
             </div>
-            <VistaBolsoNaranja />
+<VistaBolsoNaranja usuario={usuario} />
           </div>
         )}
         {tab === "atenciones" && (
