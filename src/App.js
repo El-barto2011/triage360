@@ -533,9 +533,22 @@ function VistaCarros({ carros, setCarros, permisos, esAdmin }) {
 // ─── VISTA BOLSO MEDICAMENTOS ─────────────────────────────────────────────────────
 function VistaBolsoNaranja() {
   const [tabActiva, setTabActiva] = useState("inyectables");
-  const [inyectables, setInyectables] = useState(MEDICAMENTOS_INYECTABLES);
-  const [orales, setOrales] = useState(MEDICAMENTOS_ORALES);
-  const [aerosoles, setAerosoles] = useState(MEDICAMENTOS_AEROSOLES);
+const [inyectables, setInyectables] = useState([]);
+const [orales, setOrales] = useState([]);
+const [aerosoles, setAerosoles] = useState([]);
+
+// Cargar medicamentos desde Supabase
+useEffect(() => {
+async function cargarMedicamentos() {
+const data = await sb("medicamentos?order=id", {}, usuario?.token);
+if (data) {
+setInyectables(data.filter(m => m.tipo === "inyectable"));
+setOrales(data.filter(m => m.tipo === "oral"));
+setAerosoles(data.filter(m => m.tipo === "aerosol"));
+}
+}
+if (usuario?.token) cargarMedicamentos();
+}, [usuario?.token]);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
 
@@ -553,14 +566,24 @@ function VistaBolsoNaranja() {
   };
   const abrirEditar = (ins) => { setForm({ ...ins }); setModal("editar"); };
 
-  const guardar = () => {
-    if (!form.nombre || !form.vencimiento) return;
-    const nuevo = { ...form, id: Date.now(), stock: +form.stock, minimo: +form.minimo };
-    tab.set(prev => modal === "nuevo" ? [...prev, nuevo] : prev.map(i => i.id === form.id ? nuevo : i));
-    setModal(null);
+const guardar = async () => {
+if (!form.nombre || !form.vencimiento) return;
+const datos = { nombre: form.nombre, dosis: form.dosis, tipo: form.tipo, stock: +form.stock, minimo: +form.minimo, unidad: form.unidad, vencimiento: form.vencimiento };
+if (modal === "nuevo") {
+const res = await sb("medicamentos", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
+if (res) tab.set(prev => [...prev, res[0]]);
+} else {
+const res = await sb(`medicamentos?id=eq.${form.id}`, { method: "PATCH", body: JSON.stringify(datos) }, usuario?.token);
+if (res) tab.set(prev => prev.map(i => i.id === form.id ? res[0] : i));
+}
+setModal(null);
+};
   };
 
-  const eliminar = (id) => tab.set(prev => prev.filter(i => i.id !== id));
+const eliminar = async (id) => {
+await sb(`medicamentos?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
+tab.set(prev => prev.filter(i => i.id !== id));
+};
 
   return (
     <div>
