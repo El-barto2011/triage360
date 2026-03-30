@@ -4669,7 +4669,7 @@ function GestionUsuarios({ usuario, carros }) {
   const abrirEditar = (u) => { setForm({ ...u }); setEditando(u.id); };
 
   const guardar = async () => {
-    const res = await sb(`perfiles?id=eq.${editando}`, {
+    const res = await sb(`perfiles?user_id=eq.${editando}`, {
       method: "PATCH",
       body: JSON.stringify({ nombre: form.nombre, profesion: form.profesion, rol: form.rol, evento_asignado: form.evento_asignado || null })
     }, usuario?.token);
@@ -4882,7 +4882,7 @@ function Login({ onLogin }) {
       const token = data.access_token;
       const userId = data.user?.id;
       // Obtener perfil con rol
-      const perfilRes = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?id=eq.${userId}`, {
+      const perfilRes = await fetch(`${SUPABASE_URL}/rest/v1/perfiles?user_id=eq.${userId}`, {
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
       });
       const perfiles = await perfilRes.json();
