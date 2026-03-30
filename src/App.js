@@ -4983,16 +4983,6 @@ function Login({ onLogin }) {
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [carros, setCarros] = useState(CARROS_INICIALES);
-const [medicamentosBolso, setMedicamentosBolso] = useState([]);
-
-// Cargar medicamentos desde Supabase
-useEffect(() => {
-async function cargarMeds() {
-const data = await sb("medicamentos?order=id", {}, usuario?.token);
-if (data) setMedicamentosBolso(data);
-}
-if (usuario?.token) cargarMeds();
-}, [usuario?.token]);
   const [atenciones, setAtenciones] = useState(ATENCIONES_INICIALES);
   const [usuario, setUsuario] = useState(null);
   const [industriaKey, setIndustriaKey] = useState("eventos");
@@ -5004,7 +4994,7 @@ if (usuario?.token) cargarMeds();
 
   const esAdmin = usuario?.rol === 'admin';
   const permisos = getPermisos(usuario);
-  const allMeds = medicamentosBolso;
+  const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const alertCarros = carros.flatMap(c => c.insumos).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
