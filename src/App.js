@@ -577,8 +577,6 @@ const res = await sb(`medicamentos?id=eq.${form.id}`, { method: "PATCH", body: J
 if (res) tab.set(prev => prev.map(i => i.id === form.id ? res[0] : i));
 }
 setModal(null);
-};
-  };
 
 const eliminar = async (id) => {
 await sb(`medicamentos?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
