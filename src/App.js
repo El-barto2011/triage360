@@ -4984,6 +4984,7 @@ export default function App() {
     { id: "atenciones", label: "Atenciones", icon: "event" },
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
+...(esAdmin ? [{ id: "costos", label: "Costos", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
   ];
@@ -5145,38 +5146,24 @@ export default function App() {
         {tab === "usuarios" && esAdmin && (
           <GestionUsuarios usuario={usuario} carros={carros} />
         )}
-        {tab === "reportes" && (
-          <div>
-            <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Reportes</div>
-              <div style={S.subtitle}>Resumen del inventario completo</div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              <div style={S.card}>
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>🚑 Insumos por Carro</div>
-                {carros.map(c => (
-                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}15`, fontSize: 13 }}>
-                    <span style={{ color: c.color, fontWeight: 600 }}>{c.nombre}</span>
-                    <span style={{ color: C.textMuted }}>{c.insumos.length} insumos · {c.evento_asignado === "Sin asignar" ? "Sin evento" : c.evento_asignado.slice(0, 25)}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={S.card}>
-                <div style={{ fontWeight: 700, marginBottom: 14 }}>🟠 Bolso Naranja</div>
-                {[
-                  { label: "💉 Inyectables", count: MEDICAMENTOS_INYECTABLES.length, color: C.blue },
-                  { label: "💊 Orales", count: MEDICAMENTOS_ORALES.length, color: C.green },
-                  { label: "🌬️ Aerosoles", count: MEDICAMENTOS_AEROSOLES.length, color: C.purple },
-                ].map(({ label, count, color }) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${C.border}15`, fontSize: 13 }}>
-                    <span style={{ color, fontWeight: 600 }}>{label}</span>
-                    <span style={{ color: C.textMuted }}>{count} medicamentos</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+{tab === "reportes" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Reportes</div>
+<div style={S.subtitle}>Análisis completo por evento</div>
+</div>
+<VistaReportes usuario={usuario} esAdmin={esAdmin} />
+</div>
+)}
+{tab === "costos" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Gestión de Costos</div>
+<div style={S.subtitle}>Registro de costos de insumos</div>
+</div>
+<VistaGestionCostos usuario={usuario} />
+</div>
+)}
       </main>
 
       {/* BOTTOM NAV - solo móvil */}
