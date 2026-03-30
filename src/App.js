@@ -3457,6 +3457,638 @@ function VistaMasoterapiaEspecifica({ usuario }) {
     </div>
   );
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPONENTE: REPORTES COMPLETOS (Con costos y exportación)
+// Reemplazar el componente VistaReportes existente
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VistaReportes({ usuario, esAdmin }) {
+  const [eventos, setEventos] = useState([]);
+  const [eventoSeleccionado, setEventoSeleccionado] = useState("todos");
+  const [loading, setLoading] = useState(true);
+  const [datosReporte, setDatosReporte] = useState(null);
+  const [modal, setModal] = useState(null);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [usuario]);
+
+  useEffect(() => {
+    if (eventoSeleccionado) {
+      generarReporte();
+    }
+  }, [eventoSeleccionado]);
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    const evs = await sb("equipos_evento?order=created_at.desc", {}, usuario?.token);
+    if (evs) {
+      setEventos(evs);
+      if (evs.length > 0 && eventoSeleccionado === "todos") {
+        setEventoSeleccionado(evs[0].nombre_evento);
+      }
+    }
+    setLoading(false);
+  };
+
+  const generarReporte = async () => {
+    if (!eventoSeleccionado || eventoSeleccionado === "todos") return;
+
+    setLoading(true);
+
+    // Cargar todas las atenciones del evento
+    const [
+      atencionesKine,
+      atencionesMed,
+      adminMed,
+      masoterapiaMasiva,
+      fichasMasoterapia
+    ] = await Promise.all([
+      sb(`atenciones_kinesiologia?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
+      sb(`atenciones_medicas?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
+      sb(`administracion_medicamentos?order=created_at.desc`, {}, usuario?.token),
+      sb(`atenciones_masoterapia_masiva?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
+      sb(`fichas_masoterapia?evento=eq.${eventoSeleccionado}`, {}, usuario?.token)
+    ]);
+
+    // Cargar costos (solo si es admin)
+    let costos = [];
+    if (esAdmin) {
+      costos = await sb("costos_insumos", {}, usuario?.token) || [];
+    }
+
+    // Calcular totales
+    const totalKine = atencionesKine?.length || 0;
+    const totalMedicas = atencionesMed?.length || 0;
+    const totalMasajes = masoterapiaMasiva?.reduce((sum, m) => sum + (m.masajes_realizados || 0), 0) || 0;
+    const totalFichasMasoterapia = fichasMasoterapia?.length || 0;
+
+    // Calcular medicamentos
+    const medicamentosUsados = {};
+    atencionesMed?.forEach(atencion => {
+      atencion.medicamentos_prescritos?.forEach(med => {
+        const key = med.nombre;
+        if (!medicamentosUsados[key]) {
+          medicamentosUsados[key] = { nombre: med.nombre, cantidad: 0, via: med.via };
+        }
+        medicamentosUsados[key].cantidad += med.cantidad || 1;
+      });
+    });
+
+    // Calcular insumos
+    const insumosUsados = {};
+    
+    // Insumos de atenciones médicas
+    atencionesMed?.forEach(atencion => {
+      atencion.insumos_medico?.forEach(ins => {
+        const key = ins.nombre;
+        if (!insumosUsados[key]) {
+          insumosUsados[key] = { nombre: ins.nombre, cantidad: 0, unidad: ins.unidad || "unid." };
+        }
+        insumosUsados[key].cantidad += parseFloat(ins.cantidad) || 0;
+      });
+    });
+
+    // Insumos de administración
+    adminMed?.forEach(admin => {
+      admin.insumos_administracion?.forEach(ins => {
+        const key = ins.nombre;
+        if (!insumosUsados[key]) {
+          insumosUsados[key] = { nombre: ins.nombre, cantidad: 0, unidad: ins.unidad || "unid." };
+        }
+        insumosUsados[key].cantidad += parseFloat(ins.cantidad) || 0;
+      });
+    });
+
+    // Insumos de kinesiología
+    atencionesKine?.forEach(atencion => {
+      atencion.insumos_usados?.forEach(ins => {
+        const key = ins.nombre;
+        if (!insumosUsados[key]) {
+          insumosUsados[key] = { nombre: ins.nombre, cantidad: 0, unidad: ins.unidad || "unid." };
+        }
+        insumosUsados[key].cantidad += parseFloat(ins.cantidad) || 0;
+      });
+    });
+
+    // Calcular costos (solo para admins)
+    let costoTotal = 0;
+    if (esAdmin && costos.length > 0) {
+      Object.values(insumosUsados).forEach(insumo => {
+        const costoDB = costos.find(c => c.nombre_insumo === insumo.nombre);
+        if (costoDB) {
+          costoTotal += (costoDB.costo_unitario || 0) * insumo.cantidad;
+        }
+      });
+
+      Object.values(medicamentosUsados).forEach(med => {
+        const costoDB = costos.find(c => c.nombre_insumo === med.nombre);
+        if (costoDB) {
+          costoTotal += (costoDB.costo_unitario || 0) * med.cantidad;
+        }
+      });
+    }
+
+    setDatosReporte({
+      evento: eventoSeleccionado,
+      totalKine,
+      totalMedicas,
+      totalMasajes,
+      totalFichasMasoterapia,
+      medicamentosUsados: Object.values(medicamentosUsados),
+      insumosUsados: Object.values(insumosUsados),
+      costoTotal: esAdmin ? costoTotal : null,
+      atencionesKine,
+      atencionesMed,
+      masoterapiaMasiva,
+      fichasMasoterapia
+    });
+
+    setLoading(false);
+  };
+
+  const exportarExcel = () => {
+    if (!datosReporte) return;
+
+    let csv = "REPORTE DE EVENTO - " + datosReporte.evento + "\n\n";
+    
+    csv += "RESUMEN GENERAL\n";
+    csv += "Atenciones Kinesiología," + datosReporte.totalKine + "\n";
+    csv += "Atenciones Médicas," + datosReporte.totalMedicas + "\n";
+    csv += "Masajes (Masivos)," + datosReporte.totalMasajes + "\n";
+    csv += "Fichas Masoterapia (Específicas)," + datosReporte.totalFichasMasoterapia + "\n\n";
+
+    csv += "MEDICAMENTOS PRESCRITOS\n";
+    csv += "Nombre,Cantidad,Vía\n";
+    datosReporte.medicamentosUsados.forEach(med => {
+      csv += `${med.nombre},${med.cantidad},${med.via}\n`;
+    });
+    csv += "\n";
+
+    csv += "INSUMOS UTILIZADOS\n";
+    csv += "Nombre,Cantidad,Unidad\n";
+    datosReporte.insumosUsados.forEach(ins => {
+      csv += `${ins.nombre},${ins.cantidad},${ins.unidad}\n`;
+    });
+    csv += "\n";
+
+    if (esAdmin && datosReporte.costoTotal !== null) {
+      csv += "COSTO TOTAL,$" + datosReporte.costoTotal.toLocaleString('es-CL') + "\n";
+    }
+
+    // Descargar archivo
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `reporte_${datosReporte.evento.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const cerrarEvento = async () => {
+    const eventoObj = eventos.find(e => e.nombre_evento === eventoSeleccionado);
+    if (!eventoObj) return;
+
+    const confirmar = confirm(
+      `¿Estás seguro de cerrar el evento "${eventoSeleccionado}"?\n\n` +
+      `Una vez cerrado:\n` +
+      `- No se podrán agregar más atenciones\n` +
+      `- Los datos quedarán bloqueados\n` +
+      `- Se generará un reporte automático\n\n` +
+      `Esta acción NO se puede deshacer.`
+    );
+
+    if (!confirmar) return;
+
+    const res = await sb(`equipos_evento?id=eq.${eventoObj.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        estado: "cerrado",
+        fecha_cierre: new Date().toISOString(),
+        cerrado_por: usuario.id
+      })
+    }, usuario?.token);
+
+    if (res) {
+      alert("Evento cerrado exitosamente");
+      cargarDatos();
+    }
+  };
+
+  if (loading && !datosReporte) {
+    return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando reportes...</div>;
+  }
+
+  return (
+    <div>
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>Reportes de Eventos</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+              Resumen detallado de atenciones y costos
+            </div>
+          </div>
+          {datosReporte && (
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={exportarExcel}>
+                📊 Exportar Excel
+              </button>
+              {esAdmin && eventos.find(e => e.nombre_evento === eventoSeleccionado)?.estado === "activo" && (
+                <button 
+                  style={{ ...S.btn("ghost"), fontSize: 12, color: C.red, borderColor: C.red }} 
+                  onClick={cerrarEvento}
+                >
+                  🔒 Cerrar Evento
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 8 }}>
+            Selecciona un Evento:
+          </label>
+          <select 
+            style={{ ...S.select, width: "100%" }}
+            value={eventoSeleccionado}
+            onChange={e => setEventoSeleccionado(e.target.value)}
+          >
+            {eventos.map(ev => (
+              <option key={ev.id} value={ev.nombre_evento}>
+                {ev.nombre_evento} - {ev.estado === "cerrado" ? "🔒 CERRADO" : "✅ Activo"}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {datosReporte && (
+        <>
+          <div style={{ ...S.card, marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 16 }}>📊 Resumen General</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+              <div style={{ textAlign: "center", padding: 16, background: C.surface2, borderRadius: 8 }}>
+                <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Kinesiología</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: C.blue }}>{datosReporte.totalKine}</div>
+              </div>
+              <div style={{ textAlign: "center", padding: 16, background: C.surface2, borderRadius: 8 }}>
+                <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Atenciones Médicas</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: C.blue }}>{datosReporte.totalMedicas}</div>
+              </div>
+              <div style={{ textAlign: "center", padding: 16, background: C.surface2, borderRadius: 8 }}>
+                <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Masajes Masivos</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: C.blue }}>{datosReporte.totalMasajes}</div>
+              </div>
+              <div style={{ textAlign: "center", padding: 16, background: C.surface2, borderRadius: 8 }}>
+                <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Fichas Masoterapia</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: C.blue }}>{datosReporte.totalFichasMasoterapia}</div>
+              </div>
+            </div>
+          </div>
+
+          {datosReporte.medicamentosUsados.length > 0 && (
+            <div style={{ ...S.card, marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12 }}>💊 Medicamentos Prescritos</div>
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                {datosReporte.medicamentosUsados.map((med, i) => (
+                  <div key={i} style={{ 
+                    padding: 12, 
+                    border: `1px solid ${C.border}`, 
+                    borderRadius: 6, 
+                    marginBottom: 8,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{med.nombre}</div>
+                      <div style={{ fontSize: 12, color: C.textMuted }}>Vía: {med.via}</div>
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.blue }}>
+                      {med.cantidad}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {datosReporte.insumosUsados.length > 0 && (
+            <div style={{ ...S.card, marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12 }}>🎒 Insumos Utilizados</div>
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                {datosReporte.insumosUsados.map((ins, i) => (
+                  <div key={i} style={{ 
+                    padding: 12, 
+                    border: `1px solid ${C.border}`, 
+                    borderRadius: 6, 
+                    marginBottom: 8,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{ins.nombre}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.blue }}>
+                      {ins.cantidad} {ins.unidad}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {esAdmin && datosReporte.costoTotal !== null && (
+            <div style={{ ...S.card, border: `2px solid ${C.blue}` }}>
+              <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 16 }}>💰 Costo Total del Evento</div>
+              <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 16 }}>
+                * Basado en costos registrados en el sistema. Insumos sin costo registrado no se incluyen.
+              </div>
+              <div style={{ textAlign: "center", padding: 24, background: C.blueDim, borderRadius: 8 }}>
+                <div style={{ fontSize: 40, fontWeight: 900, color: C.blue }}>
+                  ${datosReporte.costoTotal.toLocaleString('es-CL')}
+                </div>
+                <div style={{ fontSize: 13, color: C.textMuted, marginTop: 8 }}>CLP</div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPONENTE: GESTIÓN DE COSTOS DE INSUMOS (Solo Administradores)
+// Agregar después de VistaReportes
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VistaGestionCostos({ usuario }) {
+  const [costos, setCostos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+
+  useEffect(() => {
+    cargarCostos();
+  }, [usuario]);
+
+  const cargarCostos = async () => {
+    setLoading(true);
+    const res = await sb("costos_insumos?order=nombre_insumo", {}, usuario?.token);
+    if (res) setCostos(res);
+    setLoading(false);
+  };
+
+  const abrirNuevoCosto = () => {
+    setForm({
+      nombre_insumo: "",
+      costo_unitario: "",
+      categoria: "General",
+      unidad: "unid.",
+      proveedor: ""
+    });
+    setModal("nuevo");
+  };
+
+  const guardarCosto = async () => {
+    if (!form.nombre_insumo || !form.costo_unitario) {
+      alert("Completa al menos el nombre y costo del insumo");
+      return;
+    }
+
+    const datos = {
+      nombre_insumo: form.nombre_insumo,
+      costo_unitario: parseFloat(form.costo_unitario),
+      categoria: form.categoria || "General",
+      unidad: form.unidad || "unid.",
+      proveedor: form.proveedor || null
+    };
+
+    const res = await sb("costos_insumos", {
+      method: "POST",
+      body: JSON.stringify(datos)
+    }, usuario?.token);
+
+    if (res) {
+      setCostos(prev => [...prev, res[0]].sort((a, b) => a.nombre_insumo.localeCompare(b.nombre_insumo)));
+      setModal(null);
+      alert("Costo registrado exitosamente");
+    }
+  };
+
+  const editarCosto = (costo) => {
+    setForm(costo);
+    setModal("editar");
+  };
+
+  const actualizarCosto = async () => {
+    if (!form.nombre_insumo || !form.costo_unitario) {
+      alert("Completa al menos el nombre y costo del insumo");
+      return;
+    }
+
+    const res = await sb(`costos_insumos?id=eq.${form.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        nombre_insumo: form.nombre_insumo,
+        costo_unitario: parseFloat(form.costo_unitario),
+        categoria: form.categoria || "General",
+        unidad: form.unidad || "unid.",
+        proveedor: form.proveedor || null
+      })
+    }, usuario?.token);
+
+    if (res) {
+      setCostos(prev => prev.map(c => c.id === form.id ? res[0] : c));
+      setModal(null);
+      alert("Costo actualizado exitosamente");
+    }
+  };
+
+  const eliminarCosto = async (costo) => {
+    const confirmar = confirm(`¿Eliminar el costo de "${costo.nombre_insumo}"?`);
+    if (!confirmar) return;
+
+    const res = await sb(`costos_insumos?id=eq.${costo.id}`, {
+      method: "DELETE"
+    }, usuario?.token);
+
+    if (res !== null) {
+      setCostos(prev => prev.filter(c => c.id !== costo.id));
+      alert("Costo eliminado");
+    }
+  };
+
+  if (loading) {
+    return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando costos...</div>;
+  }
+
+  return (
+    <div>
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>Gestión de Costos de Insumos</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+              {costos.length} insumos con costo registrado
+            </div>
+          </div>
+          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevoCosto}>
+            + Nuevo Costo
+          </button>
+        </div>
+      </div>
+
+      {costos.length === 0 ? (
+        <div style={{ ...S.card, padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>No hay costos registrados</div>
+          <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>
+            Agrega costos para que aparezcan en los reportes
+          </div>
+          <button style={S.btn("primary")} onClick={abrirNuevoCosto}>
+            + Agregar Primer Costo
+          </button>
+        </div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 80px", gap: 12, padding: 12, background: C.surface2, borderRadius: 6, marginBottom: 12, fontSize: 12, fontWeight: 700 }}>
+            <div>Insumo</div>
+            <div>Costo Unitario</div>
+            <div>Categoría</div>
+            <div>Proveedor</div>
+            <div></div>
+          </div>
+          {costos.map(costo => (
+            <div key={costo.id} style={{ 
+              display: "grid", 
+              gridTemplateColumns: "2fr 1fr 1fr 1fr 80px", 
+              gap: 12, 
+              padding: 12, 
+              border: `1px solid ${C.border}`, 
+              borderRadius: 6, 
+              marginBottom: 8,
+              alignItems: "center"
+            }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{costo.nombre_insumo}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{costo.unidad}</div>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.blue }}>
+                ${costo.costo_unitario?.toLocaleString('es-CL')}
+              </div>
+              <div style={{ fontSize: 13 }}>{costo.categoria}</div>
+              <div style={{ fontSize: 13, color: C.textMuted }}>{costo.proveedor || "-"}</div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button 
+                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px" }}
+                  onClick={() => editarCosto(costo)}
+                >
+                  ✏️
+                </button>
+                <button 
+                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.red }}
+                  onClick={() => eliminarCosto(costo)}
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(modal === "nuevo" || modal === "editar") && (
+        <div style={S.modal} onClick={() => setModal(null)}>
+          <div style={{ ...S.modalBox, maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>
+                {modal === "nuevo" ? "Nuevo Costo de Insumo" : "Editar Costo"}
+              </div>
+              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>×</button>
+            </div>
+
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Nombre del Insumo *</label>
+              <input 
+                style={S.input} 
+                value={form.nombre_insumo || ""} 
+                onChange={e => setForm(f => ({ ...f, nombre_insumo: e.target.value }))} 
+                placeholder="Ej: Suero fisiológico 500ml"
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Costo Unitario (CLP) *</label>
+                <input 
+                  style={S.input} 
+                  type="number"
+                  value={form.costo_unitario || ""} 
+                  onChange={e => setForm(f => ({ ...f, costo_unitario: e.target.value }))} 
+                  placeholder="1500"
+                />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Unidad</label>
+                <select 
+                  style={S.select}
+                  value={form.unidad || "unid."}
+                  onChange={e => setForm(f => ({ ...f, unidad: e.target.value }))}
+                >
+                  <option>unid.</option>
+                  <option>ml</option>
+                  <option>mg</option>
+                  <option>amp.</option>
+                  <option>litros</option>
+                  <option>kg</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Categoría</label>
+              <select 
+                style={S.select}
+                value={form.categoria || "General"}
+                onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
+              >
+                <option>General</option>
+                <option>Medicamentos</option>
+                <option>Insumos Médicos</option>
+                <option>Kinesiología</option>
+                <option>Masoterapia</option>
+              </select>
+            </div>
+
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Proveedor</label>
+              <input 
+                style={S.input} 
+                value={form.proveedor || ""} 
+                onChange={e => setForm(f => ({ ...f, proveedor: e.target.value }))} 
+                placeholder="Nombre del proveedor"
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+              <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
+              <button 
+                style={S.btn("primary")} 
+                onClick={modal === "nuevo" ? guardarCosto : actualizarCosto}
+              >
+                {modal === "nuevo" ? "Guardar" : "Actualizar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 function Dashboard({ carros, usuario, esAdmin, permisos }) {
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
