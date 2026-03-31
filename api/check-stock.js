@@ -3,23 +3,33 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 export default async function handler(req, res) {
   try {
-    // Obtener medicamentos con stock bajo
-    const medicamentosRes = await fetch(SUPABASE_URL + '/rest/v1/medicamentos?stock=lte.minimo&select=*', {
+    // Obtener todos los medicamentos
+    const medicamentosRes = await fetch(SUPABASE_URL + '/rest/v1/medicamentos?select=*', {
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': 'Bearer ' + SUPABASE_KEY
       }
     });
-    const medicamentos = await medicamentosRes.json();
+    const todosMedicamentos = await medicamentosRes.json();
+    
+    // Filtrar los que tienen stock bajo
+    const medicamentos = Array.isArray(todosMedicamentos) 
+      ? todosMedicamentos.filter(m => m.stock <= m.minimo)
+      : [];
 
-    // Obtener insumos de kinesiología con stock bajo
-    const insumosRes = await fetch(SUPABASE_URL + '/rest/v1/insumos_kinesiologia?stock=lte.minimo&kinesiologo_id=not.is.null&select=*', {
+    // Obtener todos los insumos de kinesiología
+    const insumosRes = await fetch(SUPABASE_URL + '/rest/v1/insumos_kinesiologia?select=*&kinesiologo_id=not.is.null', {
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': 'Bearer ' + SUPABASE_KEY
       }
     });
-    const insumosKine = await insumosRes.json();
+    const todosInsumos = await insumosRes.json();
+    
+    // Filtrar los que tienen stock bajo
+    const insumosKine = Array.isArray(todosInsumos)
+      ? todosInsumos.filter(i => i.stock <= i.minimo)
+      : [];
 
     // Combinar y formatear
     const insumos = [
@@ -45,6 +55,6 @@ export default async function handler(req, res) {
       email: emailResult 
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message, stack: error.stack });
   }
 }
