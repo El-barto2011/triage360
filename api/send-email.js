@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         from: 'TRIAGE360 <onboarding@resend.dev>',
-        to: [ADMIN_EMAIL],
+        to: ADMIN_EMAIL.split(","),
         subject: subject,
         html: emailHtml
       })
