@@ -641,29 +641,49 @@ tab.set(prev => prev.filter(i => i.id !== id));
   );
 }
 // ─── VISTA BOLSO KINESIOLOGÍA ────────────────────────────────────────────────
+// COMPONENTE: VISTA GESTIÓN DE EVENTOS
 function VistaBolsoKinesiologia({ usuario }) {
+  const [kines, setKines] = useState([]);
+  const [kineSeleccionado, setKineSeleccionado] = useState(null);
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
+  const esAdmin = usuario?.rol === 'admin';
+  const esKine = usuario?.profesion === 'Kinesiólogo/a';
 
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      const data = await sb("insumos_kinesiologia?order=nombre", {}, usuario?.token);
-      if (data) setInsumos(data);
+      if (esAdmin) {
+        const data = await sb("perfiles?profesion=eq.Kinesiólogo/a&order=nombre", {}, usuario?.token);
+        if (data) setKines(data);
+      } else if (esKine) {
+        const data = await sb(`insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`, {}, usuario?.token);
+        if (data) setInsumos(data);
+      }
       setLoading(false);
     };
     cargar();
-  }, [usuario]);
+  }, [usuario, esAdmin, esKine]);
 
+  const cargarBolsoKine = async (kineId) => {
+    setLoading(true);
+    const data = await sb(`insumos_kinesiologia?kinesiologo_id=eq.${kineId}&order=nombre`, {}, usuario?.token);
+    if (data) setInsumos(data);
+    setKineSeleccionado(kineId);
+    setLoading(false);
+  };
+
+  const volverALista = () => { setKineSeleccionado(null); setInsumos([]); };
   const alertas = insumos.filter(i => i.stock < i.minimo).length;
-  const abrirNuevo = () => { setForm({ nombre: "", stock: "", minimo: "", unidad: "unid." }); setModal("nuevo"); };
+  const abrirNuevo = () => { setForm({ nombre: "", stock: "", minimo: "", unidad: "unid.", kinesiologo_id: esKine ? usuario.id : kineSeleccionado }); setModal("nuevo"); };
   const abrirEditar = (ins) => { setForm({ ...ins }); setModal("editar"); };
 
   const guardar = async () => {
     if (!form.nombre) return;
-    const datos = { nombre: form.nombre, stock: +form.stock, minimo: +form.minimo, unidad: form.unidad };
+    const kineId = esKine ? usuario.id : kineSeleccionado;
+    const datos = { nombre: form.nombre, stock: +form.stock, minimo: +form.minimo, unidad: form.unidad, kinesiologo_id: kineId };
     if (modal === "nuevo") {
       const res = await sb("insumos_kinesiologia", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
       if (res) setInsumos(prev => [...prev, res[0]]);
@@ -681,13 +701,43 @@ function VistaBolsoKinesiologia({ usuario }) {
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando...</div>;
 
+  if (esAdmin && !kineSeleccionado) {
+    return (
+      <div>
+        <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.blue}12, ${C.surface})`, borderColor: C.blue + "40", marginBottom: 20 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>🏥 Bolsos de Kinesiólogos</div>
+          <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Selecciona un kinesiólogo para ver su inventario</div>
+        </div>
+        <div style={S.card}>
+          <div style={{ display: "grid", gap: 12 }}>
+            {kines.map(kine => (
+              <button key={kine.id} onClick={() => cargarBolsoKine(kine.id)} style={{ ...S.btn("ghost"), padding: 16, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{kine.nombre}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Kinesiólogo/a</div>
+                </div>
+                <Icon name="arrowRight" size={18} color={C.textMuted} />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const kineActual = esKine ? usuario.nombre : kines.find(k => k.id === kineSeleccionado)?.nombre;
   return (
     <div>
       <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.blue}12, ${C.surface})`, borderColor: C.blue + "40", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>🏥 Bolso de Kinesiólogo/a</div>
-            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Insumos de kinesiología</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {esAdmin && <button onClick={volverALista} style={{ ...S.btn("ghost"), padding: "4px 8px" }}><Icon name="arrowLeft" size={16} color={C.blue} /></button>}
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>🏥 Bolso de {kineActual}</div>
+                <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Insumos de kinesiología</div>
+              </div>
+            </div>
           </div>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, color: alertas > 0 ? C.yellow : C.blue }}>{insumos.length}</div>
@@ -696,13 +746,11 @@ function VistaBolsoKinesiologia({ usuario }) {
           </div>
         </div>
       </div>
-
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <span style={{ fontWeight: 700, color: C.blue }}>📦 Inventario</span>
           <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevo}>+ Agregar</button>
         </div>
-
         <table style={S.table}>
           <thead><tr>{["Insumo", "Stock", "Estado", ""].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -716,9 +764,7 @@ function VistaBolsoKinesiologia({ usuario }) {
                   <span style={{ fontSize: 11, color: C.textFaint }}> / {ins.minimo} {ins.unidad}</span>
                 </td>
                 <td style={S.td}>
-                  {ins.stock === 0 ? <span style={S.pill(C.red, C.redDim)}>Agotado</span> :
-                   ins.stock < ins.minimo ? <span style={S.pill(C.yellow, C.yellowDim)}>Bajo</span> :
-                   <span style={S.pill(C.green, C.greenDim)}>OK</span>}
+                  {ins.stock === 0 ? <span style={S.pill(C.red, C.redDim)}>Agotado</span> : ins.stock < ins.minimo ? <span style={S.pill(C.yellow, C.yellowDim)}>Bajo</span> : <span style={S.pill(C.green, C.greenDim)}>OK</span>}
                 </td>
                 <td style={S.td}>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -731,7 +777,6 @@ function VistaBolsoKinesiologia({ usuario }) {
           </tbody>
         </table>
       </div>
-
       {modal && (
         <div style={S.modal} onClick={() => setModal(null)}>
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
@@ -749,28 +794,25 @@ function VistaBolsoKinesiologia({ usuario }) {
                 <input style={S.input} type="number" value={form.stock || ""} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} />
               </div>
               <div style={S.formRow}>
-                <label style={S.formLabel}>Stock mínimo</label>
+                <label style={S.formLabel}>Mínimo</label>
                 <input style={S.input} type="number" value={form.minimo || ""} onChange={e => setForm(p => ({ ...p, minimo: e.target.value }))} />
               </div>
             </div>
             <div style={S.formRow}>
               <label style={S.formLabel}>Unidad</label>
-              <select style={{ ...S.select, width: "100%" }} value={form.unidad || "unid."} onChange={e => setForm(p => ({ ...p, unidad: e.target.value }))}>
-                {["unid.", "rollos", "spray", "pote", "frascos"].map(u => <option key={u}>{u}</option>)}
-              </select>
+              <input style={S.input} value={form.unidad || ""} onChange={e => setForm(p => ({ ...p, unidad: e.target.value }))} />
             </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
+            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
               <button style={S.btn("primary")} onClick={guardar}>Guardar</button>
+              <button style={S.btn("secondary")} onClick={() => setModal(null)}>Cancelar</button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-// ═══════════════════════════════════════════════════════════════════════════
 }
-// COMPONENTE: VISTA GESTIÓN DE EVENTOS
+
 // Agregar este código DESPUÉS de VistaBolsoKinesiologia (línea ~742)
 // ═══════════════════════════════════════════════════════════════════════════
 
