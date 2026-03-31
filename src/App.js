@@ -3761,8 +3761,6 @@ function VistaReportes({ usuario, esAdmin }) {
       alert("Evento cerrado exitosamente. Se ha enviado el reporte por email.");
       cargarDatos();
     }
-
-    }
   };
 
   if (loading && !datosReporte) {
