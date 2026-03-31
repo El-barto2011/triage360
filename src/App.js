@@ -4953,6 +4953,7 @@ function Login({ onLogin }) {
       const perfil = perfiles?.[0] || {};
       onLogin({
         token,
+        id: perfil.id,
         email: data.user?.email,
         nombre: perfil.nombre || data.user?.email,
         rol: perfil.rol || 'profesional',
