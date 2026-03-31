@@ -3735,10 +3735,33 @@ function VistaReportes({ usuario, esAdmin }) {
         cerrado_por: usuario.id
       })
     }, usuario?.token);
-
     if (res) {
-      alert("Evento cerrado exitosamente");
+      // Enviar email con reporte del evento
+      try {
+        const stats = {
+          total_atenciones: (datosReporte?.totalMedicas || 0) + (datosReporte?.totalKine || 0) + (datosReporte?.totalMasajes || 0) + (datosReporte?.totalFichasMasoterapia || 0),
+          total_profesionales: new Set([...(datosReporte?.atencionesMedicas || []).map(a => a.medico), ...(datosReporte?.atencionesKine || []).map(a => a.kinesiologo)]).size,
+          por_profesional: []
+        };
+        await fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "reporte_evento",
+            data: {
+              evento: eventoSeleccionado,
+              fecha_cierre: new Date().toISOString(),
+              stats: stats
+            }
+          })
+        });
+      } catch (error) {
+        console.error("Error al enviar email:", error);
+      }
+      alert("Evento cerrado exitosamente. Se ha enviado el reporte por email.");
       cargarDatos();
+    }
+
     }
   };
 
