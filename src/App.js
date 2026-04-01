@@ -5059,8 +5059,8 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
 
   const cargarCarros = async () => {
     console.log("cargarCarros ejecutándose...");
-    const { data, error } = await sb('contenedores_medicamentos?tipo=eq.carro&select=*,medicamentos(nombre,unidad)', {}, usuario?.token);
-    console.log("DEBUG Carros:", data, error);
+    const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*,medicamentos(nombre,unidad)', {}, usuario?.token);
+    console.log("DEBUG Carros:", data);
     if (data) {
       setCarros(data);
       if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
