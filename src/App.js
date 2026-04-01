@@ -3741,7 +3741,7 @@ function VistaReportes({ usuario, esAdmin }) {
         const stats = {
           total_atenciones: (datosReporte?.totalMedicas || 0) + (datosReporte?.totalKine || 0) + (datosReporte?.totalMasajes || 0) + (datosReporte?.totalFichasMasoterapia || 0),
           total_profesionales: new Set([...(datosReporte?.atencionesMedicas || []).map(a => a.medico), ...(datosReporte?.atencionesKine || []).map(a => a.kinesiologo)]).size,
-          por_profesional: []
+          por_profesional: Object.values([...(datosReporte?.atencionesMedicas || []).map(a => ({medico: a.medico, rol: 'Médico'})), ...(datosReporte?.atencionesKine || []).map(a => ({medico: a.kinesiologo, rol: 'Kinesiólogo'}))].reduce((acc, {medico, rol}) => { if (!acc[medico]) acc[medico] = {nombre: medico, rol, atenciones: 0}; acc[medico].atenciones++; return acc; }, {}))
         };
         await fetch("/api/send-email", {
           method: "POST",
