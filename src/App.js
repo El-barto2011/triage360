@@ -5063,6 +5063,7 @@ function VistaCarrosClinicosDB({ usuario }) {
   const cargarCarros = async () => {
     const { data, error } = await sb('contenedores_medicamentos?tipo=eq.carro&select=*,medicamentos(nombre,unidad)', {}, usuario?.token);
     if (data) {
+console.log("DEBUG Carros:", data, error);
       setCarros(data);
       if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
     }
