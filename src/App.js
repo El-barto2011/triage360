@@ -5057,20 +5057,21 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
   const [editando, setEditando] = useState(null);
   const [formEdit, setFormEdit] = useState({});
 
-  useEffect(() => {
-// eslint-disable-next-line react-hooks/exhaustive-deps
-    cargarCarros();
-  }, []);
-
   const cargarCarros = async () => {
+    console.log("cargarCarros ejecutándose...");
     const { data, error } = await sb('contenedores_medicamentos?tipo=eq.carro&select=*,medicamentos(nombre,unidad)', {}, usuario?.token);
+    console.log("DEBUG Carros:", data, error);
     if (data) {
-console.log("DEBUG Carros:", data, error);
       setCarros(data);
       if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    console.log("useEffect ejecutándose...");
+    cargarCarros();
+  }, []);
 
   const carroActual = carros.filter(c => c.nombre === carroSel);
   const insumosCarroActual = carroActual;
