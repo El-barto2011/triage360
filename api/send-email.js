@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         from: 'TRIAGE360 <onboarding@resend.dev>',
-        to: ["alfredo.jara@sgtrumao.cl"],
+        to: ["alfredo.jara@sgtrumao.cl", "francia.munoz@sgtrumao.cl"],
         subject: subject,
         html: emailHtml
       })
