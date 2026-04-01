@@ -5057,6 +5057,7 @@ function VistaCarrosClinicosDB({ usuario }) {
   const [formEdit, setFormEdit] = useState({});
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/exhaustive-deps
     cargarCarros();
   }, []);
 
