@@ -5059,7 +5059,7 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
 
   const cargarCarros = async () => {
     console.log("cargarCarros ejecutándose...");
-    const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*,medicamentos(nombre,unidad)', {}, usuario?.token);
+    const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
     console.log("DEBUG Carros:", data);
     if (data) {
       setCarros(data);
@@ -5194,7 +5194,7 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
                       
                       return (
                         <tr key={insumo.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>{insumo.medicamentos?.nombre || 'Sin nombre'}</td>
+                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>{insumo.nombre_insumo || "Sin nombre"}</td>
                           <td style={{ padding: '10px', textAlign: 'center' }}>
                             {enEdicion ? (
                               <input type="number" value={formEdit.stock} onChange={e => setFormEdit({...formEdit, stock: e.target.value})} 
