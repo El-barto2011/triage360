@@ -5049,6 +5049,7 @@ function Login({ onLogin }) {
 // VISTA CARROS CLÍNICOS DB
 // ============================================
 function VistaCarrosClinicosDB({ usuario }) {
+console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
   const [carros, setCarros] = useState([]);
   const [carroSel, setCarroSel] = useState(null);
   const [cajonAbierto, setCajonAbierto] = useState(null);
