@@ -34,7 +34,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${RESEND_API_KEY}`
       },
       body: JSON.stringify({
-        from: 'TRIAGE360 <onboarding@resend.dev>',
+        from: 'TRIAGE360 <alfredo.jara@sgtrumao.cl>',
         to: ADMIN_EMAIL.split(","),
         subject: subject,
         html: emailHtml
