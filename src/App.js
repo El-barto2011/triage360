@@ -5251,7 +5251,7 @@ export default function App() {
   const esAdmin = usuario?.rol === 'admin';
   const permisos = getPermisos(usuario);
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
-  const alertCarros = carros.flatMap(c => c.insumos).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
+  const alertCarros = 0; // TODO: Calcular desde BD
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
   // Nav items según rol
