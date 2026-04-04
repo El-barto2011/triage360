@@ -129,7 +129,7 @@ export default async function handler(req, res) {
       `;
 
       const { data, error } = await resend.emails.send({
-        from: 'TRIAGE360 <onboarding@resend.dev>',
+        from: 'TRIAGE360 <alfredo.jara@sgtrumao.cl>',
         to: [destinatario],
         subject: `Asignación al evento: ${evento.nombre}`,
         html: htmlContent
