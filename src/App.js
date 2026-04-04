@@ -830,30 +830,8 @@ function VistaGestionEventos({ usuario }) {
         sb("equipos_evento?order=created_at.desc", {}, usuario?.token),
         sb("perfiles?order=nombre", {}, usuario?.token)
       ]);
-      
-      // Obtener emails para cada profesional desde auth.users
-      if (profs) {
-        const profsConEmail = await Promise.all(
-          profs.map(async (prof) => {
-            try {
-              const userData = await fetch(`${SUPABASE_URL}/rest/v1/auth.users?id=eq.${prof.user_id}&select=email`, {
-                headers: { 
-                  "apikey": SUPABASE_KEY, 
-                  "Authorization": `Bearer ${usuario?.token}` 
-                }
-              });
-              const data = await userData.json();
-              return { ...prof, email: data?.[0]?.email || null };
-            } catch (error) {
-              console.warn(`No se pudo obtener email para ${prof.nombre}`);
-              return { ...prof, email: null };
-            }
-          })
-        );
-        setProfesionales(profsConEmail);
-      }
-      
       if (evs) setEventos(evs);
+      if (profs) setProfesionales(profs);
       setLoading(false);
     };
     cargar();
@@ -880,6 +858,21 @@ function VistaGestionEventos({ usuario }) {
   const abrirEditarEvento = (evento) => {
     setForm({ ...evento });
     setModal("editar");
+  };
+
+  const eliminarEvento = async (eventoId, nombreEvento) => {
+    if (!window.confirm(`¿Estás seguro de eliminar el evento "${nombreEvento}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    
+    try {
+      await sb(`equipos_evento?id=eq.${eventoId}`, { method: "DELETE" }, usuario?.token);
+      setEventos(prev => prev.filter(e => e.id !== eventoId));
+      alert("Evento eliminado correctamente");
+    } catch (error) {
+      console.error("Error al eliminar:", error);
+      alert("Error al eliminar el evento");
+    }
   };
 
   const guardarEvento = async () => {
@@ -1103,12 +1096,20 @@ function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
-                <button 
-                  style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
-                  onClick={() => abrirEditarEvento(evento)}
-                >
-                  Editar
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button 
+                    style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
+                    onClick={() => abrirEditarEvento(evento)}
+                  >
+                    Editar
+                  </button>
+                  <button 
+                    style={{ ...S.btn("ghost"), padding: "6px 12px", color: C.red }} 
+                    onClick={() => eliminarEvento(evento.id, evento.nombre_evento)}
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
             </div>
           ))}
