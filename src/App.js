@@ -5794,14 +5794,6 @@ export default function App() {
   const handleLogout = () => setUsuario(null);
   if (!usuario) return <Login onLogin={handleLogin} />;
 
-  // DEBUG: Verificar datos del usuario
-  console.log("DEBUG Usuario:", {
-    nombre: usuario?.nombre,
-    profesion: usuario?.profesion,
-    rol: usuario?.rol,
-    usuarioCompleto: usuario
-  });
-
   const esAdmin = usuario?.rol === 'admin';
   const permisos = getPermisos(usuario);
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
@@ -5814,6 +5806,7 @@ export default function App() {
     ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros", icon: "carro", badge: alertCarros }] : []),
     ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso }] : []),
     { id: "atenciones", label: "Atenciones", icon: "event" },
+    ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
 ...(esAdmin ? [{ id: "costos", label: "Costos", icon: "report" }] : []),
@@ -5882,30 +5875,7 @@ export default function App() {
       )}
 
       <main style={{ ...S.main, padding: isMobile ? "16px 16px 80px" : 28 }}>
-        {tab === "dashboard" && (
-          <>
-            {/* DEBUG VISIBLE - SOLO PARA DIAGNOSTICO */}
-            {usuario?.profesion === "Kinesiólogo/a" && (
-              <div style={{ 
-                background: '#ff0000', 
-                color: 'white', 
-                padding: 20, 
-                margin: 20, 
-                borderRadius: 10,
-                fontFamily: 'monospace',
-                fontSize: 12
-              }}>
-                <div><strong>DEBUG INFO:</strong></div>
-                <div>Nombre: {usuario?.nombre}</div>
-                <div>Profesion: {usuario?.profesion}</div>
-                <div>Rol: {usuario?.rol}</div>
-                <div>¿Es Kinesiólogo?: {usuario?.profesion === "Kinesiólogo/a" ? "SÍ" : "NO"}</div>
-                <div>¿Es Admin?: {esAdmin ? "SÍ" : "NO"}</div>
-              </div>
-            )}
-            <Dashboard carros={carros} usuario={usuario} esAdmin={esAdmin} permisos={permisos} />
-          </>
-        )}
+        {tab === "dashboard" && <Dashboard carros={carros} usuario={usuario} esAdmin={esAdmin} permisos={permisos} />}
         {tab === "carros" && (
           <div>
             <div style={{ marginBottom: 24 }}>
