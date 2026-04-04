@@ -5198,6 +5198,44 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
                           <td style={{ padding: '10px', textAlign: 'center' }}>
                             {enEdicion ? (
                               <input type="number" value={formEdit.stock} onChange={e => setFormEdit({...formEdit, stock: e.target.value})} 
+                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
+                            ) : (
+                              <span style={{ color: bajStock ? C.red : C.text, fontWeight: bajStock ? 700 : 400 }}>{insumo.stock}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {enEdicion ? (
+                              <input type="number" value={formEdit.minimo} onChange={e => setFormEdit({...formEdit, minimo: e.target.value})} 
+                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
+                            ) : (
+                              <span style={{ fontSize: 12, color: C.textMuted }}>{insumo.minimo}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{insumo.unidad}</td>
+                          <td style={{ padding: '10px', textAlign: 'right' }}>
+                            {enEdicion ? (
+                              <>
+                                <button onClick={() => guardarEdicion(insumo.id)} style={{ ...S.btn('primary'), fontSize: 11, padding: '4px 10px', marginRight: 5 }}>💾 Guardar</button>
+                                <button onClick={() => setEditando(null)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✖️</button>
+                              </>
+                            ) : (
+                              <button onClick={() => abrirEditar(insumo)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✏️ Editar</button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function VistaBolsosMedicamentos({ usuario }) {
   const [bolsos, setBolsos] = useState([]);
   const [bolsoSel, setBolsoSel] = useState(null);
@@ -5484,44 +5522,6 @@ function VistaBolsosMedicamentos({ usuario }) {
     </div>
   );
 }
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ color: bajStock ? C.red : C.text, fontWeight: bajStock ? 700 : 400 }}>{insumo.stock}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input type="number" value={formEdit.minimo} onChange={e => setFormEdit({...formEdit, minimo: e.target.value})} 
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ fontSize: 12, color: C.textMuted }}>{insumo.minimo}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{insumo.unidad}</td>
-                          <td style={{ padding: '10px', textAlign: 'right' }}>
-                            {enEdicion ? (
-                              <>
-                                <button onClick={() => guardarEdicion(insumo.id)} style={{ ...S.btn('primary'), fontSize: 11, padding: '4px 10px', marginRight: 5 }}>💾 Guardar</button>
-                                <button onClick={() => setEditando(null)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✖️</button>
-                              </>
-                            ) : (
-                              <button onClick={() => abrirEditar(insumo)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✏️ Editar</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [carros, setCarros] = useState(CARROS_INICIALES);
@@ -5624,11 +5624,15 @@ export default function App() {
             <VistaCarrosClinicosDB usuario={usuario} />
           </div>
         )}
-{tab === "bolsos" && (
-<div>
-<VistaBolsosMedicamentos usuario={usuario} />
-</div>
-)}
+        {tab === "bolsos" && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={S.title}>Bolsos de Medicamentos 💊</div>
+              <div style={S.subtitle}>3 bolsos · 26 medicamentos cada uno · 3 cajas internas</div>
+            </div>
+            <VistaBolsosMedicamentos usuario={usuario} />
+          </div>
+        )}
         {tab === "bolso" && (
           <div>
             <div style={{ marginBottom: 24 }}>
