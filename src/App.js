@@ -824,28 +824,40 @@ function VistaGestionEventos({ usuario }) {
   const [form, setForm] = useState({});
 
   useEffect(() => {
-const cargar = async () => {
-setLoading(true);
-const [evs, profs] = await Promise.all([
-sb("equipos_evento?order=created_at.desc", {}, usuario?.token),
-sb("perfiles?order=nombre", {}, usuario?.token)
-]);
-
-// Obtener emails para cada profesional
-if (profs) {
-const profsConEmail = await Promise.all(
-profs.map(async (prof) => {
-const userData = await sb(`auth.users?id=eq.${prof.user_id}&select=email`, {}, usuario?.token);
-return { ...prof, email: userData?.[0]?.email || null };
-})
-);
-setProfesionales(profsConEmail);
-}
-
-if (evs) setEventos(evs);
-setLoading(false);
-};
-cargar();
+    const cargar = async () => {
+      setLoading(true);
+      const [evs, profs] = await Promise.all([
+        sb("equipos_evento?order=created_at.desc", {}, usuario?.token),
+        sb("perfiles?order=nombre", {}, usuario?.token)
+      ]);
+      
+      // Obtener emails para cada profesional desde auth.users
+      if (profs) {
+        const profsConEmail = await Promise.all(
+          profs.map(async (prof) => {
+            try {
+              const userData = await fetch(`${SUPABASE_URL}/rest/v1/auth.users?id=eq.${prof.user_id}&select=email`, {
+                headers: { 
+                  "apikey": SUPABASE_KEY, 
+                  "Authorization": `Bearer ${usuario?.token}` 
+                }
+              });
+              const data = await userData.json();
+              return { ...prof, email: data?.[0]?.email || null };
+            } catch (error) {
+              console.warn(`No se pudo obtener email para ${prof.nombre}`);
+              return { ...prof, email: null };
+            }
+          })
+        );
+        setProfesionales(profsConEmail);
+      }
+      
+      if (evs) setEventos(evs);
+      setLoading(false);
+    };
+    cargar();
+  }, [usuario]);
 
   const abrirNuevoEvento = () => {
     setForm({
@@ -968,11 +980,6 @@ cargar();
 
       // Enviar email a cada profesional
       for (const prof of profesionalesNotificar) {
-        if (!prof.email) {
-          console.warn(`⚠️ No se pudo obtener email para ${prof.nombre}`);
-          continue;
-        }
-
         // Determinar el rol del profesional
         let rol = "";
         if (evento.medicos?.includes(prof.id)) rol = "Médico";
@@ -981,7 +988,7 @@ cargar();
         else if (evento.kinesiologos?.includes(prof.id)) rol = "Kinesiólogo/a";
         else if (evento.masoterapeutas?.includes(prof.id)) rol = "Masoterapeuta";
 
-        const response = await fetch("/api/send-email", {
+        await fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -999,16 +1006,9 @@ cargar();
             equipo: equipoCompleto
           })
         });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`❌ Error al enviar email a ${prof.nombre}:`, errorText);
-        } else {
-          console.log(`✅ Email enviado a ${prof.nombre} (${prof.email})`);
-        }
       }
       
-      console.log(`📧 Emails procesados: ${profesionalesNotificar.length} profesionales`);
+      console.log(`Emails enviados a ${profesionalesNotificar.length} profesionales`);
     } catch (error) {
       console.error("Error al enviar emails:", error);
     }
