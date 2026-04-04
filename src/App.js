@@ -860,21 +860,6 @@ function VistaGestionEventos({ usuario }) {
     setModal("editar");
   };
 
-  const eliminarEvento = async (eventoId, nombreEvento) => {
-    if (!window.confirm(`¿Estás seguro de eliminar el evento "${nombreEvento}"? Esta acción no se puede deshacer.`)) {
-      return;
-    }
-    
-    try {
-      await sb(`equipos_evento?id=eq.${eventoId}`, { method: "DELETE" }, usuario?.token);
-      setEventos(prev => prev.filter(e => e.id !== eventoId));
-      alert("Evento eliminado correctamente");
-    } catch (error) {
-      console.error("Error al eliminar:", error);
-      alert("Error al eliminar el evento");
-    }
-  };
-
   const guardarEvento = async () => {
     if (!form.nombre_evento || !form.fecha_evento) {
       alert("Por favor completa nombre y fecha del evento");
@@ -962,6 +947,17 @@ function VistaGestionEventos({ usuario }) {
       // Obtener datos completos de los profesionales a notificar
       const profesionalesNotificar = profesionales.filter(p => profesionalesIds.includes(p.id));
       
+      // Obtener emails desde auth.users para cada profesional
+      const emailsPromises = profesionalesNotificar.map(async (prof) => {
+        const userData = await sb(`auth.users?id=eq.${prof.user_id}&select=email`, {}, usuario?.token);
+        return {
+          ...prof,
+          email: userData?.[0]?.email || null
+        };
+      });
+      
+      const profesionalesConEmail = await Promise.all(emailsPromises);
+      
       // Obtener datos completos del equipo para mostrar en el email
       const equipoCompleto = {
         medicos: profesionales.filter(p => evento.medicos?.includes(p.id)).map(p => p.nombre),
@@ -972,7 +968,12 @@ function VistaGestionEventos({ usuario }) {
       };
 
       // Enviar email a cada profesional
-      for (const prof of profesionalesNotificar) {
+      for (const prof of profesionalesConEmail) {
+        if (!prof.email) {
+          console.warn(`⚠️ No se pudo obtener email para ${prof.nombre}`);
+          continue;
+        }
+
         // Determinar el rol del profesional
         let rol = "";
         if (evento.medicos?.includes(prof.id)) rol = "Médico";
@@ -981,7 +982,7 @@ function VistaGestionEventos({ usuario }) {
         else if (evento.kinesiologos?.includes(prof.id)) rol = "Kinesiólogo/a";
         else if (evento.masoterapeutas?.includes(prof.id)) rol = "Masoterapeuta";
 
-        await fetch("/api/send-email", {
+        const response = await fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -999,9 +1000,16 @@ function VistaGestionEventos({ usuario }) {
             equipo: equipoCompleto
           })
         });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ Error al enviar email a ${prof.nombre}:`, errorText);
+        } else {
+          console.log(`✅ Email enviado a ${prof.nombre} (${prof.email})`);
+        }
       }
       
-      console.log(`Emails enviados a ${profesionalesNotificar.length} profesionales`);
+      console.log(`📧 Emails procesados: ${profesionalesConEmail.length} profesionales`);
     } catch (error) {
       console.error("Error al enviar emails:", error);
     }
@@ -1096,20 +1104,13 @@ function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button 
+                <button 
                   style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
                   onClick={() => abrirEditarEvento(evento)}
                 >
                   Editar
                 </button>
-<button 
-style={{ ...S.btn("ghost"), padding: "6px 12px", color: C.red }} 
-onClick={() => eliminarEvento(evento.id, evento.nombre_evento)}
->
-Eliminar
-</button>
-</div>              </div>
+              </div>
             </div>
           ))}
         </div>
