@@ -578,6 +578,7 @@ if (res) tab.set(prev => prev.map(i => i.id === form.id ? res[0] : i));
 }
 setModal(null);
 };
+  };
 
 const eliminar = async (id) => {
 await sb(`medicamentos?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
@@ -641,49 +642,29 @@ tab.set(prev => prev.filter(i => i.id !== id));
   );
 }
 // ─── VISTA BOLSO KINESIOLOGÍA ────────────────────────────────────────────────
-// COMPONENTE: VISTA GESTIÓN DE EVENTOS
 function VistaBolsoKinesiologia({ usuario }) {
-  const [kines, setKines] = useState([]);
-  const [kineSeleccionado, setKineSeleccionado] = useState(null);
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
-  const esAdmin = usuario?.rol === 'admin';
-  const esKine = usuario?.profesion === 'Kinesiólogo/a';
 
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      if (esAdmin) {
-        const data = await sb("perfiles?profesion=eq.Kinesiólogo/a&order=nombre", {}, usuario?.token);
-        if (data) setKines(data);
-      } else if (esKine) {
-        const data = await sb(`insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`, {}, usuario?.token);
-        if (data) setInsumos(data);
-      }
+      const data = await sb("insumos_kinesiologia?order=nombre", {}, usuario?.token);
+      if (data) setInsumos(data);
       setLoading(false);
     };
     cargar();
-  }, [usuario, esAdmin, esKine]);
+  }, [usuario]);
 
-  const cargarBolsoKine = async (kineId) => {
-    setLoading(true);
-    const data = await sb(`insumos_kinesiologia?kinesiologo_id=eq.${kineId}&order=nombre`, {}, usuario?.token);
-    if (data) setInsumos(data);
-    setKineSeleccionado(kineId);
-    setLoading(false);
-  };
-
-  const volverALista = () => { setKineSeleccionado(null); setInsumos([]); };
   const alertas = insumos.filter(i => i.stock < i.minimo).length;
-  const abrirNuevo = () => { setForm({ nombre: "", stock: "", minimo: "", unidad: "unid.", kinesiologo_id: esKine ? usuario.id : kineSeleccionado }); setModal("nuevo"); };
+  const abrirNuevo = () => { setForm({ nombre: "", stock: "", minimo: "", unidad: "unid." }); setModal("nuevo"); };
   const abrirEditar = (ins) => { setForm({ ...ins }); setModal("editar"); };
 
   const guardar = async () => {
     if (!form.nombre) return;
-    const kineId = esKine ? usuario.id : kineSeleccionado;
-    const datos = { nombre: form.nombre, stock: +form.stock, minimo: +form.minimo, unidad: form.unidad, kinesiologo_id: kineId };
+    const datos = { nombre: form.nombre, stock: +form.stock, minimo: +form.minimo, unidad: form.unidad };
     if (modal === "nuevo") {
       const res = await sb("insumos_kinesiologia", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
       if (res) setInsumos(prev => [...prev, res[0]]);
@@ -701,43 +682,13 @@ function VistaBolsoKinesiologia({ usuario }) {
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando...</div>;
 
-  if (esAdmin && !kineSeleccionado) {
-    return (
-      <div>
-        <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.blue}12, ${C.surface})`, borderColor: C.blue + "40", marginBottom: 20 }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>🏥 Bolsos de Kinesiólogos</div>
-          <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Selecciona un kinesiólogo para ver su inventario</div>
-        </div>
-        <div style={S.card}>
-          <div style={{ display: "grid", gap: 12 }}>
-            {kines.map(kine => (
-              <button key={kine.id} onClick={() => cargarBolsoKine(kine.id)} style={{ ...S.btn("ghost"), padding: 16, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{kine.nombre}</div>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Kinesiólogo/a</div>
-                </div>
-                <Icon name="arrowRight" size={18} color={C.textMuted} />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const kineActual = esKine ? usuario.nombre : kines.find(k => k.id === kineSeleccionado)?.nombre;
   return (
     <div>
       <div style={{ ...S.card, background: `linear-gradient(135deg, ${C.blue}12, ${C.surface})`, borderColor: C.blue + "40", marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {esAdmin && <button onClick={volverALista} style={{ ...S.btn("ghost"), padding: "4px 8px" }}><Icon name="arrowLeft" size={16} color={C.blue} /></button>}
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>🏥 Bolso de {kineActual}</div>
-                <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Insumos de kinesiología</div>
-              </div>
-            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>🏥 Bolso de Kinesiólogo/a</div>
+            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Insumos de kinesiología</div>
           </div>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, color: alertas > 0 ? C.yellow : C.blue }}>{insumos.length}</div>
@@ -746,11 +697,13 @@ function VistaBolsoKinesiologia({ usuario }) {
           </div>
         </div>
       </div>
+
       <div style={S.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <span style={{ fontWeight: 700, color: C.blue }}>📦 Inventario</span>
           <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevo}>+ Agregar</button>
         </div>
+
         <table style={S.table}>
           <thead><tr>{["Insumo", "Stock", "Estado", ""].map(h => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -764,7 +717,9 @@ function VistaBolsoKinesiologia({ usuario }) {
                   <span style={{ fontSize: 11, color: C.textFaint }}> / {ins.minimo} {ins.unidad}</span>
                 </td>
                 <td style={S.td}>
-                  {ins.stock === 0 ? <span style={S.pill(C.red, C.redDim)}>Agotado</span> : ins.stock < ins.minimo ? <span style={S.pill(C.yellow, C.yellowDim)}>Bajo</span> : <span style={S.pill(C.green, C.greenDim)}>OK</span>}
+                  {ins.stock === 0 ? <span style={S.pill(C.red, C.redDim)}>Agotado</span> :
+                   ins.stock < ins.minimo ? <span style={S.pill(C.yellow, C.yellowDim)}>Bajo</span> :
+                   <span style={S.pill(C.green, C.greenDim)}>OK</span>}
                 </td>
                 <td style={S.td}>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -777,6 +732,7 @@ function VistaBolsoKinesiologia({ usuario }) {
           </tbody>
         </table>
       </div>
+
       {modal && (
         <div style={S.modal} onClick={() => setModal(null)}>
           <div style={S.modalBox} onClick={e => e.stopPropagation()}>
@@ -794,25 +750,28 @@ function VistaBolsoKinesiologia({ usuario }) {
                 <input style={S.input} type="number" value={form.stock || ""} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} />
               </div>
               <div style={S.formRow}>
-                <label style={S.formLabel}>Mínimo</label>
+                <label style={S.formLabel}>Stock mínimo</label>
                 <input style={S.input} type="number" value={form.minimo || ""} onChange={e => setForm(p => ({ ...p, minimo: e.target.value }))} />
               </div>
             </div>
             <div style={S.formRow}>
               <label style={S.formLabel}>Unidad</label>
-              <input style={S.input} value={form.unidad || ""} onChange={e => setForm(p => ({ ...p, unidad: e.target.value }))} />
+              <select style={{ ...S.select, width: "100%" }} value={form.unidad || "unid."} onChange={e => setForm(p => ({ ...p, unidad: e.target.value }))}>
+                {["unid.", "rollos", "spray", "pote", "frascos"].map(u => <option key={u}>{u}</option>)}
+              </select>
             </div>
-            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
               <button style={S.btn("primary")} onClick={guardar}>Guardar</button>
-              <button style={S.btn("secondary")} onClick={() => setModal(null)}>Cancelar</button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
+// ═══════════════════════════════════════════════════════════════════════════
 }
-
+// COMPONENTE: VISTA GESTIÓN DE EVENTOS
 // Agregar este código DESPUÉS de VistaBolsoKinesiologia (línea ~742)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -3735,30 +3694,9 @@ function VistaReportes({ usuario, esAdmin }) {
         cerrado_por: usuario.id
       })
     }, usuario?.token);
+
     if (res) {
-      // Enviar email con reporte del evento
-      try {
-        const stats = {
-          total_atenciones: (datosReporte?.totalMedicas || 0) + (datosReporte?.totalKine || 0) + (datosReporte?.totalMasajes || 0) + (datosReporte?.totalFichasMasoterapia || 0),
-          total_profesionales: new Set([...(datosReporte?.atencionesMedicas || []).map(a => a.medico), ...(datosReporte?.atencionesKine || []).map(a => a.kinesiologo)]).size,
-          por_profesional: Object.values([...(datosReporte?.atencionesMedicas || []).map(a => ({medico: a.medico, rol: 'Médico'})), ...(datosReporte?.atencionesKine || []).map(a => ({medico: a.kinesiologo, rol: 'Kinesiólogo'}))].reduce((acc, {medico, rol}) => { if (!acc[medico]) acc[medico] = {nombre: medico, rol, atenciones: 0}; acc[medico].atenciones++; return acc; }, {}))
-        };
-        await fetch("/api/send-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "reporte_evento",
-            data: {
-              evento: eventoSeleccionado,
-              fecha_cierre: new Date().toISOString(),
-              stats: stats
-            }
-          })
-        });
-      } catch (error) {
-        console.error("Error al enviar email:", error);
-      }
-      alert("Evento cerrado exitosamente. Se ha enviado el reporte por email.");
+      alert("Evento cerrado exitosamente");
       cargarDatos();
     }
   };
@@ -4374,7 +4312,7 @@ const PERMISOS = {
   "Médico":          { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: false },
   "Enfermero/a":     { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: false },
   "Paramédico":      { recetarMedicamentos: false, verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: false },
-  "Kinesiólogo/a":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false, verBolsoKine: false  },
+  "Kinesiólogo/a":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false, verBolsoKine: true  },
   "Masoterapeuta":   { recetarMedicamentos: false, verInventario: false, modificarStock: false, verBolso: false, verBolsoKine: false },
   "Administrador":   { recetarMedicamentos: true,  verInventario: true,  modificarStock: true,  verBolso: true,  verBolsoKine: true  },
 };
@@ -4974,7 +4912,6 @@ function Login({ onLogin }) {
       const perfil = perfiles?.[0] || {};
       onLogin({
         token,
-        id: perfil.id,
         email: data.user?.email,
         nombre: perfil.nombre || data.user?.email,
         rol: perfil.rol || 'profesional',
@@ -5044,484 +4981,6 @@ function Login({ onLogin }) {
 }
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
-
-// ============================================
-// VISTA CARROS CLÍNICOS DB
-// ============================================
-function VistaCarrosClinicosDB({ usuario }) {
-console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
-  const [carros, setCarros] = useState([]);
-  const [carroSel, setCarroSel] = useState(null);
-  const [cajonAbierto, setCajonAbierto] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editando, setEditando] = useState(null);
-  const [formEdit, setFormEdit] = useState({});
-
-  const cargarCarros = async () => {
-    console.log("cargarCarros ejecutándose...");
-    const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
-    console.log("DEBUG Carros:", data);
-    if (data) {
-      setCarros(data);
-      if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    console.log("useEffect ejecutándose...");
-    cargarCarros();
-  }, []);
-
-  const carroActual = carros.filter(c => c.nombre === carroSel);
-  const insumosCarroActual = carroActual;
-  
-  const insumosCajon = (cajonId) => insumosCarroActual.filter(i => i.cajon === cajonId);
-  const alertasCajon = (cajonId) => insumosCajon(cajonId).filter(i => i.stock <= i.minimo).length;
-  const alertasCarro = (nombreCarro) => carros.filter(c => c.nombre === nombreCarro && c.stock <= c.minimo).length;
-
-  const toggleCajon = (cajonId) => setCajonAbierto(prev => prev === cajonId ? null : cajonId);
-
-  const abrirEditar = (insumo) => {
-    setEditando(insumo.id);
-    setFormEdit({ stock: insumo.stock, minimo: insumo.minimo });
-  };
-
-  const guardarEdicion = async (id) => {
-    const { error } = await sb(`contenedores_medicamentos?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ stock: +formEdit.stock, minimo: +formEdit.minimo })
-    }, usuario?.token);
-    
-    if (!error) {
-      setEditando(null);
-      cargarCarros();
-    }
-  };
-
-  const carrosUnicos = [...new Set(carros.map(c => c.nombre))];
-  const colores = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#06b6d4'];
-
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando carros...</div>;
-
-  return (
-    <div style={{ display: 'flex', gap: 20 }}>
-      {/* Lista de carros */}
-      <div style={{ width: 185, flexShrink: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Seleccionar carro</div>
-        {carrosUnicos.map((nombreCarro, idx) => {
-          const alertas = alertasCarro(nombreCarro);
-          const activo = carroSel === nombreCarro;
-          const color = colores[idx % colores.length];
-          const totalInsumos = carros.filter(c => c.nombre === nombreCarro).length;
-          
-          return (
-            <div key={nombreCarro} onClick={() => { setCarroSel(nombreCarro); setCajonAbierto(null); }} 
-                 style={{ cursor: 'pointer', background: activo ? C.surface : 'transparent', border: `1px solid ${activo ? color + '50' : C.border}`, borderRadius: 10, padding: '11px 13px', marginBottom: 7, borderLeft: `3px solid ${color}`, transition: 'all 0.12s' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: 14, color: activo ? C.text : C.textMuted }}>{nombreCarro}</span>
-                {alertas > 0 && <span style={{ background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</span>}
-              </div>
-              <div style={{ fontSize: 11, color: C.textFaint, marginTop: 2 }}>{totalInsumos} medicamentos</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Detalle del carro */}
-      <div style={{ flex: 1 }}>
-        {carroSel && (
-          <>
-            {/* Header */}
-            <div style={{ ...S.card, borderLeft: `3px solid ${colores[carrosUnicos.indexOf(carroSel) % colores.length]}`, marginBottom: 20 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: colores[carrosUnicos.indexOf(carroSel) % colores.length] }}>{carroSel}</div>
-              <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>
-                {insumosCarroActual.length} medicamentos totales · 5 cajones
-              </div>
-            </div>
-
-            {/* Tarjetas de cajones */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
-              {CAJONES_META.map(cj => {
-                const items = insumosCajon(cj.id);
-                const alertas = alertasCajon(cj.id);
-                const abierto = cajonAbierto === cj.id;
-                
-                return (
-                  <div key={cj.id} onClick={() => toggleCajon(cj.id)} 
-                       style={{ cursor: 'pointer', background: abierto ? cj.color + '15' : C.surface, border: `2px solid ${abierto ? cj.color : C.border}`, borderRadius: 12, padding: '16px 12px', textAlign: 'center', transition: 'all 0.15s', position: 'relative' }}>
-                    {alertas > 0 && (
-                      <div style={{ position: 'absolute', top: 8, right: 8, background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</div>
-                    )}
-                    <div style={{ fontSize: 28, marginBottom: 6 }}>{cj.emoji}</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: abierto ? cj.color : C.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>{cj.id}</div>
-                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, lineHeight: 1.3 }}>{cj.nombre}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: cj.color, marginTop: 8 }}>{items.length} items</div>
-                    <div style={{ fontSize: 11, marginTop: 4, color: alertas > 0 ? C.red : C.green }}>
-                      {alertas > 0 ? `⚠️ ${alertas} alertas` : '✅ OK'}
-                    </div>
-                    <div style={{ fontSize: 10, color: C.textFaint, marginTop: 6 }}>{abierto ? '▲ Cerrar' : '▼ Ver medicamentos'}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Contenido del cajón abierto */}
-            {cajonAbierto && (
-              <div style={{ ...S.card, borderTop: `3px solid ${CAJONES_META.find(c => c.id === cajonAbierto)?.color}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <span style={{ fontSize: 22 }}>{CAJONES_META.find(c => c.id === cajonAbierto)?.emoji}</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: CAJONES_META.find(c => c.id === cajonAbierto)?.color }}>{cajonAbierto}</div>
-                    <div style={{ fontSize: 12, color: C.textMuted }}>{CAJONES_META.find(c => c.id === cajonAbierto)?.nombre}</div>
-                  </div>
-                </div>
-
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                      <th style={{ padding: '8px', textAlign: 'left', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MEDICAMENTO</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>STOCK</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MÍNIMO</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>UNIDAD</th>
-                      <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>ACCIONES</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {insumosCajon(cajonAbierto).map(insumo => {
-                      const enEdicion = editando === insumo.id;
-                      const bajStock = insumo.stock <= insumo.minimo;
-                      
-                      return (
-                        <tr key={insumo.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>{insumo.nombre_insumo || "Sin nombre"}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input type="number" value={formEdit.stock} onChange={e => setFormEdit({...formEdit, stock: e.target.value})} 
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ color: bajStock ? C.red : C.text, fontWeight: bajStock ? 700 : 400 }}>{insumo.stock}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input type="number" value={formEdit.minimo} onChange={e => setFormEdit({...formEdit, minimo: e.target.value})} 
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ fontSize: 12, color: C.textMuted }}>{insumo.minimo}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{insumo.unidad}</td>
-                          <td style={{ padding: '10px', textAlign: 'right' }}>
-                            {enEdicion ? (
-                              <>
-                                <button onClick={() => guardarEdicion(insumo.id)} style={{ ...S.btn('primary'), fontSize: 11, padding: '4px 10px', marginRight: 5 }}>💾 Guardar</button>
-                                <button onClick={() => setEditando(null)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✖️</button>
-                              </>
-                            ) : (
-                              <button onClick={() => abrirEditar(insumo)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✏️ Editar</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function VistaBolsosMedicamentos({ usuario }) {
-  const [bolsos, setBolsos] = useState([]);
-  const [bolsoSel, setBolsoSel] = useState(null);
-  const [cajaAbierta, setCajaAbierta] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editando, setEditando] = useState(null);
-  const [formEdit, setFormEdit] = useState({});
-
-  const cargarBolsos = async () => {
-    const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
-    console.log("DEBUG Bolsos:", data);
-    if (data) {
-      setBolsos(data);
-      if (data.length > 0 && !bolsoSel) setBolsoSel(data[0].nombre);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    cargarBolsos();
-  }, []);
-
-  const bolsoActual = bolsos.filter(b => b.nombre === bolsoSel);
-  const medicamentosBolsoActual = bolsoActual;
-  
-  const medicamentosCaja = (cajaId) => medicamentosBolsoActual.filter(m => m.cajon === cajaId);
-  const alertasCaja = (cajaId) => medicamentosCaja(cajaId).filter(m => m.stock <= m.minimo).length;
-  const alertasBolso = (nombreBolso) => bolsos.filter(b => b.nombre === nombreBolso && b.stock <= b.minimo).length;
-
-  const toggleCaja = (cajaId) => setCajaAbierta(prev => prev === cajaId ? null : cajaId);
-
-  const iniciarEdicion = (medicamento) => {
-    setEditando(medicamento.id);
-    setFormEdit({ stock: medicamento.stock, minimo: medicamento.minimo });
-  };
-
-  const guardarEdicion = async (medicamento) => {
-    const data = await sb(
-      \`contenedores_medicamentos?id=eq.\${medicamento.id}\`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ stock: formEdit.stock, minimo: formEdit.minimo })
-      },
-      usuario?.token
-    );
-    if (data) {
-      await cargarBolsos();
-      setEditando(null);
-      setFormEdit({});
-    }
-  };
-
-  const cancelarEdicion = () => {
-    setEditando(null);
-    setFormEdit({});
-  };
-
-  const CAJAS_META = [
-    { id: "Caja 1 · Inyectables", emoji: "💉", nombre: "Inyectables", color: C.red },
-    { id: "Caja 2 · Orales", emoji: "💊", nombre: "Orales", color: C.blue },
-    { id: "Caja 3 · Aerosoles", emoji: "🫁", nombre: "Aerosoles", color: C.purple }
-  ];
-
-  if (loading) {
-    return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando bolsos...</div>;
-  }
-
-  const bolsosUnicos = [...new Set(bolsos.map(b => b.nombre))];
-
-  return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      {/* SIDEBAR - Lista de bolsos */}
-      <div style={{ width: 280, borderRight: \`1px solid \${C.border}\`, padding: 20, overflowY: 'auto' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Bolsos de Medicamentos
-        </div>
-        {bolsosUnicos.map(nombreBolso => {
-          const alertas = alertasBolso(nombreBolso);
-          const activo = bolsoSel === nombreBolso;
-          return (
-            <div
-              key={nombreBolso}
-              onClick={() => setBolsoSel(nombreBolso)}
-              style={{
-                padding: '14px 16px',
-                borderRadius: 10,
-                marginBottom: 8,
-                cursor: 'pointer',
-                background: activo ? C.accentDim : C.surface2,
-                border: \`1px solid \${activo ? C.accent : C.border}\`,
-                transition: 'all 0.15s'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: activo ? C.accent : C.text }}>
-                    💊 {nombreBolso}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                    26 medicamentos
-                  </div>
-                </div>
-                {alertas > 0 && (
-                  <div style={{
-                    background: C.red,
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    borderRadius: 12
-                  }}>
-                    {alertas}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* MAIN - Cajas del bolso seleccionado */}
-      <div style={{ flex: 1, padding: 32, overflowY: 'auto' }}>
-        {bolsoSel ? (
-          <>
-            <div style={{ marginBottom: 32 }}>
-              <div style={S.title}>💊 {bolsoSel}</div>
-              <div style={S.subtitle}>26 medicamentos totales · 3 cajas</div>
-            </div>
-
-            {/* Grid de cajas */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-              {CAJAS_META.map(caja => {
-                const meds = medicamentosCaja(caja.id);
-                const alertas = alertasCaja(caja.id);
-                const abierta = cajaAbierta === caja.id;
-
-                return (
-                  <div
-                    key={caja.id}
-                    style={{
-                      background: C.surface,
-                      border: \`1px solid \${C.border}\`,
-                      borderLeft: \`3px solid \${caja.color}\`,
-                      borderRadius: 12,
-                      overflow: 'hidden',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {/* Header de la caja */}
-                    <div
-                      onClick={() => toggleCaja(caja.id)}
-                      style={{
-                        padding: '18px 20px',
-                        cursor: 'pointer',
-                        background: abierta ? C.surface2 : 'transparent',
-                        borderBottom: abierta ? \`1px solid \${C.border}\` : 'none'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: 24, marginBottom: 4 }}>{caja.emoji}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: caja.color }}>
-                            {caja.nombre}
-                          </div>
-                          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
-                            {meds.length} items
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          {alertas > 0 ? (
-                            <div style={{
-                              background: C.redDim,
-                              color: C.red,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '4px 10px',
-                              borderRadius: 8,
-                              marginBottom: 8
-                            }}>
-                              ⚠️ {alertas} alertas
-                            </div>
-                          ) : (
-                            <div style={{
-                              background: C.greenDim,
-                              color: C.green,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '4px 10px',
-                              borderRadius: 8,
-                              marginBottom: 8
-                            }}>
-                              ✓ OK
-                            </div>
-                          )}
-                          <div style={{ fontSize: 20, color: C.textMuted }}>
-                            {abierta ? '▼' : '▶'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Contenido de la caja (medicamentos) */}
-                    {abierta && (
-                      <div style={{ padding: 20 }}>
-                        <table style={{ width: '100%', fontSize: 13 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ ...S.th, textAlign: 'left' }}>Medicamento</th>
-                              <th style={{ ...S.th, textAlign: 'center' }}>Stock</th>
-                              <th style={{ ...S.th, textAlign: 'center' }}>Mín</th>
-                              <th style={{ ...S.th, textAlign: 'center' }}>Acciones</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {meds.map(med => {
-                              const bajo = med.stock <= med.minimo;
-                              const editandoEste = editando === med.id;
-
-                              return (
-                                <tr key={med.id}>
-                                  <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>
-                                    {med.nombre_insumo || "Sin nombre"}
-                                  </td>
-                                  <td style={{ padding: '10px', textAlign: 'center' }}>
-                                    {editandoEste ? (
-                                      <input
-                                        type="number"
-                                        value={formEdit.stock}
-                                        onChange={e => setFormEdit(f => ({ ...f, stock: parseInt(e.target.value) }))}
-                                        style={{ ...S.input, width: 60, padding: '4px 8px', textAlign: 'center' }}
-                                      />
-                                    ) : (
-                                      <span style={{ color: bajo ? C.red : C.text, fontWeight: bajo ? 700 : 400 }}>
-                                        {med.stock} {med.unidad}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td style={{ padding: '10px', textAlign: 'center' }}>
-                                    {editandoEste ? (
-                                      <input
-                                        type="number"
-                                        value={formEdit.minimo}
-                                        onChange={e => setFormEdit(f => ({ ...f, minimo: parseInt(e.target.value) }))}
-                                        style={{ ...S.input, width: 60, padding: '4px 8px', textAlign: 'center' }}
-                                      />
-                                    ) : (
-                                      <span style={{ color: C.textMuted }}>{med.minimo}</span>
-                                    )}
-                                  </td>
-                                  <td style={{ padding: '10px', textAlign: 'center' }}>
-                                    {editandoEste ? (
-                                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                                        <button onClick={() => guardarEdicion(med)} style={{ ...S.btn('primary'), padding: '4px 12px', fontSize: 12 }}>
-                                          Guardar
-                                        </button>
-                                        <button onClick={cancelarEdicion} style={{ ...S.btn('ghost'), padding: '4px 12px', fontSize: 12 }}>
-                                          Cancelar
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={() => iniciarEdicion(med)} style={{ ...S.btn('ghost'), padding: '4px 12px', fontSize: 12 }}>
-                                        Editar
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <div style={{ textAlign: 'center', padding: 60, color: C.textMuted }}>
-            Selecciona un bolso para ver su contenido
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [carros, setCarros] = useState(CARROS_INICIALES);
@@ -5537,7 +4996,7 @@ export default function App() {
   const esAdmin = usuario?.rol === 'admin';
   const permisos = getPermisos(usuario);
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
-  const alertCarros = 0; // TODO: Calcular desde BD
+  const alertCarros = carros.flatMap(c => c.insumos).filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
   // Nav items según rol
@@ -5558,7 +5017,7 @@ export default function App() {
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
     ...(esAdmin ? [{ section: "Inventario" }] : []),
     ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros }] : []),
-...(esAdmin || permisos.verBolso ? [{ id: "bolsos", label: "Bolso de Medicamentos", icon: "bolso" }] : []),
+    ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Bolso de Medicamentos 💊", icon: "bolso", badge: alertBolso }] : []),
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
 ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
@@ -5621,16 +5080,7 @@ export default function App() {
               <div style={S.title}>Carros Clínicos</div>
               <div style={S.subtitle}>7 carros · cada uno asignado a su evento</div>
             </div>
-            <VistaCarrosClinicosDB usuario={usuario} />
-          </div>
-        )}
-        {tab === "bolsos" && (
-          <div>
-            <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Bolsos de Medicamentos 💊</div>
-              <div style={S.subtitle}>3 bolsos · 26 medicamentos cada uno · 3 cajas internas</div>
-            </div>
-            <VistaBolsosMedicamentos usuario={usuario} />
+            <VistaCarros carros={carros} setCarros={setCarros} permisos={permisos} esAdmin={esAdmin} />
           </div>
         )}
         {tab === "bolso" && (
@@ -5639,7 +5089,7 @@ export default function App() {
               <div style={S.title}>Bolso Naranja 🟠</div>
               <div style={S.subtitle}>Medicamentos separados del carro · 3 cajas internas</div>
             </div>
-<VistaBolsoNaranja usuario={usuario} />
+            <VistaBolsoNaranja />
           </div>
         )}
         {tab === "atenciones" && (
