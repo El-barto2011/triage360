@@ -824,18 +824,28 @@ function VistaGestionEventos({ usuario }) {
   const [form, setForm] = useState({});
 
   useEffect(() => {
-    const cargar = async () => {
-      setLoading(true);
-      const [evs, profs] = await Promise.all([
-        sb("equipos_evento?order=created_at.desc", {}, usuario?.token),
-        sb("perfiles?order=nombre", {}, usuario?.token)
-      ]);
-      if (evs) setEventos(evs);
-      if (profs) setProfesionales(profs);
-      setLoading(false);
-    };
-    cargar();
-  }, [usuario]);
+const cargar = async () => {
+setLoading(true);
+const [evs, profs] = await Promise.all([
+sb("equipos_evento?order=created_at.desc", {}, usuario?.token),
+sb("perfiles?order=nombre", {}, usuario?.token)
+]);
+
+// Obtener emails para cada profesional
+if (profs) {
+const profsConEmail = await Promise.all(
+profs.map(async (prof) => {
+const userData = await sb(`auth.users?id=eq.${prof.user_id}&select=email`, {}, usuario?.token);
+return { ...prof, email: userData?.[0]?.email || null };
+})
+);
+setProfesionales(profsConEmail);
+}
+
+if (evs) setEventos(evs);
+setLoading(false);
+};
+cargar();
 
   const abrirNuevoEvento = () => {
     setForm({
@@ -947,17 +957,6 @@ function VistaGestionEventos({ usuario }) {
       // Obtener datos completos de los profesionales a notificar
       const profesionalesNotificar = profesionales.filter(p => profesionalesIds.includes(p.id));
       
-      // Obtener emails desde auth.users para cada profesional
-      const emailsPromises = profesionalesNotificar.map(async (prof) => {
-        const userData = await sb(`auth.users?id=eq.${prof.user_id}&select=email`, {}, usuario?.token);
-        return {
-          ...prof,
-          email: userData?.[0]?.email || null
-        };
-      });
-      
-      const profesionalesConEmail = await Promise.all(emailsPromises);
-      
       // Obtener datos completos del equipo para mostrar en el email
       const equipoCompleto = {
         medicos: profesionales.filter(p => evento.medicos?.includes(p.id)).map(p => p.nombre),
@@ -968,7 +967,7 @@ function VistaGestionEventos({ usuario }) {
       };
 
       // Enviar email a cada profesional
-      for (const prof of profesionalesConEmail) {
+      for (const prof of profesionalesNotificar) {
         if (!prof.email) {
           console.warn(`⚠️ No se pudo obtener email para ${prof.nombre}`);
           continue;
@@ -1009,7 +1008,7 @@ function VistaGestionEventos({ usuario }) {
         }
       }
       
-      console.log(`📧 Emails procesados: ${profesionalesConEmail.length} profesionales`);
+      console.log(`📧 Emails procesados: ${profesionalesNotificar.length} profesionales`);
     } catch (error) {
       console.error("Error al enviar emails:", error);
     }
