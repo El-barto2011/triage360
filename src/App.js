@@ -859,6 +859,21 @@ function VistaGestionEventos({ usuario }) {
   };
 
   const guardarEvento = async () => {
+
+const eliminarEvento = async (eventoId, nombreEvento) => {
+if (!window.confirm(`¿Estás seguro de eliminar el evento "${nombreEvento}"? Esta acción no se puede deshacer.`)) {
+return;
+}
+
+const res = await sb(`equipos_evento?id=eq.${eventoId}`, { method: "DELETE" }, usuario?.token);
+
+if (res !== null) {
+setEventos(prev => prev.filter(e => e.id !== eventoId));
+alert("Evento eliminado correctamente");
+} else {
+alert("Error al eliminar el evento");
+}
+};
     if (!form.nombre_evento || !form.fecha_evento) {
       alert("Por favor completa nombre y fecha del evento");
       return;
