@@ -1096,13 +1096,20 @@ function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
-                <button 
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button 
                   style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
                   onClick={() => abrirEditarEvento(evento)}
                 >
                   Editar
                 </button>
-              </div>
+<button 
+style={{ ...S.btn("ghost"), padding: "6px 12px", color: C.red }} 
+onClick={() => eliminarEvento(evento.id, evento.nombre_evento)}
+>
+Eliminar
+</button>
+</div>              </div>
             </div>
           ))}
         </div>
