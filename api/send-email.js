@@ -150,3 +150,4 @@ export default async function handler(req, res) {
   // Otros tipos de emails existentes...
   return res.status(400).json({ error: 'Tipo de email no soportado' });
 }
+// Force redeploy Fri Apr  3 22:59:00 -03 2026
