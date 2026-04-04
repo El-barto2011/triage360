@@ -875,6 +875,7 @@ function VistaGestionEventos({ usuario }) {
       kinesiologos: form.kinesiologos || [],
       masoterapeutas: form.masoterapeutas || [],
       carros_asignados: form.carros_asignados || [],
+      bolsos_asignados: form.bolsos_asignados || [],
       estado: "activo"
     };
 
@@ -905,6 +906,16 @@ function VistaGestionEventos({ usuario }) {
       setForm(p => ({ ...p, carros_asignados: carros.filter(c => c !== carro) }));
     } else {
       setForm(p => ({ ...p, carros_asignados: [...carros, carro] }));
+    }
+  };
+
+  const toggleBolso = (bolso) => {
+    const bolsos = form.bolsos_asignados || [];
+    const index = bolsos.indexOf(bolso);
+    if (index > -1) {
+      setForm(p => ({ ...p, bolsos_asignados: bolsos.filter(b => b !== bolso) }));
+    } else {
+      setForm(p => ({ ...p, bolsos_asignados: [...bolsos, bolso] }));
     }
   };
 
@@ -1210,6 +1221,31 @@ function VistaGestionEventos({ usuario }) {
                         onChange={() => toggleCarro(`Carro ${num}`)}
                       />
                       <span style={{ fontSize: 12 }}>Carro {num}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Bolsos de Medicamentos</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {[1, 2, 3].map(num => (
+                    <label key={num} style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: 6, 
+                      padding: "6px 12px", 
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      background: (form.bolsos_asignados || []).includes(`Bolso ${num}`) ? C.blueDim : "transparent"
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={(form.bolsos_asignados || []).includes(`Bolso ${num}`)}
+                        onChange={() => toggleBolso(`Bolso ${num}`)}
+                      />
+                      <span style={{ fontSize: 12 }}>💊 Bolso {num}</span>
                     </label>
                   ))}
                 </div>
@@ -5056,14 +5092,56 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
   const [formEdit, setFormEdit] = useState({});
+  const [carrosPermitidos, setCarrosPermitidos] = useState([]);
+
+  const esAdmin = usuario?.rol === 'admin';
 
   const cargarCarros = async () => {
     console.log("cargarCarros ejecutándose...");
-    const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
-    console.log("DEBUG Carros:", data);
-    if (data) {
-      setCarros(data);
-      if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
+    
+    // Si es admin, cargar todos los carros
+    if (esAdmin) {
+      const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
+      console.log("DEBUG Carros (Admin):", data);
+      if (data) {
+        setCarros(data);
+        setCarrosPermitidos(['Carro 1', 'Carro 2', 'Carro 3', 'Carro 4', 'Carro 5', 'Carro 6', 'Carro 7']);
+        if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
+      }
+    } else {
+      // Si es profesional, obtener eventos donde está asignado
+      const eventos = await sb('equipos_evento?estado=eq.activo', {}, usuario?.token);
+      console.log("DEBUG Eventos activos:", eventos);
+      
+      let carrosAsignados = [];
+      if (eventos) {
+        eventos.forEach(evento => {
+          // Verificar si el usuario está en alguna lista de profesionales
+          const estaAsignado = 
+            (evento.medicos || []).includes(usuario.id) ||
+            (evento.enfermeros || []).includes(usuario.id) ||
+            (evento.paramedicos || []).includes(usuario.id);
+          
+          if (estaAsignado && evento.carros_asignados) {
+            carrosAsignados = [...carrosAsignados, ...evento.carros_asignados];
+          }
+        });
+      }
+      
+      // Eliminar duplicados
+      carrosAsignados = [...new Set(carrosAsignados)];
+      console.log("DEBUG Carros asignados al usuario:", carrosAsignados);
+      setCarrosPermitidos(carrosAsignados);
+      
+      // Cargar solo los carros asignados
+      if (carrosAsignados.length > 0) {
+        const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
+        if (data) {
+          const carrosFiltrados = data.filter(c => carrosAsignados.includes(c.nombre));
+          setCarros(carrosFiltrados);
+          if (carrosFiltrados.length > 0 && !carroSel) setCarroSel(carrosFiltrados[0].nombre);
+        }
+      }
     }
     setLoading(false);
   };
@@ -5103,6 +5181,20 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
   const colores = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#06b6d4'];
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando carros...</div>;
+
+  if (!esAdmin && carrosPermitidos.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🚑</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+          No tienes carros asignados
+        </div>
+        <div style={{ fontSize: 14, color: C.textMuted }}>
+          Solicita al administrador que te asigne a un evento con un carro clínico.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', gap: 20 }}>
@@ -5243,13 +5335,54 @@ function VistaBolsosMedicamentos({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
   const [formEdit, setFormEdit] = useState({});
+  const [bolsosPermitidos, setBolsosPermitidos] = useState([]);
+
+  const esAdmin = usuario?.rol === 'admin';
 
   const cargarBolsos = async () => {
-    const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
-    console.log("DEBUG Bolsos:", data);
-    if (data) {
-      setBolsos(data);
-      if (data.length > 0 && !bolsoSel) setBolsoSel(data[0].nombre);
+    // Si es admin, cargar todos los bolsos
+    if (esAdmin) {
+      const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
+      console.log("DEBUG Bolsos (Admin):", data);
+      if (data) {
+        setBolsos(data);
+        setBolsosPermitidos(['Bolso 1', 'Bolso 2', 'Bolso 3']);
+        if (data.length > 0 && !bolsoSel) setBolsoSel(data[0].nombre);
+      }
+    } else {
+      // Si es profesional, obtener eventos donde está asignado
+      const eventos = await sb('equipos_evento?estado=eq.activo', {}, usuario?.token);
+      console.log("DEBUG Eventos activos:", eventos);
+      
+      let bolsosAsignados = [];
+      if (eventos) {
+        eventos.forEach(evento => {
+          // Verificar si el usuario está en alguna lista de profesionales
+          const estaAsignado = 
+            (evento.medicos || []).includes(usuario.id) ||
+            (evento.enfermeros || []).includes(usuario.id) ||
+            (evento.paramedicos || []).includes(usuario.id);
+          
+          if (estaAsignado && evento.bolsos_asignados) {
+            bolsosAsignados = [...bolsosAsignados, ...evento.bolsos_asignados];
+          }
+        });
+      }
+      
+      // Eliminar duplicados
+      bolsosAsignados = [...new Set(bolsosAsignados)];
+      console.log("DEBUG Bolsos asignados al usuario:", bolsosAsignados);
+      setBolsosPermitidos(bolsosAsignados);
+      
+      // Cargar solo los bolsos asignados
+      if (bolsosAsignados.length > 0) {
+        const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
+        if (data) {
+          const bolsosFiltrados = data.filter(b => bolsosAsignados.includes(b.nombre));
+          setBolsos(bolsosFiltrados);
+          if (bolsosFiltrados.length > 0 && !bolsoSel) setBolsoSel(bolsosFiltrados[0].nombre);
+        }
+      }
     }
     setLoading(false);
   };
@@ -5274,7 +5407,7 @@ function VistaBolsosMedicamentos({ usuario }) {
 
   const guardarEdicion = async (medicamento) => {
     const data = await sb(
-      \`contenedores_medicamentos?id=eq.\${medicamento.id}\`,
+      `contenedores_medicamentos?id=eq.${medicamento.id}`,
       {
         method: 'PATCH',
         body: JSON.stringify({ stock: formEdit.stock, minimo: formEdit.minimo })
@@ -5303,12 +5436,26 @@ function VistaBolsosMedicamentos({ usuario }) {
     return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando bolsos...</div>;
   }
 
+  if (!esAdmin && bolsosPermitidos.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>💊</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+          No tienes bolsos asignados
+        </div>
+        <div style={{ fontSize: 14, color: C.textMuted }}>
+          Solicita al administrador que te asigne a un evento con un bolso de medicamentos.
+        </div>
+      </div>
+    );
+  }
+
   const bolsosUnicos = [...new Set(bolsos.map(b => b.nombre))];
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       {/* SIDEBAR - Lista de bolsos */}
-      <div style={{ width: 280, borderRight: \`1px solid \${C.border}\`, padding: 20, overflowY: 'auto' }}>
+      <div style={{ width: 280, borderRight: `1px solid ${C.border}`, padding: 20, overflowY: 'auto' }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 }}>
           Bolsos de Medicamentos
         </div>
@@ -5325,7 +5472,7 @@ function VistaBolsosMedicamentos({ usuario }) {
                 marginBottom: 8,
                 cursor: 'pointer',
                 background: activo ? C.accentDim : C.surface2,
-                border: \`1px solid \${activo ? C.accent : C.border}\`,
+                border: `1px solid ${activo ? C.accent : C.border}`,
                 transition: 'all 0.15s'
               }}
             >
@@ -5377,8 +5524,8 @@ function VistaBolsosMedicamentos({ usuario }) {
                     key={caja.id}
                     style={{
                       background: C.surface,
-                      border: \`1px solid \${C.border}\`,
-                      borderLeft: \`3px solid \${caja.color}\`,
+                      border: `1px solid ${C.border}`,
+                      borderLeft: `3px solid ${caja.color}`,
                       borderRadius: 12,
                       overflow: 'hidden',
                       transition: 'all 0.2s'
@@ -5391,7 +5538,7 @@ function VistaBolsosMedicamentos({ usuario }) {
                         padding: '18px 20px',
                         cursor: 'pointer',
                         background: abierta ? C.surface2 : 'transparent',
-                        borderBottom: abierta ? \`1px solid \${C.border}\` : 'none'
+                        borderBottom: abierta ? `1px solid ${C.border}` : 'none'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
