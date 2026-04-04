@@ -5274,7 +5274,7 @@ function VistaBolsosMedicamentos({ usuario }) {
 
   const guardarEdicion = async (medicamento) => {
     const data = await sb(
-      \`contenedores_medicamentos?id=eq.\${medicamento.id}\`,
+      `contenedores_medicamentos?id=eq.\${medicamento.id}`,
       {
         method: 'PATCH',
         body: JSON.stringify({ stock: formEdit.stock, minimo: formEdit.minimo })
@@ -5308,7 +5308,7 @@ function VistaBolsosMedicamentos({ usuario }) {
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       {/* SIDEBAR - Lista de bolsos */}
-      <div style={{ width: 280, borderRight: \`1px solid \${C.border}\`, padding: 20, overflowY: 'auto' }}>
+      <div style={{ width: 280, borderRight: `1px solid \${C.border}`, padding: 20, overflowY: 'auto' }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 }}>
           Bolsos de Medicamentos
         </div>
@@ -5325,7 +5325,7 @@ function VistaBolsosMedicamentos({ usuario }) {
                 marginBottom: 8,
                 cursor: 'pointer',
                 background: activo ? C.accentDim : C.surface2,
-                border: \`1px solid \${activo ? C.accent : C.border}\`,
+                border: `1px solid \${activo ? C.accent : C.border}`,
                 transition: 'all 0.15s'
               }}
             >
@@ -5377,8 +5377,8 @@ function VistaBolsosMedicamentos({ usuario }) {
                     key={caja.id}
                     style={{
                       background: C.surface,
-                      border: \`1px solid \${C.border}\`,
-                      borderLeft: \`3px solid \${caja.color}\`,
+                      border: `1px solid \${C.border}`,
+                      borderLeft: `3px solid \${caja.color}`,
                       borderRadius: 12,
                       overflow: 'hidden',
                       transition: 'all 0.2s'
@@ -5391,7 +5391,7 @@ function VistaBolsosMedicamentos({ usuario }) {
                         padding: '18px 20px',
                         cursor: 'pointer',
                         background: abierta ? C.surface2 : 'transparent',
-                        borderBottom: abierta ? \`1px solid \${C.border}\` : 'none'
+                        borderBottom: abierta ? `1px solid \${C.border}` : 'none'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
