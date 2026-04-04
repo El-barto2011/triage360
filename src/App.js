@@ -865,12 +865,12 @@ if (!window.confirm(`¿Estás seguro de eliminar el evento "${nombreEvento}"? Es
 return;
 }
 
-const res = await sb(`equipos_evento?id=eq.${eventoId}`, { method: "DELETE" }, usuario?.token);
-
-if (res !== null) {
+try {
+await sb(`equipos_evento?id=eq.${eventoId}`, { method: "DELETE" }, usuario?.token);
 setEventos(prev => prev.filter(e => e.id !== eventoId));
 alert("Evento eliminado correctamente");
-} else {
+} catch (error) {
+console.error("Error al eliminar:", error);
 alert("Error al eliminar el evento");
 }
 };
