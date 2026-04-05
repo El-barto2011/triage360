@@ -13,22 +13,28 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('Iniciando verificación de stock...');
+    
     // 1. Obtener todos los items de inventario
     const response = await fetch(
       `${SUPABASE_URL}/rest/v1/contenedores_medicamentos?select=*`,
       {
         headers: {
           'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
         }
       }
     );
 
     if (!response.ok) {
-      throw new Error('Error al obtener inventario de Supabase');
+      const errorText = await response.text();
+      console.error('Error de Supabase:', errorText);
+      throw new Error(`Error al obtener inventario: ${response.status} - ${errorText}`);
     }
 
     const inventario = await response.json();
+    console.log(`Total items en inventario: ${inventario.length}`);
 
     // 2. Filtrar items con stock bajo o igual al mínimo
     const itemsBajos = inventario.filter(item => {
@@ -36,6 +42,8 @@ export default async function handler(req, res) {
       const minimo = parseInt(item.minimo) || 0;
       return stock <= minimo;
     });
+
+    console.log(`Items con stock bajo: ${itemsBajos.length}`);
 
     // Si no hay items con stock bajo, no enviar email
     if (itemsBajos.length === 0) {
@@ -60,6 +68,9 @@ export default async function handler(req, res) {
       }
     });
 
+    console.log(`Carros afectados: ${Object.keys(carros).length}`);
+    console.log(`Bolsos afectados: ${Object.keys(bolsos).length}`);
+
     // 4. Generar HTML del email
     const htmlContent = generarEmailHTML(carros, bolsos, itemsBajos.length);
 
@@ -78,20 +89,23 @@ export default async function handler(req, res) {
 
     if (error) {
       console.error('Error al enviar email:', error);
-      return res.status(400).json({ error });
+      return res.status(400).json({ error: error.message });
     }
+
+    console.log('Email enviado exitosamente');
 
     return res.status(200).json({ 
       success: true, 
       itemsBajos: itemsBajos.length,
       carrosAfectados: Object.keys(carros).length,
       bolsosAfectados: Object.keys(bolsos).length,
-      emailEnviado: true
+      emailEnviado: true,
+      emailId: data?.id || null
     });
 
   } catch (error) {
     console.error('Error en check-stock:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message, stack: error.stack });
   }
 }
 
@@ -116,7 +130,6 @@ function generarEmailHTML(carros, bolsos, totalItems) {
               ${items.map(item => {
                 const stock = parseInt(item.stock) || 0;
                 const minimo = parseInt(item.minimo) || 0;
-                const porcentaje = minimo > 0 ? Math.round((stock / minimo) * 100) : 0;
                 const estado = stock === 0 ? 'AGOTADO' : stock < minimo ? 'CRÍTICO' : 'BAJO';
                 const colorEstado = stock === 0 ? '#dc2626' : stock < minimo ? '#f59e0b' : '#eab308';
                 
