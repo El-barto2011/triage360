@@ -860,18 +860,6 @@ function VistaGestionEventos({ usuario }) {
     setModal("editar");
   };
 
-  const eliminarEvento = async (eventoId, nombreEvento) => {
-    if (!window.confirm(`¿Estás seguro de eliminar el evento "${nombreEvento}"?`)) return;
-    try {
-      await sb(`equipos_evento?id=eq.${eventoId}`, { method: "DELETE" }, usuario?.token);
-      setEventos(prev => prev.filter(e => e.id !== eventoId));
-      alert("Evento eliminado correctamente");
-    } catch (error) {
-      console.error("Error al eliminar:", error);
-      alert("Error al eliminar el evento");
-    }
-  };
-
   const guardarEvento = async () => {
     if (!form.nombre_evento || !form.fecha_evento) {
       alert("Por favor completa nombre y fecha del evento");
@@ -1093,20 +1081,12 @@ function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button 
-                    style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
-                    onClick={() => abrirEditarEvento(evento)}
-                  >
-                    Editar
-                  </button>
-                  <button 
-                    style={{ ...S.btn("ghost"), padding: "6px 12px", color: C.red }} 
-                    onClick={() => eliminarEvento(evento.id, evento.nombre_evento)}
-                  >
-                    Eliminar
-                  </button>
-                </div>
+                <button 
+                  style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
+                  onClick={() => abrirEditarEvento(evento)}
+                >
+                  Editar
+                </button>
               </div>
             </div>
           ))}
@@ -5533,37 +5513,31 @@ function VistaBolsosMedicamentos({ usuario }) {
 
   const toggleCaja = (cajaId) => setCajaAbierta(prev => prev === cajaId ? null : cajaId);
 
-  const iniciarEdicion = (medicamento) => {
+  const abrirEditar = (medicamento) => {
     setEditando(medicamento.id);
     setFormEdit({ stock: medicamento.stock, minimo: medicamento.minimo });
   };
 
-  const guardarEdicion = async (medicamento) => {
-    const data = await sb(
-      `contenedores_medicamentos?id=eq.${medicamento.id}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ stock: formEdit.stock, minimo: formEdit.minimo })
-      },
-      usuario?.token
-    );
-    if (data) {
-      await cargarBolsos();
+  const guardarEdicion = async (id) => {
+    const { error } = await sb(`contenedores_medicamentos?id=eq.${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ stock: +formEdit.stock, minimo: +formEdit.minimo })
+    }, usuario?.token);
+    
+    if (!error) {
       setEditando(null);
-      setFormEdit({});
+      cargarBolsos();
     }
   };
 
-  const cancelarEdicion = () => {
-    setEditando(null);
-    setFormEdit({});
-  };
-
   const CAJAS_META = [
-    { id: "Caja 1 · Inyectables", emoji: "💉", nombre: "Inyectables", color: C.red },
-    { id: "Caja 2 · Orales", emoji: "💊", nombre: "Orales", color: C.blue },
-    { id: "Caja 3 · Aerosoles", emoji: "🫁", nombre: "Aerosoles", color: C.purple }
+    { id: "Caja 1 · Inyectables", emoji: "💉", nombre: "Inyectables", color: '#ec4899' },
+    { id: "Caja 2 · Orales", emoji: "💊", nombre: "Orales", color: '#3b82f6' },
+    { id: "Caja 3 · Aerosoles", emoji: "🫁", nombre: "Aerosoles", color: '#8b5cf6' }
   ];
+
+  const bolsosUnicos = [...new Set(bolsos.map(b => b.nombre))];
+  const colores = ['#f59e0b', '#10b981', '#06b6d4'];
 
   if (loading) {
     return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando bolsos...</div>;
@@ -5583,220 +5557,132 @@ function VistaBolsosMedicamentos({ usuario }) {
     );
   }
 
-  const bolsosUnicos = [...new Set(bolsos.map(b => b.nombre))];
-
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      {/* SIDEBAR - Lista de bolsos */}
-      <div style={{ width: 280, borderRight: `1px solid ${C.border}`, padding: 20, overflowY: 'auto' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Bolsos de Medicamentos
-        </div>
-        {bolsosUnicos.map(nombreBolso => {
+    <div style={{ display: 'flex', gap: 20 }}>
+      {/* Lista de bolsos */}
+      <div style={{ width: 185, flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Seleccionar bolso</div>
+        {bolsosUnicos.map((nombreBolso, idx) => {
           const alertas = alertasBolso(nombreBolso);
           const activo = bolsoSel === nombreBolso;
+          const color = colores[idx % colores.length];
+          const totalMedicamentos = bolsos.filter(b => b.nombre === nombreBolso).length;
+          
           return (
-            <div
-              key={nombreBolso}
-              onClick={() => setBolsoSel(nombreBolso)}
-              style={{
-                padding: '14px 16px',
-                borderRadius: 10,
-                marginBottom: 8,
-                cursor: 'pointer',
-                background: activo ? C.accentDim : C.surface2,
-                border: `1px solid ${activo ? C.accent : C.border}`,
-                transition: 'all 0.15s'
-              }}
-            >
+            <div key={nombreBolso} onClick={() => { setBolsoSel(nombreBolso); setCajaAbierta(null); }} 
+                 style={{ cursor: 'pointer', background: activo ? C.surface : 'transparent', border: `1px solid ${activo ? color + '50' : C.border}`, borderRadius: 10, padding: '11px 13px', marginBottom: 7, borderLeft: `3px solid ${color}`, transition: 'all 0.12s' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: activo ? C.accent : C.text }}>
-                    💊 {nombreBolso}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                    26 medicamentos
-                  </div>
-                </div>
-                {alertas > 0 && (
-                  <div style={{
-                    background: C.red,
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    borderRadius: 12
-                  }}>
-                    {alertas}
-                  </div>
-                )}
+                <span style={{ fontWeight: 700, fontSize: 14, color: activo ? C.text : C.textMuted }}>{nombreBolso}</span>
+                {alertas > 0 && <span style={{ background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</span>}
               </div>
+              <div style={{ fontSize: 11, color: C.textFaint, marginTop: 2 }}>{totalMedicamentos} medicamentos</div>
             </div>
           );
         })}
       </div>
 
-      {/* MAIN - Cajas del bolso seleccionado */}
-      <div style={{ flex: 1, padding: 32, overflowY: 'auto' }}>
-        {bolsoSel ? (
+      {/* Detalle del bolso */}
+      <div style={{ flex: 1 }}>
+        {bolsoSel && (
           <>
-            <div style={{ marginBottom: 32 }}>
-              <div style={S.title}>💊 {bolsoSel}</div>
-              <div style={S.subtitle}>26 medicamentos totales · 3 cajas</div>
+            {/* Header */}
+            <div style={{ ...S.card, borderLeft: `3px solid ${colores[bolsosUnicos.indexOf(bolsoSel) % colores.length]}`, marginBottom: 20 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: colores[bolsosUnicos.indexOf(bolsoSel) % colores.length] }}>💊 {bolsoSel}</div>
+              <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>
+                {medicamentosBolsoActual.length} medicamentos totales · 3 cajas
+              </div>
             </div>
 
-            {/* Grid de cajas */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
+            {/* Tarjetas de cajas */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
               {CAJAS_META.map(caja => {
-                const meds = medicamentosCaja(caja.id);
+                const items = medicamentosCaja(caja.id);
                 const alertas = alertasCaja(caja.id);
                 const abierta = cajaAbierta === caja.id;
-
+                
                 return (
-                  <div
-                    key={caja.id}
-                    style={{
-                      background: C.surface,
-                      border: `1px solid ${C.border}`,
-                      borderLeft: `3px solid ${caja.color}`,
-                      borderRadius: 12,
-                      overflow: 'hidden',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {/* Header de la caja */}
-                    <div
-                      onClick={() => toggleCaja(caja.id)}
-                      style={{
-                        padding: '18px 20px',
-                        cursor: 'pointer',
-                        background: abierta ? C.surface2 : 'transparent',
-                        borderBottom: abierta ? `1px solid ${C.border}` : 'none'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: 24, marginBottom: 4 }}>{caja.emoji}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: caja.color }}>
-                            {caja.nombre}
-                          </div>
-                          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
-                            {meds.length} items
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          {alertas > 0 ? (
-                            <div style={{
-                              background: C.redDim,
-                              color: C.red,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '4px 10px',
-                              borderRadius: 8,
-                              marginBottom: 8
-                            }}>
-                              ⚠️ {alertas} alertas
-                            </div>
-                          ) : (
-                            <div style={{
-                              background: C.greenDim,
-                              color: C.green,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '4px 10px',
-                              borderRadius: 8,
-                              marginBottom: 8
-                            }}>
-                              ✓ OK
-                            </div>
-                          )}
-                          <div style={{ fontSize: 20, color: C.textMuted }}>
-                            {abierta ? '▼' : '▶'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Contenido de la caja (medicamentos) */}
-                    {abierta && (
-                      <div style={{ padding: 20 }}>
-                        <table style={{ width: '100%', fontSize: 13 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ ...S.th, textAlign: 'left' }}>Medicamento</th>
-                              <th style={{ ...S.th, textAlign: 'center' }}>Stock</th>
-                              <th style={{ ...S.th, textAlign: 'center' }}>Mín</th>
-                              <th style={{ ...S.th, textAlign: 'center' }}>Acciones</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {meds.map(med => {
-                              const bajo = med.stock <= med.minimo;
-                              const editandoEste = editando === med.id;
-
-                              return (
-                                <tr key={med.id}>
-                                  <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>
-                                    {med.nombre_insumo || "Sin nombre"}
-                                  </td>
-                                  <td style={{ padding: '10px', textAlign: 'center' }}>
-                                    {editandoEste ? (
-                                      <input
-                                        type="number"
-                                        value={formEdit.stock}
-                                        onChange={e => setFormEdit(f => ({ ...f, stock: parseInt(e.target.value) }))}
-                                        style={{ ...S.input, width: 60, padding: '4px 8px', textAlign: 'center' }}
-                                      />
-                                    ) : (
-                                      <span style={{ color: bajo ? C.red : C.text, fontWeight: bajo ? 700 : 400 }}>
-                                        {med.stock} {med.unidad}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td style={{ padding: '10px', textAlign: 'center' }}>
-                                    {editandoEste ? (
-                                      <input
-                                        type="number"
-                                        value={formEdit.minimo}
-                                        onChange={e => setFormEdit(f => ({ ...f, minimo: parseInt(e.target.value) }))}
-                                        style={{ ...S.input, width: 60, padding: '4px 8px', textAlign: 'center' }}
-                                      />
-                                    ) : (
-                                      <span style={{ color: C.textMuted }}>{med.minimo}</span>
-                                    )}
-                                  </td>
-                                  <td style={{ padding: '10px', textAlign: 'center' }}>
-                                    {editandoEste ? (
-                                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                                        <button onClick={() => guardarEdicion(med)} style={{ ...S.btn('primary'), padding: '4px 12px', fontSize: 12 }}>
-                                          Guardar
-                                        </button>
-                                        <button onClick={cancelarEdicion} style={{ ...S.btn('ghost'), padding: '4px 12px', fontSize: 12 }}>
-                                          Cancelar
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={() => iniciarEdicion(med)} style={{ ...S.btn('ghost'), padding: '4px 12px', fontSize: 12 }}>
-                                        Editar
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                  <div key={caja.id} onClick={() => toggleCaja(caja.id)} 
+                       style={{ cursor: 'pointer', background: abierta ? caja.color + '15' : C.surface, border: `2px solid ${abierta ? caja.color : C.border}`, borderRadius: 12, padding: '16px 12px', textAlign: 'center', transition: 'all 0.15s', position: 'relative' }}>
+                    {alertas > 0 && (
+                      <div style={{ position: 'absolute', top: 8, right: 8, background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</div>
                     )}
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>{caja.emoji}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: abierta ? caja.color : C.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>{caja.id}</div>
+                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, lineHeight: 1.3 }}>{caja.nombre}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: caja.color, marginTop: 8 }}>{items.length} items</div>
+                    <div style={{ fontSize: 11, marginTop: 4, color: alertas > 0 ? C.red : C.green }}>
+                      {alertas > 0 ? `⚠️ ${alertas} alertas` : '✅ OK'}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.textFaint, marginTop: 6 }}>{abierta ? '▲ Cerrar' : '▼ Ver medicamentos'}</div>
                   </div>
                 );
               })}
             </div>
+
+            {/* Contenido de la caja abierta */}
+            {cajaAbierta && (
+              <div style={{ ...S.card, borderTop: `3px solid ${CAJAS_META.find(c => c.id === cajaAbierta)?.color}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 22 }}>{CAJAS_META.find(c => c.id === cajaAbierta)?.emoji}</span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: CAJAS_META.find(c => c.id === cajaAbierta)?.color }}>{cajaAbierta}</div>
+                    <div style={{ fontSize: 12, color: C.textMuted }}>{CAJAS_META.find(c => c.id === cajaAbierta)?.nombre}</div>
+                  </div>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                      <th style={{ padding: '8px', textAlign: 'left', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MEDICAMENTO</th>
+                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>STOCK</th>
+                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MÍNIMO</th>
+                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>UNIDAD</th>
+                      <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>ACCIONES</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {medicamentosCaja(cajaAbierta).map(med => {
+                      const enEdicion = editando === med.id;
+                      const bajStock = med.stock <= med.minimo;
+                      
+                      return (
+                        <tr key={med.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>{med.nombre_insumo || "Sin nombre"}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {enEdicion ? (
+                              <input type="number" value={formEdit.stock} onChange={e => setFormEdit({...formEdit, stock: e.target.value})} 
+                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
+                            ) : (
+                              <span style={{ color: bajStock ? C.red : C.text, fontWeight: bajStock ? 700 : 400 }}>{med.stock}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {enEdicion ? (
+                              <input type="number" value={formEdit.minimo} onChange={e => setFormEdit({...formEdit, minimo: e.target.value})} 
+                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
+                            ) : (
+                              <span style={{ fontSize: 12, color: C.textMuted }}>{med.minimo}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{med.unidad}</td>
+                          <td style={{ padding: '10px', textAlign: 'right' }}>
+                            {enEdicion ? (
+                              <>
+                                <button onClick={() => guardarEdicion(med.id)} style={{ ...S.btn('primary'), fontSize: 11, padding: '4px 10px', marginRight: 5 }}>💾 Guardar</button>
+                                <button onClick={() => setEditando(null)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✖️</button>
+                              </>
+                            ) : (
+                              <button onClick={() => abrirEditar(med)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✏️ Editar</button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
-        ) : (
-          <div style={{ textAlign: 'center', padding: 60, color: C.textMuted }}>
-            Selecciona un bolso para ver su contenido
-          </div>
         )}
       </div>
     </div>
