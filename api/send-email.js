@@ -12,13 +12,34 @@ export default async function handler(req, res) {
 
   if (tipo === 'asignacion_evento') {
     try {
-      // Formatear fecha
-      const fechaFormateada = new Date(evento.fecha).toLocaleDateString('es-CL', {
+      // Formatear fecha inicio
+      const fechaInicio = new Date(evento.fecha).toLocaleDateString('es-CL', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       });
+
+      // Formatear fecha fin si existe
+      let fechaTexto = fechaInicio;
+      if (evento.fecha_fin) {
+        const fechaFin = new Date(evento.fecha_fin).toLocaleDateString('es-CL', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        fechaTexto = `${fechaInicio} al ${fechaFin}`;
+      }
+
+      // Formatear horario si existe
+      let horarioTexto = '';
+      if (evento.hora_inicio || evento.hora_fin) {
+        horarioTexto = `<div class="info-item">
+          <span class="label">🕐 Horario:</span> 
+          <span class="value">${evento.hora_inicio || '--:--'} - ${evento.hora_fin || '--:--'}</span>
+        </div>`;
+      }
 
       // Construir lista de equipo
       let listaEquipo = '';
@@ -50,6 +71,9 @@ export default async function handler(req, res) {
     ul { list-style: none; padding: 0; }
     ul li { padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
     ul li:last-child { border-bottom: none; }
+    .observaciones { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #f59e0b; }
+    .observaciones-title { font-weight: 600; color: #92400e; margin-bottom: 8px; }
+    .observaciones-text { color: #78350f; font-style: italic; }
   </style>
 </head>
 <body>
@@ -75,13 +99,21 @@ export default async function handler(req, res) {
         </div>
         <div class="info-item">
           <span class="label">🗓️ Fecha:</span> 
-          <span class="value">${fechaFormateada}</span>
+          <span class="value">${fechaTexto}</span>
         </div>
+        ${horarioTexto}
         <div class="info-item">
           <span class="label">👤 Tu rol:</span> 
           <span class="value"><strong>${rol}</strong></span>
         </div>
       </div>
+
+      ${evento.observaciones ? `
+      <div class="observaciones">
+        <div class="observaciones-title">💬 Observaciones Importantes</div>
+        <div class="observaciones-text">${evento.observaciones}</div>
+      </div>
+      ` : ''}
 
       ${evento.carros?.length > 0 || evento.bolsos?.length > 0 ? `
       <div class="info-box">
