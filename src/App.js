@@ -4324,11 +4324,70 @@ function VistaGestionCostos({ usuario }) {
   );
 }
 function Dashboard({ carros, usuario, esAdmin, permisos }) {
+  const [alertasStock, setAlertasStock] = useState([]);
+  const [alertasVencimiento, setAlertasVencimiento] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    cargarAlertas();
+  }, []);
+
+  const cargarAlertas = async () => {
+    try {
+      // Obtener todos los items de inventario (carros y bolsos)
+      const data = await sb('contenedores_medicamentos?select=*', {}, usuario?.token);
+      
+      if (data) {
+        // Filtrar items con stock bajo (stock <= minimo)
+        const itemsBajos = data.filter(item => 
+          parseInt(item.stock) <= parseInt(item.minimo)
+        );
+        setAlertasStock(itemsBajos);
+
+        // Filtrar items con fecha de vencimiento
+        const hoy = new Date();
+        const en30dias = new Date();
+        en30dias.setDate(hoy.getDate() + 30);
+
+        const itemsConVencimiento = data.filter(item => item.fecha_vencimiento);
+        
+        const vencidos = itemsConVencimiento.filter(item => {
+          const fechaVenc = new Date(item.fecha_vencimiento);
+          return fechaVenc < hoy;
+        });
+
+        const proximosVencer = itemsConVencimiento.filter(item => {
+          const fechaVenc = new Date(item.fecha_vencimiento);
+          return fechaVenc >= hoy && fechaVenc <= en30dias;
+        });
+
+        setAlertasVencimiento({ vencidos, proximosVencer });
+      }
+    } catch (error) {
+      console.error('Error al cargar alertas:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const todo = [...todosInsumos, ...todosMeds];
-  const alertasVenc = todo.filter(i => estadoVenc(i.vencimiento) !== "ok");
-  const stockBajo = todo.filter(i => estadoStock(i) !== "ok");
+
+  // Separar alertas por tipo (carro/bolso)
+  const alertasCarros = alertasStock.filter(item => item.tipo === 'carro');
+  const alertasBolsos = alertasStock.filter(item => item.tipo === 'bolso');
+  const totalAlertasStock = alertasStock.length;
+  const totalVencidos = alertasVencimiento.vencidos?.length || 0;
+  const totalProximosVencer = alertasVencimiento.proximosVencer?.length || 0;
+  const totalAlertasVenc = totalVencidos + totalProximosVencer;
+
+  const diasHastaVenc = (fecha) => {
+    const hoy = new Date();
+    const venc = new Date(fecha);
+    const diff = Math.ceil((venc - hoy) / (1000 * 60 * 60 * 24));
+    return diff;
+  };
 
   return (
     <div>
@@ -4371,8 +4430,8 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
           { label: "Carros activos", val: carros.length, color: C.accent },
           { label: "Insumos en carros", val: todosInsumos.length, color: C.blue },
           { label: "Medicamentos bolso", val: todosMeds.length, color: C.orange },
-          { label: "Alertas vencimiento", val: alertasVenc.length, color: alertasVenc.length > 0 ? C.red : C.green },
-          { label: "Stock bajo mínimo", val: stockBajo.length, color: stockBajo.length > 0 ? C.yellow : C.green },
+          { label: "Alertas vencimiento", val: loading ? "..." : totalAlertasVenc, color: totalAlertasVenc > 0 ? C.red : C.green },
+          { label: "Stock bajo mínimo", val: loading ? "..." : totalAlertasStock, color: totalAlertasStock > 0 ? C.yellow : C.green },
         ].map(({ label, val, color }) => (
           <div key={label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 10, padding: "18px 20px" }}>
             <div style={{ fontSize: 30, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
@@ -4403,25 +4462,151 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
         </div>
       </div>
 
-      {/* Alertas */}
-      {(alertasVenc.length > 0 || stockBajo.length > 0) && (
+      {/* Alertas Críticas - Vencimientos (desde BD) */}
+      {!loading && totalAlertasVenc > 0 && (
         <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>⚠️ Alertas Críticas</div>
-          {todo.filter(i => estadoVenc(i.vencimiento) === "vencido").map(i => (
-            <div key={i.id} style={{ background: C.redDim, border: `1px solid ${C.red}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 13 }}>
-              <strong style={{ color: C.red }}>VENCIDO:</strong> {i.nombre} {i.dosis || ""} — venció {new Date(i.vencimiento).toLocaleDateString("es-CL")}
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>⚠️ Alertas Críticas - Vencimientos</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>
+              {totalVencidos} vencidos · {totalProximosVencer} próximos a vencer
+            </span>
+          </div>
+
+          {/* Medicamentos Vencidos */}
+          {totalVencidos > 0 && alertasVencimiento.vencidos.map(item => (
+            <div key={item.id} style={{ 
+              background: C.redDim, 
+              border: `1px solid ${C.red}30`, 
+              borderRadius: 8, 
+              padding: "10px 14px", 
+              marginBottom: 8, 
+              fontSize: 13 
+            }}>
+              <strong style={{ color: C.red }}>VENCIDO:</strong> {item.nombre_insumo}
+              <span style={{ color: C.textMuted, marginLeft: 8 }}>
+                ({item.tipo === 'carro' ? '🚑' : '💊'} {item.nombre} · {item.cajon})
+              </span>
+              <span style={{ color: C.red, marginLeft: 8, fontWeight: 700 }}>
+                — venció {new Date(item.fecha_vencimiento).toLocaleDateString("es-CL")}
+              </span>
             </div>
           ))}
-          {todo.filter(i => estadoVenc(i.vencimiento) === "proximo").map(i => (
-            <div key={i.id} style={{ background: C.yellowDim, border: `1px solid ${C.yellow}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 13 }}>
-              <strong style={{ color: C.yellow }}>Próximo a vencer:</strong> {i.nombre} {i.dosis || ""} — {diasHastaVenc(i.vencimiento)} días
+
+          {/* Próximos a Vencer (30 días) */}
+          {totalProximosVencer > 0 && alertasVencimiento.proximosVencer.map(item => (
+            <div key={item.id} style={{ 
+              background: C.yellowDim, 
+              border: `1px solid ${C.yellow}30`, 
+              borderRadius: 8, 
+              padding: "10px 14px", 
+              marginBottom: 8, 
+              fontSize: 13 
+            }}>
+              <strong style={{ color: C.yellow }}>Próximo a vencer:</strong> {item.nombre_insumo}
+              <span style={{ color: C.textMuted, marginLeft: 8 }}>
+                ({item.tipo === 'carro' ? '🚑' : '💊'} {item.nombre} · {item.cajon})
+              </span>
+              <span style={{ color: C.yellow, marginLeft: 8, fontWeight: 700 }}>
+                — {diasHastaVenc(item.fecha_vencimiento)} días
+              </span>
             </div>
           ))}
-          {todo.filter(i => estadoStock(i) !== "ok").map(i => (
-            <div key={i.id} style={{ background: C.yellowDim, border: `1px solid ${C.yellow}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 13 }}>
-              <strong style={{ color: C.yellow }}>Stock bajo:</strong> {i.nombre} {i.dosis || ""} — {i.stock}/{i.minimo} {i.unidad}
+        </div>
+      )}
+
+      {/* Alertas de Stock Bajo (desde BD) */}
+      {!loading && totalAlertasStock > 0 && (
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📦 Alertas de Stock Bajo</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>
+              {totalAlertasStock} items requieren atención
+            </span>
+          </div>
+
+          {/* Alertas de Carros Clínicos */}
+          {alertasCarros.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 10 }}>
+                🚑 Carros Clínicos ({alertasCarros.length} items)
+              </div>
+              {alertasCarros.slice(0, 5).map(item => {
+                const estado = parseInt(item.stock) === 0 ? 'AGOTADO' : 'BAJO';
+                const colorEstado = parseInt(item.stock) === 0 ? C.red : C.yellow;
+                
+                return (
+                  <div key={item.id} style={{ 
+                    background: parseInt(item.stock) === 0 ? C.redDim : C.yellowDim, 
+                    border: `1px solid ${colorEstado}30`, 
+                    borderRadius: 8, 
+                    padding: "10px 14px", 
+                    marginBottom: 8, 
+                    fontSize: 13,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <strong style={{ color: colorEstado }}>{estado}:</strong> {item.nombre_insumo} 
+                      <span style={{ color: C.textMuted, marginLeft: 8 }}>
+                        ({item.nombre} · {item.cajon})
+                      </span>
+                    </div>
+                    <span style={{ fontWeight: 700, color: colorEstado }}>
+                      {item.stock}/{item.minimo} {item.unidad}
+                    </span>
+                  </div>
+                );
+              })}
+              {alertasCarros.length > 5 && (
+                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, textAlign: 'center' }}>
+                  ... y {alertasCarros.length - 5} items más en carros
+                </div>
+              )}
             </div>
-          ))}
+          )}
+
+          {/* Alertas de Bolsos de Medicamentos */}
+          {alertasBolsos.length > 0 && (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.orange, marginBottom: 10 }}>
+                💊 Bolsos de Medicamentos ({alertasBolsos.length} items)
+              </div>
+              {alertasBolsos.slice(0, 5).map(item => {
+                const estado = parseInt(item.stock) === 0 ? 'AGOTADO' : 'BAJO';
+                const colorEstado = parseInt(item.stock) === 0 ? C.red : C.yellow;
+                
+                return (
+                  <div key={item.id} style={{ 
+                    background: parseInt(item.stock) === 0 ? C.redDim : C.yellowDim, 
+                    border: `1px solid ${colorEstado}30`, 
+                    borderRadius: 8, 
+                    padding: "10px 14px", 
+                    marginBottom: 8, 
+                    fontSize: 13,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <strong style={{ color: colorEstado }}>{estado}:</strong> {item.nombre_insumo}
+                      <span style={{ color: C.textMuted, marginLeft: 8 }}>
+                        ({item.nombre} · {item.cajon})
+                      </span>
+                    </div>
+                    <span style={{ fontWeight: 700, color: colorEstado }}>
+                      {item.stock}/{item.minimo} {item.unidad}
+                    </span>
+                  </div>
+                );
+              })}
+              {alertasBolsos.length > 5 && (
+                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, textAlign: 'center' }}>
+                  ... y {alertasBolsos.length - 5} items más en bolsos
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
