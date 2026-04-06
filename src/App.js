@@ -5460,13 +5460,21 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
 
   const abrirEditar = (insumo) => {
     setEditando(insumo.id);
-    setFormEdit({ stock: insumo.stock, minimo: insumo.minimo });
+    setFormEdit({ 
+      stock: insumo.stock, 
+      minimo: insumo.minimo,
+      fecha_vencimiento: insumo.fecha_vencimiento || ''
+    });
   };
 
   const guardarEdicion = async (id) => {
     const { error } = await sb(`contenedores_medicamentos?id=eq.${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ stock: +formEdit.stock, minimo: +formEdit.minimo })
+      body: JSON.stringify({ 
+        stock: +formEdit.stock, 
+        minimo: +formEdit.minimo,
+        fecha_vencimiento: formEdit.fecha_vencimiento || null
+      })
     }, usuario?.token);
     
     if (!error) {
@@ -5574,6 +5582,7 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>STOCK</th>
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MÍNIMO</th>
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>UNIDAD</th>
+                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>VENCIMIENTO</th>
                       <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>ACCIONES</th>
                     </tr>
                   </thead>
@@ -5602,6 +5611,20 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
                             )}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{insumo.unidad}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {enEdicion ? (
+                              <input 
+                                type="date" 
+                                value={formEdit.fecha_vencimiento} 
+                                onChange={e => setFormEdit({...formEdit, fecha_vencimiento: e.target.value})} 
+                                style={{ width: 130, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} 
+                              />
+                            ) : (
+                              <span style={{ fontSize: 11, color: insumo.fecha_vencimiento ? C.text : C.textFaint }}>
+                                {insumo.fecha_vencimiento ? new Date(insumo.fecha_vencimiento).toLocaleDateString('es-CL') : '—'}
+                              </span>
+                            )}
+                          </td>
                           <td style={{ padding: '10px', textAlign: 'right' }}>
                             {enEdicion ? (
                               <>
@@ -5700,13 +5723,21 @@ function VistaBolsosMedicamentos({ usuario }) {
 
   const abrirEditar = (medicamento) => {
     setEditando(medicamento.id);
-    setFormEdit({ stock: medicamento.stock, minimo: medicamento.minimo });
+    setFormEdit({ 
+      stock: medicamento.stock, 
+      minimo: medicamento.minimo,
+      fecha_vencimiento: medicamento.fecha_vencimiento || ''
+    });
   };
 
   const guardarEdicion = async (id) => {
     const { error } = await sb(`contenedores_medicamentos?id=eq.${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ stock: +formEdit.stock, minimo: +formEdit.minimo })
+      body: JSON.stringify({ 
+        stock: +formEdit.stock, 
+        minimo: +formEdit.minimo,
+        fecha_vencimiento: formEdit.fecha_vencimiento || null
+      })
     }, usuario?.token);
     
     if (!error) {
@@ -5822,6 +5853,7 @@ function VistaBolsosMedicamentos({ usuario }) {
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>STOCK</th>
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MÍNIMO</th>
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>UNIDAD</th>
+                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>VENCIMIENTO</th>
                       <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>ACCIONES</th>
                     </tr>
                   </thead>
@@ -5850,6 +5882,20 @@ function VistaBolsosMedicamentos({ usuario }) {
                             )}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{med.unidad}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {enEdicion ? (
+                              <input 
+                                type="date" 
+                                value={formEdit.fecha_vencimiento} 
+                                onChange={e => setFormEdit({...formEdit, fecha_vencimiento: e.target.value})} 
+                                style={{ width: 130, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} 
+                              />
+                            ) : (
+                              <span style={{ fontSize: 11, color: med.fecha_vencimiento ? C.text : C.textFaint }}>
+                                {med.fecha_vencimiento ? new Date(med.fecha_vencimiento).toLocaleDateString('es-CL') : '—'}
+                              </span>
+                            )}
+                          </td>
                           <td style={{ padding: '10px', textAlign: 'right' }}>
                             {enEdicion ? (
                               <>
