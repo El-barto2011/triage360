@@ -869,6 +869,10 @@ function VistaGestionEventos({ usuario }) {
     const datos = {
       nombre_evento: form.nombre_evento,
       fecha_evento: form.fecha_evento,
+      fecha_fin: form.fecha_fin || null,
+      hora_inicio: form.hora_inicio || null,
+      hora_fin: form.hora_fin || null,
+      observaciones: form.observaciones || null,
       ubicacion: form.ubicacion || "",
       tipo_evento: form.tipo_evento,
       tipo_masoterapia: form.tipo_masoterapia,
@@ -1148,7 +1152,7 @@ function VistaGestionEventos({ usuario }) {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
-                <label style={S.formLabel}>Fecha</label>
+                <label style={S.formLabel}>Fecha Inicio</label>
                 <input 
                   style={S.input} 
                   type="date" 
@@ -1156,6 +1160,39 @@ function VistaGestionEventos({ usuario }) {
                   onChange={e => setForm(p => ({ ...p, fecha_evento: e.target.value }))} 
                 />
               </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Fecha Fin (opcional)</label>
+                <input 
+                  style={S.input} 
+                  type="date" 
+                  value={form.fecha_fin || ""} 
+                  onChange={e => setForm(p => ({ ...p, fecha_fin: e.target.value }))} 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Hora Inicio</label>
+                <input 
+                  style={S.input} 
+                  type="time" 
+                  value={form.hora_inicio || ""} 
+                  onChange={e => setForm(p => ({ ...p, hora_inicio: e.target.value }))} 
+                />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Hora Fin</label>
+                <input 
+                  style={S.input} 
+                  type="time" 
+                  value={form.hora_fin || ""} 
+                  onChange={e => setForm(p => ({ ...p, hora_fin: e.target.value }))} 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Tipo de Evento</label>
                 <select 
@@ -1184,6 +1221,16 @@ function VistaGestionEventos({ usuario }) {
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
                 Masivo = contador simple | Específico = fichas individuales
               </div>
+            </div>
+
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Observaciones</label>
+              <textarea
+                style={{ ...S.input, height: 80, resize: "vertical" }}
+                value={form.observaciones || ""}
+                onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))}
+                placeholder="Instrucciones especiales, consideraciones del evento..."
+              />
             </div>
 
             <div style={{ marginTop: 20 }}>
