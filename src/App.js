@@ -1109,6 +1109,7 @@ function VistaGestionEventos({ usuario }) {
                   Eliminar
                 </button>
                 </div>
+              </div>
             </div>
           ))}
         </div>
