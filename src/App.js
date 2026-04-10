@@ -996,6 +996,16 @@ function VistaGestionEventos({ usuario }) {
     }
   };
 
+  const eliminarEvento = async (evento) => {
+    if (!confirm(`¿Eliminar el evento "${evento.nombre_evento}"? Esta acción no se puede deshacer.`)) return;
+    const res = await sb(`equipos_evento?id=eq.${evento.id}`, { method: "DELETE" }, usuario?.token);
+    if (res !== null) {
+      setEventos(prev => prev.filter(e => e.id !== evento.id));
+    } else {
+      alert("Error al eliminar el evento. Intenta nuevamente.");
+    }
+  };
+
   const toggleProfesional = (tipo, profesionalId) => {
     const lista = form[tipo] || [];
     const index = lista.indexOf(profesionalId);
@@ -1085,13 +1095,20 @@ function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
+                <div style={{ display: "flex", gap: 8 }}>
                 <button 
                   style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
                   onClick={() => abrirEditarEvento(evento)}
                 >
                   Editar
                 </button>
-              </div>
+                <button
+                  style={{ ...S.btn("danger"), padding: "6px 12px" }}
+                  onClick={() => eliminarEvento(evento)}
+                >
+                  Eliminar
+                </button>
+                </div>
             </div>
           ))}
         </div>
