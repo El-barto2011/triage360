@@ -5986,6 +5986,7 @@ function VistaBolsosMedicamentos({ usuario }) {
 }
 export default function App() {
   const [tab, setTab] = useState("dashboard");
+  const [subTabMaso, setSubTabMaso] = useState(null);
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [atenciones, setAtenciones] = useState(ATENCIONES_INICIALES);
   const [usuario, setUsuario] = useState(null);
@@ -6026,8 +6027,7 @@ export default function App() {
 ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
 ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
-...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaMasiva", label: "Masoterapia Masiva", icon: "bolso" }] : []),
-...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaEspecifica", label: "Masoterapia Específica", icon: "event" }] : []),
+...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
     ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
@@ -6157,22 +6157,42 @@ export default function App() {
 <VistaAtencionesKinesiologia usuario={usuario} />
 </div>
 )}
-{tab === "masoterapiaMasiva" && (
+{tab === "masoterapia" && (
 <div>
-<div style={{ marginBottom: 24 }}>
-<div style={S.title}>Masoterapia Masiva</div>
-<div style={S.subtitle}>Contador de masajes para eventos masivos</div>
-</div>
-<VistaMasoterapiaMasiva usuario={usuario} />
-</div>
-)}
-{tab === "masoterapiaEspecifica" && (
-<div>
-<div style={{ marginBottom: 24 }}>
-<div style={S.title}>Masoterapia Específica</div>
-<div style={S.subtitle}>Fichas individuales para torneos</div>
-</div>
-<VistaMasoterapiaEspecifica usuario={usuario} />
+  <div style={{ marginBottom: 24 }}>
+    <div style={S.title}>Masoterapia</div>
+    <div style={S.subtitle}>Selecciona el tipo de atención</div>
+  </div>
+  <div style={{ display: "flex", gap: 16, marginBottom: 32, flexWrap: "wrap" }}>
+    <div
+      style={{ ...S.card, flex: 1, minWidth: 200, cursor: "pointer", borderColor: C.blue, textAlign: "center", padding: 32 }}
+      onClick={() => setSubTabMaso("masiva")}
+    >
+      <div style={{ fontSize: 32, marginBottom: 8 }}>🏃</div>
+      <div style={{ fontWeight: 700, fontSize: 16, color: C.blue }}>Masoterapia Masiva</div>
+      <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Contador de masajes para eventos masivos</div>
+    </div>
+    <div
+      style={{ ...S.card, flex: 1, minWidth: 200, cursor: "pointer", borderColor: C.blue, textAlign: "center", padding: 32 }}
+      onClick={() => setSubTabMaso("especifica")}
+    >
+      <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+      <div style={{ fontWeight: 700, fontSize: 16, color: C.blue }}>Masoterapia Específica</div>
+      <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Fichas individuales para torneos</div>
+    </div>
+  </div>
+  {subTabMaso === "masiva" && (
+    <div>
+      <button style={{ ...S.btn("ghost"), marginBottom: 16, fontSize: 12 }} onClick={() => setSubTabMaso(null)}>← Volver</button>
+      <VistaMasoterapiaMasiva usuario={usuario} />
+    </div>
+  )}
+  {subTabMaso === "especifica" && (
+    <div>
+      <button style={{ ...S.btn("ghost"), marginBottom: 16, fontSize: 12 }} onClick={() => setSubTabMaso(null)}>← Volver</button>
+      <VistaMasoterapiaEspecifica usuario={usuario} />
+    </div>
+  )}
 </div>
 )}
         {tab === "configuracion" && (
