@@ -4905,7 +4905,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
       {/* Resumen */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
         {PROFESIONES.map(p => {
-          const count = atenciones.filter(a => a.profesion === p).length;
+          const count = filtradas.filter(a => a.profesion === p).length;
           const color = coloresProfesion[p];
           return (
             <div key={p} style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 10, padding: "14px 16px" }}>
@@ -4915,7 +4915,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
           );
         })}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}`, borderRadius: 10, padding: "14px 16px" }}>
-          <div style={{ fontSize: 26, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{atenciones.length}</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{filtradas.length}</div>
           <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>Total atenciones</div>
         </div>
       </div>
