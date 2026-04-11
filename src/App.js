@@ -3295,7 +3295,7 @@ function VistaMasoterapiaMasiva({ usuario }) {
 
     const datos = {
       masoterapeuta_id: usuario.id,
-      masoterapeuta_nombre: usuario.email,
+      masoterapeuta_nombre: usuario.nombre || usuario.email,
       evento: eventoSeleccionado,
       masajes_realizados: 0,
       fecha: new Date().toISOString().split('T')[0]
@@ -3564,7 +3564,7 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
     const datos = {
       evento: form.evento,
       masoterapeuta_id: usuario.id,
-      masoterapeuta_nombre: usuario.email,
+      masoterapeuta_nombre: usuario.nombre || usuario.email,
       paciente_nombre: form.paciente_nombre,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       fecha_atencion: new Date().toISOString().split('T')[0],
