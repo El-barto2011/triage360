@@ -3501,6 +3501,7 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
   const [filtroEvento, setFiltroEvento] = useState("Todos");
+  const [filtroMasoterapeuta, setFiltroMasoterapeuta] = useState("Todos");
 
   const zonasDisponibles = [
     "Cuello", "Hombros", "Espalda alta", "Espalda baja", "Brazos", 
@@ -3605,7 +3606,10 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
   }
 
   const hoy = new Date().toISOString().split('T')[0];
-  const fichasFiltradas = filtroEvento === "Todos" ? fichas : fichas.filter(f => f.evento === filtroEvento);
+  const fichasFiltradas = fichas
+    .filter(f => filtroEvento === "Todos" || f.evento === filtroEvento)
+    .filter(f => filtroMasoterapeuta === "Todos" || f.masoterapeuta_nombre === filtroMasoterapeuta);
+  const masoterapeutasUnicos = [...new Set(fichas.map(f => f.masoterapeuta_nombre).filter(Boolean))];
   const fichasHoy = fichasFiltradas.filter(f => {
     const fecha = new Date(f.created_at).toISOString().split('T')[0];
     return fecha === hoy;
@@ -3623,16 +3627,28 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {esAdmin && (
-              <select
-                style={{ ...S.select, fontSize: 12 }}
-                value={filtroEvento}
-                onChange={e => setFiltroEvento(e.target.value)}
-              >
-                <option value="Todos">Todos los eventos</option>
-                {eventos.map(e => (
-                  <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
-                ))}
-              </select>
+              <>
+                <select
+                  style={{ ...S.select, fontSize: 12 }}
+                  value={filtroEvento}
+                  onChange={e => setFiltroEvento(e.target.value)}
+                >
+                  <option value="Todos">Todos los eventos</option>
+                  {eventos.map(e => (
+                    <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
+                  ))}
+                </select>
+                <select
+                  style={{ ...S.select, fontSize: 12 }}
+                  value={filtroMasoterapeuta}
+                  onChange={e => setFiltroMasoterapeuta(e.target.value)}
+                >
+                  <option value="Todos">Todos los masoterapeutas</option>
+                  {masoterapeutasUnicos.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </>
             )}
             {!esAdmin && (
               <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
