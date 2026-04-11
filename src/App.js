@@ -1575,8 +1575,24 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
     if (res) {
       setAtenciones(prev => [res[0], ...prev]);
+
+      // Descontar stock de insumos usados
+      const insumosUsados = form.insumos_medico || [];
+      for (const ins of insumosUsados) {
+        if (ins.insumo_id && ins.cantidad) {
+          const insumoActual = carrosEvento.find(c => String(c.id) === String(ins.insumo_id));
+          if (insumoActual) {
+            const nuevoStock = Math.max(0, (insumoActual.stock || 0) - ins.cantidad);
+            await sb(`contenedores_medicamentos?id=eq.${insumoActual.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ stock: nuevoStock })
+            }, usuario?.token);
+          }
+        }
+      }
+
       setModal(null);
-      alert("Atención registrada exitosamente");
+      alert("Atención registrada y stock actualizado exitosamente");
     }
   };
 
