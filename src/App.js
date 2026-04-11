@@ -4813,19 +4813,24 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
   const [filtroEvento, setFiltroEvento] = useState("Todos");
   const [filtroProfesion, setFiltroProfesion] = useState("Todas");
   const [fichaVer, setFichaVer] = useState(null);
+  const [eventosDB, setEventosDB] = useState([]);
 
-  // Cargar atenciones desde Supabase
+  // Cargar atenciones y eventos desde Supabase
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      const data = await sb("atenciones?order=created_at.desc", {}, usuario?.token);
+      const [data, evs] = await Promise.all([
+        sb("atenciones?order=created_at.desc", {}, usuario?.token),
+        sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
+      ]);
       if (data) setAtenciones(data);
+      if (evs) setEventosDB(evs);
       setLoading(false);
     };
     cargar();
   }, [usuario]);
 
-  const eventos = ["Todos", ...new Set(carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => c.evento_asignado))];
+  const eventos = ["Todos", ...eventosDB.map(e => e.nombre_evento)];
 
   const filtradas = atenciones.filter(a => {
     const matchEv = filtroEvento === "Todos" || a.evento === filtroEvento;
@@ -4840,7 +4845,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
     const hh = String(ahora.getHours()).padStart(2, "0");
     const mm = String(ahora.getMinutes()).padStart(2, "0");
     setForm({
-      evento: carros.find(c => c.evento_asignado !== "Sin asignar")?.evento_asignado || "",
+      evento: usuario?.evento_asignado || eventosDB[0]?.nombre_evento || "",
       fecha: ahora.toISOString().slice(0, 10),
       paciente: "", rut: "", edad: "",
       profesion: "Médico", profesional: "",
@@ -4973,8 +4978,8 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
             <div style={{ background: C.surface2, borderRadius: 8, padding: "12px 16px", marginBottom: 18, fontSize: 13, color: C.textMuted }}>
               <div style={S.formLabel}>Evento</div>
               <select style={{ ...S.select, width: "100%" }} value={form.evento || ""} onChange={e => F("evento", e.target.value)}>
-                {carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => (
-                  <option key={c.id}>{c.evento_asignado}</option>
+                {eventosDB.map(e => (
+                  <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
                 ))}
                 <option value="Otro">Otro</option>
               </select>
