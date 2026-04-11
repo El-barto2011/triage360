@@ -1470,7 +1470,12 @@ function VistaAtencionesMedicas({ usuario, carros }) {
     if (ats) setAtenciones(ats);
     if (evs) setEventos(evs);
     if (todosCarros && evs) {
-      const eventoUsuario = evs.find(e => e.nombre_evento === usuario?.evento_asignado);
+      const eventoUsuario = evs.find(e =>
+        (e.medicos || []).includes(usuario?.id) ||
+        (e.enfermeros || []).includes(usuario?.id) ||
+        (e.paramedicos || []).includes(usuario?.id) ||
+        e.nombre_evento === usuario?.evento_asignado
+      );
       const nombresCarros = eventoUsuario?.carros_asignados || [];
       setCarrosEvento(todosCarros.filter(c => nombresCarros.includes(c.nombre)));
     }
