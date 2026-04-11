@@ -1618,6 +1618,12 @@ function VistaAtencionesMedicas({ usuario, carros }) {
     }
   };
 
+  const eliminarAtencion = async (id) => {
+    if (!confirm("¿Eliminar esta atención? Esta acción no se puede deshacer.")) return;
+    const res = await sb(`atenciones_medicas?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
+    if (res !== null) setAtenciones(prev => prev.filter(a => a.id !== id));
+  };
+
   const verDetalleAtencion = (atencion) => {
     setForm(atencion);
     setModal("detalle");
@@ -1747,13 +1753,25 @@ function VistaAtencionesMedicas({ usuario, carros }) {
               border: `1px solid ${C.border}`, 
               borderRadius: 6, 
               marginBottom: 8,
-              cursor: "pointer",
-              opacity: 0.7
-            }} onClick={() => verDetalleAtencion(atencion)}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+              opacity: 0.7,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <div style={{ cursor: "pointer", flex: 1 }} onClick={() => verDetalleAtencion(atencion)}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>
+                  {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+                </div>
               </div>
+              {usuario?.rol === "admin" && (
+                <button
+                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.red }}
+                  onClick={() => eliminarAtencion(atencion.id)}
+                >
+                  🗑 Eliminar
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -2918,13 +2936,25 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
               border: `1px solid ${C.border}`, 
               borderRadius: 6, 
               marginBottom: 8,
-              cursor: "pointer",
-              opacity: 0.7
-            }} onClick={() => verDetalleAtencion(atencion)}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+              opacity: 0.7,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <div style={{ cursor: "pointer", flex: 1 }} onClick={() => verDetalleAtencion(atencion)}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>
+                  {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+                </div>
               </div>
+              {usuario?.rol === "admin" && (
+                <button
+                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.red }}
+                  onClick={() => eliminarAtencion(atencion.id)}
+                >
+                  🗑 Eliminar
+                </button>
+              )}
             </div>
           ))}
         </div>
