@@ -1464,7 +1464,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const cargarDatos = async () => {
     setLoading(true);
     const [ats, evs, todosCarros, todosBolsos] = await Promise.all([
-      sb("atenciones_medicas?order=created_at.desc&limit=50", {}, usuario?.token),
+      sb(`atenciones_medicas?order=created_at.desc&limit=50${usuario?.rol !== "admin" && usuario?.evento_asignado ? "&evento=eq." + encodeURIComponent(usuario.evento_asignado) : ""}`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
       sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token),
       sb("contenedores_medicamentos?tipo=eq.bolso&select=*", {}, usuario?.token)
