@@ -6201,11 +6201,16 @@ export default function App() {
   const navItems = [
     { id: "dashboard", label: "Inicio", icon: "dashboard" },
     ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros", icon: "carro", badge: alertCarros }] : []),
-    ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso }] : []),
+    ...(esAdmin || permisos.verBolso ? [{ id: "bolsos", label: "Bolso", icon: "bolso", badge: alertBolso }] : []),
     { id: "atenciones", label: "Atenciones", icon: "event" },
+    ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
+    ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "atencionEnfermeria", label: "Atención", icon: "med" }] : []),
+    ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
+    ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kine", icon: "event" }] : []),
+    ...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
+    ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kine", icon: "bolso" }] : []),
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
-...(esAdmin ? [{ id: "costos", label: "Costos", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
   ];
