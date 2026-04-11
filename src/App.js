@@ -1892,7 +1892,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                   )}
                   {(form.insumos_medico || []).map((ins, index) => {
                     const carroSel = carrosEvento.find(c => c.nombre === ins.carro) || carrosEvento[0];
-                    const cajones = carroSel ? [...new Set(carrosEvento.filter(c => c.nombre === carroSel.nombre).map(c => c.cajon).filter(Boolean))] : [];
+                    const cajones = carroSel ? [...new Set(carrosEvento.filter(c => c.nombre === carroSel.nombre).map(c => c.cajon).filter(Boolean))].sort() : [];
                     const insumosCajon = carroSel && ins.cajon ? carrosEvento.filter(c => c.nombre === carroSel.nombre && c.cajon === ins.cajon) : [];
                     return (
                       <div key={index} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 6, marginBottom: 8 }}>
