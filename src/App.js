@@ -1453,6 +1453,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
+  const [filtroEvento, setFiltroEvento] = useState("Todos");
 
   useEffect(() => {
     cargarDatos();
@@ -2575,6 +2576,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
+  const [filtroEvento, setFiltroEvento] = useState("Todos");
 
   useEffect(() => {
     cargarDatos();
@@ -2732,7 +2734,8 @@ function VistaAtencionesKinesiologia({ usuario }) {
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando atenciones...</div>;
 
   const hoy = new Date().toISOString().split('T')[0];
-  const atencionesHoy = atenciones.filter(a => {
+  const atencionesFiltradas = filtroEvento === "Todos" ? atenciones : atenciones.filter(a => a.evento === filtroEvento);
+  const atencionesHoy = atencionesFiltradas.filter(a => {
     const fecha = new Date(a.created_at).toISOString().split('T')[0];
     return fecha === hoy;
   });
@@ -2750,7 +2753,17 @@ function VistaAtencionesKinesiologia({ usuario }) {
               {insumosAlerta.length > 0 && <span style={{ color: C.red, marginLeft: 8 }}>⚠️ {insumosAlerta.length} con stock bajo</span>}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <select
+              style={{ ...S.select, fontSize: 12, padding: "6px 10px" }}
+              value={filtroEvento}
+              onChange={e => setFiltroEvento(e.target.value)}
+            >
+              <option value="Todos">Todos los eventos</option>
+              {eventos.map(e => (
+                <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
+              ))}
+            </select>
             <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={abrirGestionBolso}>
               🎒 Mi Bolso
             </button>
