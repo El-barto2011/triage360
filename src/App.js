@@ -1923,13 +1923,13 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                             onChange={e => {
                               const insumo = insumosCajon.find(i => String(i.id) === e.target.value);
                               actualizarInsumo(index, "insumo_id", e.target.value);
-                              actualizarInsumo(index, "nombre", insumo?.nombre || "");
+                              actualizarInsumo(index, "nombre", insumo?.nombre_insumo || insumo?.nombre || "");
                               actualizarInsumo(index, "unidad", insumo?.unidad || "unid.");
                             }}
                           >
                             <option value="">Seleccionar insumo</option>
                             {insumosCajon.map(i => (
-                              <option key={i.id} value={String(i.id)}>{i.nombre} (Stock: {i.stock})</option>
+                              <option key={i.id} value={String(i.id)}>{i.nombre_insumo || i.nombre} (Stock: {i.stock})</option>
                             ))}
                           </select>
                           <input
