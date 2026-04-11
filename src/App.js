@@ -6084,6 +6084,7 @@ export default function App() {
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
 ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
+...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "atencionEnfermeria", label: "Atención", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
 ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
 ...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
@@ -6194,6 +6195,15 @@ export default function App() {
 <div style={{ marginBottom: 24 }}>
 <div style={S.title}>Atenciones Médicas</div>
 <div style={S.subtitle}>Evaluación y prescripción médica</div>
+</div>
+<VistaAtencionesMedicas usuario={usuario} carros={carros} />
+</div>
+)}
+{tab === "atencionEnfermeria" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Atención de Enfermería/Paramédico</div>
+<div style={S.subtitle}>Registro de atenciones e insumos utilizados</div>
 </div>
 <VistaAtencionesMedicas usuario={usuario} carros={carros} />
 </div>
