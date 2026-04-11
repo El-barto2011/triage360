@@ -1620,8 +1620,14 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
   const eliminarAtencion = async (id) => {
     if (!confirm("¿Eliminar esta atención? Esta acción no se puede deshacer.")) return;
-    const res = await sb(`atenciones_medicas?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
-    if (res !== null) setAtenciones(prev => prev.filter(a => a.id !== id));
+    const headers = { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Prefer": "return=minimal" };
+    if (usuario?.token) headers["Authorization"] = `Bearer ${usuario.token}`;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/atenciones_medicas?id=eq.${id}`, { method: "DELETE", headers });
+    if (res.ok) {
+      setAtenciones(prev => prev.filter(a => a.id !== id));
+    } else {
+      alert("Error al eliminar. Intenta nuevamente.");
+    }
   };
 
   const verDetalleAtencion = (atencion) => {
