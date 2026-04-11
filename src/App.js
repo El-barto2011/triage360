@@ -3494,12 +3494,13 @@ function VistaMasoterapiaMasiva({ usuario }) {
 // Agregar después de VistaMasoterapiaMasiva
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaMasoterapiaEspecifica({ usuario }) {
+function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
   const [fichas, setFichas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
+  const [filtroEvento, setFiltroEvento] = useState("Todos");
 
   const zonasDisponibles = [
     "Cuello", "Hombros", "Espalda alta", "Espalda baja", "Brazos", 
@@ -3513,8 +3514,11 @@ function VistaMasoterapiaEspecifica({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const query = esAdmin
+      ? "fichas_masoterapia?order=created_at.desc&limit=100"
+      : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`;
     const [fs, evs] = await Promise.all([
-      sb(`fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
+      sb(query, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token)
     ]);
     if (fs) setFichas(fs);
@@ -3601,7 +3605,8 @@ function VistaMasoterapiaEspecifica({ usuario }) {
   }
 
   const hoy = new Date().toISOString().split('T')[0];
-  const fichasHoy = fichas.filter(f => {
+  const fichasFiltradas = filtroEvento === "Todos" ? fichas : fichas.filter(f => f.evento === filtroEvento);
+  const fichasHoy = fichasFiltradas.filter(f => {
     const fecha = new Date(f.created_at).toISOString().split('T')[0];
     return fecha === hoy;
   });
@@ -3616,9 +3621,25 @@ function VistaMasoterapiaEspecifica({ usuario }) {
               {fichasHoy.length} fichas hoy · {fichas.length} fichas totales
             </div>
           </div>
-          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
-            + Nueva Ficha
-          </button>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {esAdmin && (
+              <select
+                style={{ ...S.select, fontSize: 12 }}
+                value={filtroEvento}
+                onChange={e => setFiltroEvento(e.target.value)}
+              >
+                <option value="Todos">Todos los eventos</option>
+                {eventos.map(e => (
+                  <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
+                ))}
+              </select>
+            )}
+            {!esAdmin && (
+              <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
+                + Nueva Ficha
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -6357,7 +6378,7 @@ export default function App() {
   {subTabMaso === "especifica" && (
     <div>
       <button style={{ ...S.btn("ghost"), marginBottom: 16, fontSize: 12 }} onClick={() => setSubTabMaso(null)}>← Volver</button>
-      <VistaMasoterapiaEspecifica usuario={usuario} />
+      <VistaMasoterapiaEspecifica usuario={usuario} esAdmin={esAdmin} />
     </div>
   )}
 </div>
