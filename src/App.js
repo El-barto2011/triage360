@@ -2569,7 +2569,7 @@ function VistaAdministracionMedicamentos({ usuario }) {
 // Agregar después de VistaAdministracionMedicamentos
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaAtencionesKinesiologia({ usuario }) {
+function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
   const [atenciones, setAtenciones] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2764,12 +2764,16 @@ function VistaAtencionesKinesiologia({ usuario }) {
                 <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
               ))}
             </select>
-            <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={abrirGestionBolso}>
-              🎒 Mi Bolso
-            </button>
-            <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
-              + Nueva Atención
-            </button>
+            {!esAdmin && (
+              <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={abrirGestionBolso}>
+                🎒 Mi Bolso
+              </button>
+            )}
+            {!esAdmin && (
+              <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
+                + Nueva Atención
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -6172,7 +6176,7 @@ export default function App() {
 <div style={S.title}>Atenciones de Kinesiología</div>
 <div style={S.subtitle}>Registro de atenciones con bolso individual</div>
 </div>
-<VistaAtencionesKinesiologia usuario={usuario} />
+<VistaAtencionesKinesiologia usuario={usuario} esAdmin={esAdmin} />
 </div>
 )}
 {tab === "masoterapia" && (
