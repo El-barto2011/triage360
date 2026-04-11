@@ -1454,6 +1454,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
   const [filtroEvento, setFiltroEvento] = useState("Todos");
+  const [carrosEvento, setCarrosEvento] = useState([]);
 
   useEffect(() => {
     cargarDatos();
@@ -1461,12 +1462,18 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
   const cargarDatos = async () => {
     setLoading(true);
-    const [ats, evs] = await Promise.all([
+    const [ats, evs, todosCarros] = await Promise.all([
       sb("atenciones_medicas?order=created_at.desc&limit=50", {}, usuario?.token),
-      sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
+      sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
+      sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token)
     ]);
     if (ats) setAtenciones(ats);
     if (evs) setEventos(evs);
+    if (todosCarros && evs) {
+      const eventoUsuario = evs.find(e => e.nombre_evento === usuario?.evento_asignado);
+      const nombresCarros = eventoUsuario?.carros_asignados || [];
+      setCarrosEvento(todosCarros.filter(c => nombresCarros.includes(c.nombre)));
+    }
     setLoading(false);
   };
 
@@ -1873,47 +1880,68 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                       + Agregar Insumo
                     </button>
                   </div>
-                  {(form.insumos_medico || []).map((ins, index) => (
-                    <div key={index} style={{ 
-                      padding: 12, 
-                      border: `1px solid ${C.border}`, 
-                      borderRadius: 6, 
-                      marginBottom: 8,
-                      display: "flex",
-                      gap: 12,
-                      alignItems: "center"
-                    }}>
-                      <input 
-                        style={{ ...S.input, flex: 2 }}
-                        placeholder="Nombre del insumo"
-                        value={ins.nombre}
-                        onChange={e => actualizarInsumo(index, "nombre", e.target.value)}
-                      />
-                      <input 
-                        type="number"
-                        style={{ ...S.input, width: 80 }}
-                        placeholder="Cant."
-                        value={ins.cantidad}
-                        onChange={e => actualizarInsumo(index, "cantidad", parseInt(e.target.value) || 1)}
-                      />
-                      <select 
-                        style={{ ...S.select, width: 100 }}
-                        value={ins.unidad}
-                        onChange={e => actualizarInsumo(index, "unidad", e.target.value)}
-                      >
-                        <option>unid.</option>
-                        <option>ml</option>
-                        <option>mg</option>
-                        <option>amp.</option>
-                      </select>
-                      <button 
-                        style={{ ...S.btn("ghost"), fontSize: 12 }}
-                        onClick={() => eliminarInsumo(index)}
-                      >
-                        Eliminar
-                      </button>
+                  {carrosEvento.length === 0 && (
+                    <div style={{ fontSize: 12, color: C.textMuted, padding: 8 }}>
+                      No hay carros asignados a tu evento.
                     </div>
-                  ))}
+                  )}
+                  {(form.insumos_medico || []).map((ins, index) => {
+                    const carroSel = carrosEvento.find(c => c.nombre === ins.carro) || carrosEvento[0];
+                    const cajones = carroSel ? [...new Set(carrosEvento.filter(c => c.nombre === carroSel.nombre).map(c => c.cajon).filter(Boolean))] : [];
+                    const insumosCajon = carroSel && ins.cajon ? carrosEvento.filter(c => c.nombre === carroSel.nombre && c.cajon === ins.cajon) : [];
+                    return (
+                      <div key={index} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 6, marginBottom: 8 }}>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                          <select
+                            style={{ ...S.select, flex: 1 }}
+                            value={ins.carro || ""}
+                            onChange={e => actualizarInsumo(index, "carro", e.target.value)}
+                          >
+                            <option value="">Seleccionar carro</option>
+                            {[...new Set(carrosEvento.map(c => c.nombre))].map(nombre => (
+                              <option key={nombre} value={nombre}>{nombre}</option>
+                            ))}
+                          </select>
+                          <select
+                            style={{ ...S.select, flex: 1 }}
+                            value={ins.cajon || ""}
+                            onChange={e => actualizarInsumo(index, "cajon", e.target.value)}
+                          >
+                            <option value="">Seleccionar cajón</option>
+                            {cajones.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <select
+                            style={{ ...S.select, flex: 2 }}
+                            value={ins.insumo_id || ""}
+                            onChange={e => {
+                              const insumo = insumosCajon.find(i => String(i.id) === e.target.value);
+                              actualizarInsumo(index, "insumo_id", e.target.value);
+                              actualizarInsumo(index, "nombre", insumo?.nombre || "");
+                              actualizarInsumo(index, "unidad", insumo?.unidad || "unid.");
+                            }}
+                          >
+                            <option value="">Seleccionar insumo</option>
+                            {insumosCajon.map(i => (
+                              <option key={i.id} value={String(i.id)}>{i.nombre} (Stock: {i.stock})</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            style={{ ...S.input, width: 80 }}
+                            placeholder="Cant."
+                            min={1}
+                            value={ins.cantidad}
+                            onChange={e => actualizarInsumo(index, "cantidad", parseInt(e.target.value) || 1)}
+                          />
+                          <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={() => eliminarInsumo(index)}>
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div style={S.formRow}>
