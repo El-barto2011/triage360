@@ -1464,13 +1464,11 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const cargarDatos = async () => {
     setLoading(true);
     const [ats, evs, todosCarros, todosBolsos] = await Promise.all([
-      sb(`atenciones_medicas?order=created_at.desc&limit=50${usuario?.rol !== "admin" && usuario?.evento_asignado ? "&evento=eq." + encodeURIComponent(usuario.evento_asignado) : ""}`, {}, usuario?.token),
+      sb("atenciones_medicas?order=created_at.desc&limit=50", {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
       sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token),
       sb("contenedores_medicamentos?tipo=eq.bolso&select=*", {}, usuario?.token)
     ]);
-    if (ats) setAtenciones(ats);
-    if (evs) setEventos(evs);
     if (evs) {
       const eventoUsuario = evs.find(e =>
         (e.medicos || []).includes(usuario?.id) ||
@@ -1478,6 +1476,11 @@ function VistaAtencionesMedicas({ usuario, carros }) {
         (e.paramedicos || []).includes(usuario?.id) ||
         e.nombre_evento === usuario?.evento_asignado
       );
+      if (ats && eventoUsuario && usuario?.rol !== "admin") {
+        setAtenciones(ats.filter(a => a.evento === eventoUsuario.nombre_evento));
+      } else if (ats) {
+        setAtenciones(ats);
+      }
       const nombresCarros = eventoUsuario?.carros_asignados || [];
       const nombresBolsos = eventoUsuario?.bolsos_asignados || [];
       if (todosCarros) setCarrosEvento(todosCarros.filter(c => nombresCarros.includes(c.nombre)));
