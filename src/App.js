@@ -4822,7 +4822,7 @@ const ATENCIONES_INICIALES = [
   },
 ];
 
-function VistaAtenciones({ carros, usuario, permisos, industria }) {
+function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -4849,7 +4849,11 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
 
   const eventos = ["Todos", ...eventosDB.map(e => e.nombre_evento)];
 
-  const filtradas = atenciones.filter(a => {
+  const atencionesFiltradas = esAdmin
+    ? atenciones
+    : atenciones.filter(a => a.evento === usuario?.evento_asignado);
+
+  const filtradas = atencionesFiltradas.filter(a => {
     const matchEv = filtroEvento === "Todos" || a.evento === filtroEvento;
     const matchProf = filtroProfesion === "Todas" || a.profesion === filtroProfesion;
     return matchEv && matchProf;
@@ -4929,7 +4933,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
           {["Todas", ...PROFESIONES].map(p => <option key={p}>{p}</option>)}
         </select>
         <div style={{ flex: 1 }} />
-        <button style={S.btn("primary")} onClick={abrirNueva}>+ Nueva atención</button>
+        {false && <button style={S.btn("primary")} onClick={abrirNueva}>+ Nueva atención</button>}
       </div>
 
       {/* Tabla */}
@@ -6132,7 +6136,7 @@ export default function App() {
               <div style={S.title}>Atenciones en Carpa Médica 🏥</div>
               <div style={S.subtitle}>Registro por evento · Médico, Enfermero/a, Paramédico, Kinesiólogo/a, Masoterapeuta</div>
             </div>
-            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} />
+            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} esAdmin={esAdmin} />
           </div>
         )}
 {tab === "bolsoKine" && (
