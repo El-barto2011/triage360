@@ -1455,6 +1455,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const [eventos, setEventos] = useState([]);
   const [filtroEvento, setFiltroEvento] = useState("Todos");
   const [carrosEvento, setCarrosEvento] = useState([]);
+  const [bolsosEvento, setBolsosEvento] = useState([]);
 
   useEffect(() => {
     cargarDatos();
@@ -1462,14 +1463,15 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
   const cargarDatos = async () => {
     setLoading(true);
-    const [ats, evs, todosCarros] = await Promise.all([
+    const [ats, evs, todosCarros, todosBolsos] = await Promise.all([
       sb("atenciones_medicas?order=created_at.desc&limit=50", {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
-      sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token)
+      sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token),
+      sb("contenedores_medicamentos?tipo=eq.bolso&select=*", {}, usuario?.token)
     ]);
     if (ats) setAtenciones(ats);
     if (evs) setEventos(evs);
-    if (todosCarros && evs) {
+    if (evs) {
       const eventoUsuario = evs.find(e =>
         (e.medicos || []).includes(usuario?.id) ||
         (e.enfermeros || []).includes(usuario?.id) ||
@@ -1477,7 +1479,9 @@ function VistaAtencionesMedicas({ usuario, carros }) {
         e.nombre_evento === usuario?.evento_asignado
       );
       const nombresCarros = eventoUsuario?.carros_asignados || [];
-      setCarrosEvento(todosCarros.filter(c => nombresCarros.includes(c.nombre)));
+      const nombresBolsos = eventoUsuario?.bolsos_asignados || [];
+      if (todosCarros) setCarrosEvento(todosCarros.filter(c => nombresCarros.includes(c.nombre)));
+      if (todosBolsos) setBolsosEvento(todosBolsos.filter(b => nombresBolsos.includes(b.nombre)));
     }
     setLoading(false);
   };
@@ -1575,6 +1579,21 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
     if (res) {
       setAtenciones(prev => [res[0], ...prev]);
+
+      // Descontar stock de medicamentos prescritos
+      const medicamentosUsados = form.medicamentos_prescritos || [];
+      for (const med of medicamentosUsados) {
+        if (med.med_id && med.cantidad) {
+          const medActual = bolsosEvento.find(b => String(b.id) === String(med.med_id));
+          if (medActual) {
+            const nuevoStock = Math.max(0, (medActual.stock || 0) - med.cantidad);
+            await sb(`contenedores_medicamentos?id=eq.${medActual.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ stock: nuevoStock })
+            }, usuario?.token);
+          }
+        }
+      }
 
       // Descontar stock de insumos usados
       const insumosUsados = form.insumos_medico || [];
@@ -1834,64 +1853,86 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                       + Agregar Medicamento
                     </button>
                   </div>
-                  {(form.medicamentos_prescritos || []).map((med, index) => (
-                    <div key={index} style={{ 
-                      padding: 12, 
-                      border: `1px solid ${C.border}`, 
-                      borderRadius: 6, 
-                      marginBottom: 12,
-                      background: med.urgente ? C.redDim : C.surface
-                    }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                        <input 
-                          style={S.input}
-                          placeholder="Nombre del medicamento"
-                          value={med.nombre}
-                          onChange={e => actualizarMedicamento(index, "nombre", e.target.value)}
-                        />
-                        <input 
-                          style={S.input}
-                          placeholder="Dosis"
-                          value={med.dosis}
-                          onChange={e => actualizarMedicamento(index, "dosis", e.target.value)}
-                        />
-                        <select 
-                          style={S.select}
-                          value={med.via}
-                          onChange={e => actualizarMedicamento(index, "via", e.target.value)}
-                        >
-                          <option>Oral</option>
-                          <option>Intravenosa</option>
-                          <option>Intramuscular</option>
-                          <option>Subcutánea</option>
-                          <option>Tópica</option>
-                        </select>
-                      </div>
-                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                        <input 
-                          type="number"
-                          style={{ ...S.input, width: 80 }}
-                          placeholder="Cant."
-                          value={med.cantidad}
-                          onChange={e => actualizarMedicamento(index, "cantidad", parseInt(e.target.value) || 1)}
-                        />
-                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                          <input 
-                            type="checkbox"
-                            checked={med.urgente}
-                            onChange={e => actualizarMedicamento(index, "urgente", e.target.checked)}
-                          />
-                          <span style={{ color: med.urgente ? C.red : C.text }}>Urgente 🚨</span>
-                        </label>
-                        <button 
-                          style={{ ...S.btn("ghost"), fontSize: 12, marginLeft: "auto" }}
-                          onClick={() => eliminarMedicamento(index)}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
+                  {bolsosEvento.length === 0 && (
+                    <div style={{ fontSize: 12, color: C.textMuted, padding: 8 }}>
+                      No hay bolsos de medicamentos asignados a tu evento.
                     </div>
-                  ))}
+                  )}
+                  {(form.medicamentos_prescritos || []).map((med, index) => {
+                    const bolsoSel = bolsosEvento.find(b => b.nombre === med.bolso) || bolsosEvento[0];
+                    const medsBolso = bolsoSel ? bolsosEvento.filter(b => b.nombre === bolsoSel.nombre) : [];
+                    return (
+                      <div key={index} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 6, marginBottom: 12, background: med.urgente ? C.redDim : C.surface }}>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                          <select
+                            style={{ ...S.select, flex: 1 }}
+                            value={med.bolso || ""}
+                            onChange={e => actualizarMedicamento(index, "bolso", e.target.value)}
+                          >
+                            <option value="">Seleccionar bolso</option>
+                            {[...new Set(bolsosEvento.map(b => b.nombre))].map(nombre => (
+                              <option key={nombre} value={nombre}>{nombre}</option>
+                            ))}
+                          </select>
+                          <select
+                            style={{ ...S.select, flex: 2 }}
+                            value={med.med_id || ""}
+                            onChange={e => {
+                              const medicamento = medsBolso.find(b => String(b.id) === e.target.value);
+                              actualizarMedicamento(index, "med_id", e.target.value);
+                              actualizarMedicamento(index, "nombre", medicamento?.nombre_insumo || medicamento?.nombre || "");
+                            }}
+                          >
+                            <option value="">Seleccionar medicamento</option>
+                            {medsBolso.map(b => (
+                              <option key={b.id} value={String(b.id)}>{b.nombre_insumo || b.nombre} (Stock: {b.stock})</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                          <input
+                            style={S.input}
+                            placeholder="Dosis"
+                            value={med.dosis || ""}
+                            onChange={e => actualizarMedicamento(index, "dosis", e.target.value)}
+                          />
+                          <select
+                            style={{ ...S.select, width: 140 }}
+                            value={med.via || "Oral"}
+                            onChange={e => actualizarMedicamento(index, "via", e.target.value)}
+                          >
+                            <option>Oral</option>
+                            <option>Intravenosa</option>
+                            <option>Intramuscular</option>
+                            <option>Subcutánea</option>
+                            <option>Tópica</option>
+                          </select>
+                          <input
+                            type="number"
+                            style={{ ...S.input, width: 80 }}
+                            placeholder="Cant."
+                            min={1}
+                            value={med.cantidad || 1}
+                            onChange={e => actualizarMedicamento(index, "cantidad", parseInt(e.target.value) || 1)}
+                          />
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                            <input
+                              type="checkbox"
+                              checked={med.urgente || false}
+                              onChange={e => actualizarMedicamento(index, "urgente", e.target.checked)}
+                            />
+                            <span style={{ color: med.urgente ? C.red : C.text }}>Urgente 🚨</span>
+                          </label>
+                          <button
+                            style={{ ...S.btn("ghost"), fontSize: 12, marginLeft: "auto" }}
+                            onClick={() => eliminarMedicamento(index)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div style={{ marginTop: 20, marginBottom: 20 }}>
