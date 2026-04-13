@@ -1475,7 +1475,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
     const datos = {
       medico_id: usuario.id,
-      medico_nombre: usuario.email,
+      medico_nombre: usuario.nombre || usuario.email,
       paciente_nombre: form.paciente_nombre,
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
@@ -2091,7 +2091,7 @@ function VistaAdministracionMedicamentos({ usuario }) {
     const datosAdmin = {
       atencion_id: form.atencion_id,
       administrador_id: usuario.id,
-      administrador_nombre: usuario.email,
+      administrador_nombre: usuario.nombre || usuario.email,
       administrador_tipo: usuario.profesion || "Enfermero/a",
       medicamentos_administrados: form.medicamentos_administrados,
       insumos_administracion: form.insumos_administracion || [],
@@ -2576,7 +2576,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
 
     const datos = {
       kinesiologo_id: usuario.id,
-      kinesiologo_nombre: usuario.email,
+      kinesiologo_nombre: usuario.nombre || usuario.email,
       paciente_nombre: form.paciente_nombre,
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
@@ -3090,7 +3090,7 @@ function VistaMasoterapiaMasiva({ usuario }) {
 
     const datos = {
       masoterapeuta_id: usuario.id,
-      masoterapeuta_nombre: usuario.email,
+      masoterapeuta_nombre: usuario.nombre || usuario.email,
       evento: eventoSeleccionado,
       masajes_realizados: 0,
       fecha: new Date().toISOString().split('T')[0]
@@ -3355,7 +3355,7 @@ function VistaMasoterapiaEspecifica({ usuario }) {
       evento: form.evento,
       evento_id: form.evento_id || null,
       masoterapeuta_id: usuario.id,
-      masoterapeuta_nombre: usuario.email,
+      masoterapeuta_nombre: usuario.nombre || usuario.email,
       paciente_nombre: form.paciente_nombre,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       fecha_atencion: new Date().toISOString().split('T')[0],
