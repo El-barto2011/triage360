@@ -1382,7 +1382,7 @@ function VistaGestionEventos({ usuario }) {
 // Agregar después de VistaGestionEventos
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaAtencionesMedicas({ usuario, carros }) {
+function VistaAtencionesMedicas({ usuario, carros, esAdmin }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -1567,9 +1567,11 @@ function VistaAtencionesMedicas({ usuario, carros }) {
               {atencionesHoy.length} atenciones hoy · {pendientesAdmin.length} pendientes de administración
             </div>
           </div>
-          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
-            + Nueva Atención
-          </button>
+          {!esAdmin && (
+            <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
+              + Nueva Atención
+            </button>
+          )}
         </div>
       </div>
 
@@ -2583,7 +2585,7 @@ function VistaAdministracionMedicamentos({ usuario }) {
 // Agregar después de VistaAdministracionMedicamentos
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaAtencionesKinesiologia({ usuario }) {
+function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
   const [atenciones, setAtenciones] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2614,9 +2616,15 @@ function VistaAtencionesKinesiologia({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const queryAts = esAdmin
+      ? `atenciones_kinesiologia?order=created_at.desc&limit=200`
+      : `atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50`;
+    const queryIns = esAdmin
+      ? `insumos_kinesiologia?order=nombre`
+      : `insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`;
     const [ats, ins, evs] = await Promise.all([
-      sb(`atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
-      sb(`insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`, {}, usuario?.token),
+      sb(queryAts, {}, usuario?.token),
+      sb(queryIns, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
     ]);
     if (ats) setAtenciones(ats);
@@ -2834,9 +2842,11 @@ function VistaAtencionesKinesiologia({ usuario }) {
             <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={abrirGestionBolso}>
               🎒 Mi Bolso
             </button>
-            <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
-              + Nueva Atención
-            </button>
+            {!esAdmin && (
+              <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
+                + Nueva Atención
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -3220,7 +3230,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
 // Agregar después de VistaAtencionesKinesiologia
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaMasoterapiaMasiva({ usuario }) {
+function VistaMasoterapiaMasiva({ usuario, esAdmin }) {
   const [registroHoy, setRegistroHoy] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3235,7 +3245,9 @@ function VistaMasoterapiaMasiva({ usuario }) {
     setLoading(true);
     const [evs, hist] = await Promise.all([
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Masivo&order=created_at.desc", {}, usuario?.token),
-      sb(`atenciones_masoterapia_masiva?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=30`, {}, usuario?.token)
+      esAdmin
+        ? sb(`atenciones_masoterapia_masiva?order=created_at.desc&limit=200`, {}, usuario?.token)
+        : sb(`atenciones_masoterapia_masiva?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=30`, {}, usuario?.token)
     ]);
 
     if (evs) {
@@ -3604,9 +3616,11 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
               {fichasHoy.length} fichas hoy · {fichas.length} fichas totales
             </div>
           </div>
-          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
-            + Nueva Ficha
-          </button>
+          {!esAdmin && (
+            <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
+              + Nueva Ficha
+            </button>
+          )}
         </div>
       </div>
 
@@ -6456,7 +6470,7 @@ export default function App() {
 <div style={S.title}>Atenciones Médicas</div>
 <div style={S.subtitle}>Evaluación y prescripción médica</div>
 </div>
-<VistaAtencionesMedicas usuario={usuario} carros={carros} />
+<VistaAtencionesMedicas usuario={usuario} carros={carros} esAdmin={esAdmin} />
 </div>
 )}
 {tab === "adminMedicamentos" && (
@@ -6474,7 +6488,7 @@ export default function App() {
 <div style={S.title}>Atenciones de Kinesiología</div>
 <div style={S.subtitle}>Registro de atenciones con bolso individual</div>
 </div>
-<VistaAtencionesKinesiologia usuario={usuario} />
+<VistaAtencionesKinesiologia usuario={usuario} esAdmin={esAdmin} />
 </div>
 )}
 {tab === "masoterapiaMasiva" && (
@@ -6483,7 +6497,7 @@ export default function App() {
 <div style={S.title}>Masoterapia Masiva</div>
 <div style={S.subtitle}>Contador de masajes para eventos masivos</div>
 </div>
-<VistaMasoterapiaMasiva usuario={usuario} />
+<VistaMasoterapiaMasiva usuario={usuario} esAdmin={esAdmin} />
 </div>
 )}
 {tab === "masoterapiaEspecifica" && (
