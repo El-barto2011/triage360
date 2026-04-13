@@ -1473,6 +1473,19 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       return;
     }
 
+    // Validación anti-duplicado: misma atención en los últimos 5 minutos
+    const hace5min = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const duplicado = atenciones.find(a =>
+      a.paciente_nombre?.trim().toLowerCase() === form.paciente_nombre?.trim().toLowerCase() &&
+      a.evento === form.evento &&
+      a.motivo_consulta === form.motivo_consulta &&
+      a.created_at > hace5min
+    );
+    if (duplicado) {
+      alert("⚠️ Ya existe una atención registrada para este paciente en este evento hace menos de 5 minutos. ¿Es un registro duplicado?");
+      return;
+    }
+
     const datos = {
       medico_id: usuario.id,
       medico_nombre: usuario.nombre || usuario.email,
@@ -2571,6 +2584,19 @@ function VistaAtencionesKinesiologia({ usuario }) {
   const guardarAtencion = async () => {
     if (!form.paciente_nombre || !form.evento || !form.motivo_consulta) {
       alert("Por favor completa al menos: nombre del paciente, evento y motivo de consulta");
+      return;
+    }
+
+    // Validación anti-duplicado: misma atención en los últimos 5 minutos
+    const hace5min = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const duplicado = atenciones.find(a =>
+      a.paciente_nombre?.trim().toLowerCase() === form.paciente_nombre?.trim().toLowerCase() &&
+      a.evento === form.evento &&
+      a.motivo_consulta === form.motivo_consulta &&
+      a.created_at > hace5min
+    );
+    if (duplicado) {
+      alert("⚠️ Ya existe una atención registrada para este paciente en este evento hace menos de 5 minutos. ¿Es un registro duplicado?");
       return;
     }
 
