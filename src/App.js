@@ -869,10 +869,6 @@ function VistaGestionEventos({ usuario }) {
     const datos = {
       nombre_evento: form.nombre_evento,
       fecha_evento: form.fecha_evento,
-      fecha_fin: form.fecha_fin || null,
-      hora_inicio: form.hora_inicio || null,
-      hora_fin: form.hora_fin || null,
-      observaciones: form.observaciones || null,
       ubicacion: form.ubicacion || "",
       tipo_evento: form.tipo_evento,
       tipo_masoterapia: form.tipo_masoterapia,
@@ -1152,7 +1148,7 @@ function VistaGestionEventos({ usuario }) {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
-                <label style={S.formLabel}>Fecha Inicio</label>
+                <label style={S.formLabel}>Fecha</label>
                 <input 
                   style={S.input} 
                   type="date" 
@@ -1160,49 +1156,6 @@ function VistaGestionEventos({ usuario }) {
                   onChange={e => setForm(p => ({ ...p, fecha_evento: e.target.value }))} 
                 />
               </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Fecha Fin</label>
-                <input 
-                  style={S.input} 
-                  type="date" 
-                  value={form.fecha_fin || ""} 
-                  onChange={e => setForm(p => ({ ...p, fecha_fin: e.target.value }))} 
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Hora Inicio</label>
-                <input 
-                  style={S.input} 
-                  type="time" 
-                  value={form.hora_inicio || ""} 
-                  onChange={e => setForm(p => ({ ...p, hora_inicio: e.target.value }))} 
-                />
-              </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Hora Fin</label>
-                <input 
-                  style={S.input} 
-                  type="time" 
-                  value={form.hora_fin || ""} 
-                  onChange={e => setForm(p => ({ ...p, hora_fin: e.target.value }))} 
-                />
-              </div>
-            </div>
-
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Observaciones</label>
-              <textarea 
-                style={{ ...S.input, minHeight: 70 }} 
-                value={form.observaciones || ""} 
-                onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} 
-                placeholder="Observaciones del evento..."
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Tipo de Evento</label>
                 <select 
@@ -1527,6 +1480,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       evento: form.evento,
+      evento_id: form.evento_id || null,
       motivo_consulta: form.motivo_consulta,
       diagnostico: form.diagnostico || null,
       tratamiento: form.tratamiento || null,
@@ -1741,7 +1695,10 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                     <select 
                       style={{ ...S.select, width: "100%" }} 
                       value={form.evento || ""} 
-                      onChange={e => setForm(f => ({ ...f, evento: e.target.value }))}
+                      onChange={e => {
+                    const ev = eventos.find(ev => ev.nombre_evento === e.target.value);
+                    setForm(f => ({ ...f, evento: e.target.value, evento_id: ev ? ev.id : null }));
+                  }}
                     >
                       {eventos.map(ev => (
                         <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
@@ -2624,6 +2581,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       evento: form.evento,
+      evento_id: form.evento_id || null,
       motivo_consulta: form.motivo_consulta,
       evaluacion_inicial: form.evaluacion_inicial || null,
       tratamiento_realizado: form.tratamiento_realizado || null,
@@ -2847,7 +2805,10 @@ function VistaAtencionesKinesiologia({ usuario }) {
                 <select 
                   style={{ ...S.select, width: "100%" }} 
                   value={form.evento || ""} 
-                  onChange={e => setForm(f => ({ ...f, evento: e.target.value }))}
+                  onChange={e => {
+                    const ev = eventos.find(ev => ev.nombre_evento === e.target.value);
+                    setForm(f => ({ ...f, evento: e.target.value, evento_id: ev ? ev.id : null }));
+                  }}
                 >
                   {eventos.map(ev => (
                     <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
@@ -3392,6 +3353,7 @@ function VistaMasoterapiaEspecifica({ usuario }) {
 
     const datos = {
       evento: form.evento,
+      evento_id: form.evento_id || null,
       masoterapeuta_id: usuario.id,
       masoterapeuta_nombre: usuario.email,
       paciente_nombre: form.paciente_nombre,
@@ -3553,7 +3515,10 @@ function VistaMasoterapiaEspecifica({ usuario }) {
                 <select 
                   style={{ ...S.select, width: "100%" }} 
                   value={form.evento || ""} 
-                  onChange={e => setForm(f => ({ ...f, evento: e.target.value }))}
+                  onChange={e => {
+                    const ev = eventos.find(ev => ev.nombre_evento === e.target.value);
+                    setForm(f => ({ ...f, evento: e.target.value, evento_id: ev ? ev.id : null }));
+                  }}
                 >
                   {eventos.map(ev => (
                     <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
@@ -3724,7 +3689,7 @@ function VistaMasoterapiaEspecifica({ usuario }) {
 
 function VistaReportes({ usuario, esAdmin }) {
   const [eventos, setEventos] = useState([]);
-  const [eventoSeleccionado, setEventoSeleccionado] = useState("todos");
+  const [eventoSeleccionado, setEventoSeleccionado] = useState("");
   const [loading, setLoading] = useState(true);
   const [datosReporte, setDatosReporte] = useState(null);
   const [modal, setModal] = useState(null);
@@ -3744,15 +3709,15 @@ function VistaReportes({ usuario, esAdmin }) {
     const evs = await sb("equipos_evento?order=created_at.desc", {}, usuario?.token);
     if (evs) {
       setEventos(evs);
-      if (evs.length > 0 && eventoSeleccionado === "todos") {
-        setEventoSeleccionado(evs[0].nombre_evento);
+      if (evs.length > 0 && !eventoSeleccionado) {
+        setEventoSeleccionado(String(evs[0].id));
       }
     }
     setLoading(false);
   };
 
   const generarReporte = async () => {
-    if (!eventoSeleccionado || eventoSeleccionado === "todos") return;
+    if (!eventoSeleccionado) return;
 
     setLoading(true);
 
@@ -3764,11 +3729,11 @@ function VistaReportes({ usuario, esAdmin }) {
       masoterapiaMasiva,
       fichasMasoterapia
     ] = await Promise.all([
-      sb(`atenciones_kinesiologia?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
-      sb(`atenciones_medicas?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
+      sb(`atenciones_kinesiologia?evento_id=eq.${eventoSeleccionado}`, {}, usuario?.token),
+      sb(`atenciones_medicas?evento_id=eq.${eventoSeleccionado}`, {}, usuario?.token),
       sb(`administracion_medicamentos?order=created_at.desc`, {}, usuario?.token),
-      sb(`atenciones_masoterapia_masiva?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
-      sb(`fichas_masoterapia?evento=eq.${eventoSeleccionado}`, {}, usuario?.token)
+      sb(`atenciones_masoterapia_masiva?evento_id=eq.${eventoSeleccionado}`, {}, usuario?.token),
+      sb(`fichas_masoterapia?evento_id=eq.${eventoSeleccionado}`, {}, usuario?.token)
     ]);
 
     // Cargar costos (solo si es admin)
@@ -3909,7 +3874,7 @@ function VistaReportes({ usuario, esAdmin }) {
   };
 
   const cerrarEvento = async () => {
-    const eventoObj = eventos.find(e => e.nombre_evento === eventoSeleccionado);
+    const eventoObj = eventos.find(e => String(e.id) === eventoSeleccionado);
     if (!eventoObj) return;
 
     const confirmar = confirm(
@@ -4000,7 +3965,7 @@ function VistaReportes({ usuario, esAdmin }) {
             onChange={e => setEventoSeleccionado(e.target.value)}
           >
             {eventos.map(ev => (
-              <option key={ev.id} value={ev.nombre_evento}>
+              <option key={ev.id} value={String(ev.id)}>
                 {ev.nombre_evento} - {ev.estado === "cerrado" ? "🔒 CERRADO" : "✅ Activo"}
               </option>
             ))}
