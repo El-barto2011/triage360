@@ -841,7 +841,6 @@ function VistaGestionEventos({ usuario }) {
     setForm({
       nombre_evento: "",
       fecha_evento: new Date().toISOString().split('T')[0],
-      ubicacion: "",
       tipo_evento: "Deportivo",
       tipo_masoterapia: "Masivo",
       medicos: [],
@@ -849,8 +848,7 @@ function VistaGestionEventos({ usuario }) {
       paramedicos: [],
       kinesiologos: [],
       masoterapeutas: [],
-      carros_asignados: [],
-      bolsos_asignados: []
+      carros_asignados: []
     });
     setModal("nuevo");
   };
@@ -869,11 +867,6 @@ function VistaGestionEventos({ usuario }) {
     const datos = {
       nombre_evento: form.nombre_evento,
       fecha_evento: form.fecha_evento,
-      fecha_fin: form.fecha_fin || null,
-      hora_inicio: form.hora_inicio || null,
-      hora_fin: form.hora_fin || null,
-      observaciones: form.observaciones || null,
-      ubicacion: form.ubicacion || "",
       tipo_evento: form.tipo_evento,
       tipo_masoterapia: form.tipo_masoterapia,
       medicos: form.medicos || [],
@@ -882,128 +875,17 @@ function VistaGestionEventos({ usuario }) {
       kinesiologos: form.kinesiologos || [],
       masoterapeutas: form.masoterapeutas || [],
       carros_asignados: form.carros_asignados || [],
-      bolsos_asignados: form.bolsos_asignados || [],
       estado: "activo"
     };
 
-    let eventoGuardado = null;
-    let profesionalesANotificar = [];
-
     if (modal === "nuevo") {
-      // CREAR NUEVO EVENTO
       const res = await sb("equipos_evento", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
-      if (res) {
-        eventoGuardado = res[0];
-        setEventos(prev => [eventoGuardado, ...prev]);
-        
-        // Notificar a TODOS los profesionales asignados
-        profesionalesANotificar = [
-          ...datos.medicos,
-          ...datos.enfermeros,
-          ...datos.paramedicos,
-          ...datos.kinesiologos,
-          ...datos.masoterapeutas
-        ];
-      }
+      if (res) setEventos(prev => [res[0], ...prev]);
     } else {
-      // EDITAR EVENTO EXISTENTE
-      const eventoAnterior = eventos.find(e => e.id === form.id);
       const res = await sb(`equipos_evento?id=eq.${form.id}`, { method: "PATCH", body: JSON.stringify(datos) }, usuario?.token);
-      
-      if (res) {
-        eventoGuardado = res[0];
-        setEventos(prev => prev.map(e => e.id === form.id ? eventoGuardado : e));
-        
-        // Detectar NUEVOS profesionales agregados
-        const profesionalesAnteriores = [
-          ...(eventoAnterior?.medicos || []),
-          ...(eventoAnterior?.enfermeros || []),
-          ...(eventoAnterior?.paramedicos || []),
-          ...(eventoAnterior?.kinesiologos || []),
-          ...(eventoAnterior?.masoterapeutas || [])
-        ];
-        
-        const profesionalesActuales = [
-          ...datos.medicos,
-          ...datos.enfermeros,
-          ...datos.paramedicos,
-          ...datos.kinesiologos,
-          ...datos.masoterapeutas
-        ];
-        
-        // Notificar solo a los NUEVOS
-        profesionalesANotificar = profesionalesActuales.filter(
-          id => !profesionalesAnteriores.includes(id)
-        );
-      }
+      if (res) setEventos(prev => prev.map(e => e.id === form.id ? res[0] : e));
     }
-
-    // Enviar emails a los profesionales
-    if (eventoGuardado && profesionalesANotificar.length > 0) {
-      await enviarEmailsAsignacion(eventoGuardado, profesionalesANotificar);
-    }
-
     setModal(null);
-  };
-
-  const enviarEmailsAsignacion = async (evento, profesionalesIds) => {
-    try {
-      // Obtener datos completos de los profesionales a notificar
-      const profesionalesNotificar = profesionales.filter(p => profesionalesIds.includes(p.id));
-      
-      // Obtener datos completos del equipo para mostrar en el email
-      const equipoCompleto = {
-        medicos: profesionales.filter(p => evento.medicos?.includes(p.id)).map(p => p.nombre),
-        enfermeros: profesionales.filter(p => evento.enfermeros?.includes(p.id)).map(p => p.nombre),
-        paramedicos: profesionales.filter(p => evento.paramedicos?.includes(p.id)).map(p => p.nombre),
-        kinesiologos: profesionales.filter(p => evento.kinesiologos?.includes(p.id)).map(p => p.nombre),
-        masoterapeutas: profesionales.filter(p => evento.masoterapeutas?.includes(p.id)).map(p => p.nombre)
-      };
-
-      // Enviar email a cada profesional
-      for (const prof of profesionalesNotificar) {
-        // Determinar el rol del profesional
-        let rol = "";
-        if (evento.medicos?.includes(prof.id)) rol = "Médico";
-        else if (evento.enfermeros?.includes(prof.id)) rol = "Enfermero/a";
-        else if (evento.paramedicos?.includes(prof.id)) rol = "Paramédico";
-        else if (evento.kinesiologos?.includes(prof.id)) rol = "Kinesiólogo/a";
-        else if (evento.masoterapeutas?.includes(prof.id)) rol = "Masoterapeuta";
-
-        await fetch("/api/send-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tipo: "asignacion_evento",
-            destinatario: prof.email,
-            nombreProfesional: prof.nombre,
-            rol: rol,
-            evento: {
-              nombre: evento.nombre_evento,
-              fecha: evento.fecha_evento,
-              ubicacion: evento.ubicacion || "Por confirmar",
-              carros: evento.carros_asignados || [],
-              bolsos: evento.bolsos_asignados || []
-            },
-            equipo: equipoCompleto
-          })
-        });
-      }
-      
-      console.log(`Emails enviados a ${profesionalesNotificar.length} profesionales`);
-    } catch (error) {
-      console.error("Error al enviar emails:", error);
-    }
-  };
-
-  const eliminarEvento = async (evento) => {
-    if (!confirm(`¿Eliminar el evento "${evento.nombre_evento}"? Esta acción no se puede deshacer.`)) return;
-    const res = await sb(`equipos_evento?id=eq.${evento.id}`, { method: "DELETE" }, usuario?.token);
-    if (res !== null) {
-      setEventos(prev => prev.filter(e => e.id !== evento.id));
-    } else {
-      alert("Error al eliminar el evento. Intenta nuevamente.");
-    }
   };
 
   const toggleProfesional = (tipo, profesionalId) => {
@@ -1023,16 +905,6 @@ function VistaGestionEventos({ usuario }) {
       setForm(p => ({ ...p, carros_asignados: carros.filter(c => c !== carro) }));
     } else {
       setForm(p => ({ ...p, carros_asignados: [...carros, carro] }));
-    }
-  };
-
-  const toggleBolso = (bolso) => {
-    const bolsos = form.bolsos_asignados || [];
-    const index = bolsos.indexOf(bolso);
-    if (index > -1) {
-      setForm(p => ({ ...p, bolsos_asignados: bolsos.filter(b => b !== bolso) }));
-    } else {
-      setForm(p => ({ ...p, bolsos_asignados: [...bolsos, bolso] }));
     }
   };
 
@@ -1095,20 +967,12 @@ function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
                 <button 
                   style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
                   onClick={() => abrirEditarEvento(evento)}
                 >
                   Editar
                 </button>
-                <button
-                  style={{ ...S.btn("danger"), padding: "6px 12px" }}
-                  onClick={() => eliminarEvento(evento)}
-                >
-                  Eliminar
-                </button>
-                </div>
               </div>
             </div>
           ))}
@@ -1158,19 +1022,9 @@ function VistaGestionEventos({ usuario }) {
               />
             </div>
 
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Ubicación</label>
-              <input 
-                style={S.input} 
-                value={form.ubicacion || ""} 
-                onChange={e => setForm(p => ({ ...p, ubicacion: e.target.value }))} 
-                placeholder="Parque Bicentenario, Vitacura"
-              />
-            </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
-                <label style={S.formLabel}>Fecha Inicio</label>
+                <label style={S.formLabel}>Fecha</label>
                 <input 
                   style={S.input} 
                   type="date" 
@@ -1178,39 +1032,6 @@ function VistaGestionEventos({ usuario }) {
                   onChange={e => setForm(p => ({ ...p, fecha_evento: e.target.value }))} 
                 />
               </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Fecha Fin (opcional)</label>
-                <input 
-                  style={S.input} 
-                  type="date" 
-                  value={form.fecha_fin || ""} 
-                  onChange={e => setForm(p => ({ ...p, fecha_fin: e.target.value }))} 
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Hora Inicio</label>
-                <input 
-                  style={S.input} 
-                  type="time" 
-                  value={form.hora_inicio || ""} 
-                  onChange={e => setForm(p => ({ ...p, hora_inicio: e.target.value }))} 
-                />
-              </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Hora Fin</label>
-                <input 
-                  style={S.input} 
-                  type="time" 
-                  value={form.hora_fin || ""} 
-                  onChange={e => setForm(p => ({ ...p, hora_fin: e.target.value }))} 
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Tipo de Evento</label>
                 <select 
@@ -1239,16 +1060,6 @@ function VistaGestionEventos({ usuario }) {
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
                 Masivo = contador simple | Específico = fichas individuales
               </div>
-            </div>
-
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Observaciones</label>
-              <textarea
-                style={{ ...S.input, height: 80, resize: "vertical" }}
-                value={form.observaciones || ""}
-                onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))}
-                placeholder="Instrucciones especiales, consideraciones del evento..."
-              />
             </div>
 
             <div style={{ marginTop: 20 }}>
@@ -1403,31 +1214,6 @@ function VistaGestionEventos({ usuario }) {
                   ))}
                 </div>
               </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Bolsos de Medicamentos</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {[1, 2, 3].map(num => (
-                    <label key={num} style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: 6, 
-                      padding: "6px 12px", 
-                      border: `1px solid ${C.border}`, 
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      background: (form.bolsos_asignados || []).includes(`Bolso ${num}`) ? C.blueDim : "transparent"
-                    }}>
-                      <input 
-                        type="checkbox" 
-                        checked={(form.bolsos_asignados || []).includes(`Bolso ${num}`)}
-                        onChange={() => toggleBolso(`Bolso ${num}`)}
-                      />
-                      <span style={{ fontSize: 12 }}>💊 Bolso {num}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
             </div>
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
@@ -1453,9 +1239,6 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
-  const [filtroEvento, setFiltroEvento] = useState("Todos");
-  const [carrosEvento, setCarrosEvento] = useState([]);
-  const [bolsosEvento, setBolsosEvento] = useState([]);
 
   useEffect(() => {
     cargarDatos();
@@ -1463,29 +1246,12 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
   const cargarDatos = async () => {
     setLoading(true);
-    const [ats, evs, todosCarros, todosBolsos] = await Promise.all([
+    const [ats, evs] = await Promise.all([
       sb("atenciones_medicas?order=created_at.desc&limit=50", {}, usuario?.token),
-      sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
-      sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token),
-      sb("contenedores_medicamentos?tipo=eq.bolso&select=*", {}, usuario?.token)
+      sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
     ]);
-    if (evs) {
-      const eventoUsuario = evs.find(e =>
-        (e.medicos || []).includes(usuario?.id) ||
-        (e.enfermeros || []).includes(usuario?.id) ||
-        (e.paramedicos || []).includes(usuario?.id) ||
-        e.nombre_evento === usuario?.evento_asignado
-      );
-      if (ats && eventoUsuario && usuario?.rol !== "admin") {
-        setAtenciones(ats.filter(a => a.evento === eventoUsuario.nombre_evento));
-      } else if (ats) {
-        setAtenciones(ats);
-      }
-      const nombresCarros = eventoUsuario?.carros_asignados || [];
-      const nombresBolsos = eventoUsuario?.bolsos_asignados || [];
-      if (todosCarros) setCarrosEvento(todosCarros.filter(c => nombresCarros.includes(c.nombre)));
-      if (todosBolsos) setBolsosEvento(todosBolsos.filter(b => nombresBolsos.includes(b.nombre)));
-    }
+    if (ats) setAtenciones(ats);
+    if (evs) setEventos(evs);
     setLoading(false);
   };
 
@@ -1582,53 +1348,8 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
     if (res) {
       setAtenciones(prev => [res[0], ...prev]);
-
-      // Descontar stock de medicamentos prescritos
-      const medicamentosUsados = form.medicamentos_prescritos || [];
-      for (const med of medicamentosUsados) {
-        if (med.med_id && med.cantidad) {
-          const medActual = bolsosEvento.find(b => String(b.id) === String(med.med_id));
-          if (medActual) {
-            const nuevoStock = Math.max(0, (medActual.stock || 0) - med.cantidad);
-            await sb(`contenedores_medicamentos?id=eq.${medActual.id}`, {
-              method: "PATCH",
-              body: JSON.stringify({ stock: nuevoStock })
-            }, usuario?.token);
-          }
-        }
-      }
-
-      // Descontar stock de insumos usados
-      const insumosUsados = form.insumos_medico || [];
-      for (const ins of insumosUsados) {
-        if (ins.insumo_id && ins.cantidad) {
-          const insumoActual = carrosEvento.find(c => String(c.id) === String(ins.insumo_id));
-          if (insumoActual) {
-            const nuevoStock = Math.max(0, (insumoActual.stock || 0) - ins.cantidad);
-            await sb(`contenedores_medicamentos?id=eq.${insumoActual.id}`, {
-              method: "PATCH",
-              body: JSON.stringify({ stock: nuevoStock })
-            }, usuario?.token);
-          }
-        }
-      }
-
       setModal(null);
-      alert("Atención registrada y stock actualizado exitosamente");
-    }
-  };
-
-  const eliminarAtencion = async (id) => {
-    if (!confirm("¿Eliminar esta atención? Esta acción no se puede deshacer.")) return;
-    const headers = { "apikey": SUPABASE_KEY };
-    if (usuario?.token) headers["Authorization"] = `Bearer ${usuario.token}`;
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/atenciones_medicas?id=eq.${id}`, { method: "DELETE", headers });
-    if (res.ok) {
-      setAtenciones(prev => prev.filter(a => a.id !== id));
-    } else {
-      const err = await res.text();
-      console.error("Error DELETE atención:", res.status, err);
-      alert("Error al eliminar. Intenta nuevamente.");
+      alert("Atención registrada exitosamente");
     }
   };
 
@@ -1761,25 +1482,13 @@ function VistaAtencionesMedicas({ usuario, carros }) {
               border: `1px solid ${C.border}`, 
               borderRadius: 6, 
               marginBottom: 8,
-              opacity: 0.7,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <div style={{ cursor: "pointer", flex: 1 }} onClick={() => verDetalleAtencion(atencion)}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
-                <div style={{ fontSize: 11, color: C.textMuted }}>
-                  {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
-                </div>
+              cursor: "pointer",
+              opacity: 0.7
+            }} onClick={() => verDetalleAtencion(atencion)}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
+              <div style={{ fontSize: 11, color: C.textMuted }}>
+                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
               </div>
-              {usuario?.rol === "admin" && (
-                <button
-                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.red }}
-                  onClick={() => eliminarAtencion(atencion.id)}
-                >
-                  🗑 Eliminar
-                </button>
-              )}
             </div>
           ))}
         </div>
@@ -1882,86 +1591,64 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                       + Agregar Medicamento
                     </button>
                   </div>
-                  {bolsosEvento.length === 0 && (
-                    <div style={{ fontSize: 12, color: C.textMuted, padding: 8 }}>
-                      No hay bolsos de medicamentos asignados a tu evento.
-                    </div>
-                  )}
-                  {(form.medicamentos_prescritos || []).map((med, index) => {
-                    const bolsoSel = bolsosEvento.find(b => b.nombre === med.bolso) || bolsosEvento[0];
-                    const medsBolso = bolsoSel ? bolsosEvento.filter(b => b.nombre === bolsoSel.nombre) : [];
-                    return (
-                      <div key={index} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 6, marginBottom: 12, background: med.urgente ? C.redDim : C.surface }}>
-                        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                          <select
-                            style={{ ...S.select, flex: 1 }}
-                            value={med.bolso || ""}
-                            onChange={e => actualizarMedicamento(index, "bolso", e.target.value)}
-                          >
-                            <option value="">Seleccionar bolso</option>
-                            {[...new Set(bolsosEvento.map(b => b.nombre))].map(nombre => (
-                              <option key={nombre} value={nombre}>{nombre}</option>
-                            ))}
-                          </select>
-                          <select
-                            style={{ ...S.select, flex: 2 }}
-                            value={med.med_id || ""}
-                            onChange={e => {
-                              const medicamento = medsBolso.find(b => String(b.id) === e.target.value);
-                              actualizarMedicamento(index, "med_id", e.target.value);
-                              actualizarMedicamento(index, "nombre", medicamento?.nombre_insumo || medicamento?.nombre || "");
-                            }}
-                          >
-                            <option value="">Seleccionar medicamento</option>
-                            {medsBolso.map(b => (
-                              <option key={b.id} value={String(b.id)}>{b.nombre_insumo || b.nombre} (Stock: {b.stock})</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                          <input
-                            style={S.input}
-                            placeholder="Dosis"
-                            value={med.dosis || ""}
-                            onChange={e => actualizarMedicamento(index, "dosis", e.target.value)}
-                          />
-                          <select
-                            style={{ ...S.select, width: 140 }}
-                            value={med.via || "Oral"}
-                            onChange={e => actualizarMedicamento(index, "via", e.target.value)}
-                          >
-                            <option>Oral</option>
-                            <option>Intravenosa</option>
-                            <option>Intramuscular</option>
-                            <option>Subcutánea</option>
-                            <option>Tópica</option>
-                          </select>
-                          <input
-                            type="number"
-                            style={{ ...S.input, width: 80 }}
-                            placeholder="Cant."
-                            min={1}
-                            value={med.cantidad || 1}
-                            onChange={e => actualizarMedicamento(index, "cantidad", parseInt(e.target.value) || 1)}
-                          />
-                          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                            <input
-                              type="checkbox"
-                              checked={med.urgente || false}
-                              onChange={e => actualizarMedicamento(index, "urgente", e.target.checked)}
-                            />
-                            <span style={{ color: med.urgente ? C.red : C.text }}>Urgente 🚨</span>
-                          </label>
-                          <button
-                            style={{ ...S.btn("ghost"), fontSize: 12, marginLeft: "auto" }}
-                            onClick={() => eliminarMedicamento(index)}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
+                  {(form.medicamentos_prescritos || []).map((med, index) => (
+                    <div key={index} style={{ 
+                      padding: 12, 
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6, 
+                      marginBottom: 12,
+                      background: med.urgente ? C.redDim : C.surface
+                    }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                        <input 
+                          style={S.input}
+                          placeholder="Nombre del medicamento"
+                          value={med.nombre}
+                          onChange={e => actualizarMedicamento(index, "nombre", e.target.value)}
+                        />
+                        <input 
+                          style={S.input}
+                          placeholder="Dosis"
+                          value={med.dosis}
+                          onChange={e => actualizarMedicamento(index, "dosis", e.target.value)}
+                        />
+                        <select 
+                          style={S.select}
+                          value={med.via}
+                          onChange={e => actualizarMedicamento(index, "via", e.target.value)}
+                        >
+                          <option>Oral</option>
+                          <option>Intravenosa</option>
+                          <option>Intramuscular</option>
+                          <option>Subcutánea</option>
+                          <option>Tópica</option>
+                        </select>
                       </div>
-                    );
-                  })}
+                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                        <input 
+                          type="number"
+                          style={{ ...S.input, width: 80 }}
+                          placeholder="Cant."
+                          value={med.cantidad}
+                          onChange={e => actualizarMedicamento(index, "cantidad", parseInt(e.target.value) || 1)}
+                        />
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                          <input 
+                            type="checkbox"
+                            checked={med.urgente}
+                            onChange={e => actualizarMedicamento(index, "urgente", e.target.checked)}
+                          />
+                          <span style={{ color: med.urgente ? C.red : C.text }}>Urgente 🚨</span>
+                        </label>
+                        <button 
+                          style={{ ...S.btn("ghost"), fontSize: 12, marginLeft: "auto" }}
+                          onClick={() => eliminarMedicamento(index)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div style={{ marginTop: 20, marginBottom: 20 }}>
@@ -1971,68 +1658,47 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                       + Agregar Insumo
                     </button>
                   </div>
-                  {carrosEvento.length === 0 && (
-                    <div style={{ fontSize: 12, color: C.textMuted, padding: 8 }}>
-                      No hay carros asignados a tu evento.
+                  {(form.insumos_medico || []).map((ins, index) => (
+                    <div key={index} style={{ 
+                      padding: 12, 
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6, 
+                      marginBottom: 8,
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "center"
+                    }}>
+                      <input 
+                        style={{ ...S.input, flex: 2 }}
+                        placeholder="Nombre del insumo"
+                        value={ins.nombre}
+                        onChange={e => actualizarInsumo(index, "nombre", e.target.value)}
+                      />
+                      <input 
+                        type="number"
+                        style={{ ...S.input, width: 80 }}
+                        placeholder="Cant."
+                        value={ins.cantidad}
+                        onChange={e => actualizarInsumo(index, "cantidad", parseInt(e.target.value) || 1)}
+                      />
+                      <select 
+                        style={{ ...S.select, width: 100 }}
+                        value={ins.unidad}
+                        onChange={e => actualizarInsumo(index, "unidad", e.target.value)}
+                      >
+                        <option>unid.</option>
+                        <option>ml</option>
+                        <option>mg</option>
+                        <option>amp.</option>
+                      </select>
+                      <button 
+                        style={{ ...S.btn("ghost"), fontSize: 12 }}
+                        onClick={() => eliminarInsumo(index)}
+                      >
+                        Eliminar
+                      </button>
                     </div>
-                  )}
-                  {(form.insumos_medico || []).map((ins, index) => {
-                    const carroSel = carrosEvento.find(c => c.nombre === ins.carro) || carrosEvento[0];
-                    const cajones = carroSel ? [...new Set(carrosEvento.filter(c => c.nombre === carroSel.nombre).map(c => c.cajon).filter(Boolean))].sort() : [];
-                    const insumosCajon = carroSel && ins.cajon ? carrosEvento.filter(c => c.nombre === carroSel.nombre && c.cajon === ins.cajon) : [];
-                    return (
-                      <div key={index} style={{ padding: 12, border: `1px solid ${C.border}`, borderRadius: 6, marginBottom: 8 }}>
-                        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                          <select
-                            style={{ ...S.select, flex: 1 }}
-                            value={ins.carro || ""}
-                            onChange={e => actualizarInsumo(index, "carro", e.target.value)}
-                          >
-                            <option value="">Seleccionar carro</option>
-                            {[...new Set(carrosEvento.map(c => c.nombre))].map(nombre => (
-                              <option key={nombre} value={nombre}>{nombre}</option>
-                            ))}
-                          </select>
-                          <select
-                            style={{ ...S.select, flex: 1 }}
-                            value={ins.cajon || ""}
-                            onChange={e => actualizarInsumo(index, "cajon", e.target.value)}
-                          >
-                            <option value="">Seleccionar cajón</option>
-                            {cajones.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </div>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <select
-                            style={{ ...S.select, flex: 2 }}
-                            value={ins.insumo_id || ""}
-                            onChange={e => {
-                              const insumo = insumosCajon.find(i => String(i.id) === e.target.value);
-                              actualizarInsumo(index, "insumo_id", e.target.value);
-                              actualizarInsumo(index, "nombre", insumo?.nombre_insumo || insumo?.nombre || "");
-                              actualizarInsumo(index, "unidad", insumo?.unidad || "unid.");
-                            }}
-                          >
-                            <option value="">Seleccionar insumo</option>
-                            {insumosCajon.map(i => (
-                              <option key={i.id} value={String(i.id)}>{i.nombre_insumo || i.nombre} (Stock: {i.stock})</option>
-                            ))}
-                          </select>
-                          <input
-                            type="number"
-                            style={{ ...S.input, width: 80 }}
-                            placeholder="Cant."
-                            min={1}
-                            value={ins.cantidad}
-                            onChange={e => actualizarInsumo(index, "cantidad", parseInt(e.target.value) || 1)}
-                          />
-                          <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={() => eliminarInsumo(index)}>
-                            Eliminar
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  ))}
                 </div>
 
                 <div style={S.formRow}>
@@ -2688,14 +2354,13 @@ function VistaAdministracionMedicamentos({ usuario }) {
 // Agregar después de VistaAdministracionMedicamentos
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
+function VistaAtencionesKinesiologia({ usuario }) {
   const [atenciones, setAtenciones] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
-  const [filtroEvento, setFiltroEvento] = useState("Todos");
 
   useEffect(() => {
     cargarDatos();
@@ -2853,8 +2518,7 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando atenciones...</div>;
 
   const hoy = new Date().toISOString().split('T')[0];
-  const atencionesFiltradas = filtroEvento === "Todos" ? atenciones : atenciones.filter(a => a.evento === filtroEvento);
-  const atencionesHoy = atencionesFiltradas.filter(a => {
+  const atencionesHoy = atenciones.filter(a => {
     const fecha = new Date(a.created_at).toISOString().split('T')[0];
     return fecha === hoy;
   });
@@ -2872,27 +2536,13 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
               {insumosAlerta.length > 0 && <span style={{ color: C.red, marginLeft: 8 }}>⚠️ {insumosAlerta.length} con stock bajo</span>}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <select
-              style={{ ...S.select, fontSize: 12, padding: "6px 10px" }}
-              value={filtroEvento}
-              onChange={e => setFiltroEvento(e.target.value)}
-            >
-              <option value="Todos">Todos los eventos</option>
-              {eventos.map(e => (
-                <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
-              ))}
-            </select>
-            {!esAdmin && (
-              <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={abrirGestionBolso}>
-                🎒 Mi Bolso
-              </button>
-            )}
-            {!esAdmin && (
-              <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
-                + Nueva Atención
-              </button>
-            )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={abrirGestionBolso}>
+              🎒 Mi Bolso
+            </button>
+            <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaAtencion}>
+              + Nueva Atención
+            </button>
           </div>
         </div>
       </div>
@@ -2944,25 +2594,13 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
               border: `1px solid ${C.border}`, 
               borderRadius: 6, 
               marginBottom: 8,
-              opacity: 0.7,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <div style={{ cursor: "pointer", flex: 1 }} onClick={() => verDetalleAtencion(atencion)}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
-                <div style={{ fontSize: 11, color: C.textMuted }}>
-                  {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
-                </div>
+              cursor: "pointer",
+              opacity: 0.7
+            }} onClick={() => verDetalleAtencion(atencion)}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
+              <div style={{ fontSize: 11, color: C.textMuted }}>
+                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
               </div>
-              {usuario?.rol === "admin" && (
-                <button
-                  style={{ ...S.btn("ghost"), fontSize: 11, padding: "4px 8px", color: C.red }}
-                  onClick={() => eliminarAtencion(atencion.id)}
-                >
-                  🗑 Eliminar
-                </button>
-              )}
             </div>
           ))}
         </div>
@@ -3295,7 +2933,7 @@ function VistaMasoterapiaMasiva({ usuario }) {
 
     const datos = {
       masoterapeuta_id: usuario.id,
-      masoterapeuta_nombre: usuario.nombre || usuario.email,
+      masoterapeuta_nombre: usuario.email,
       evento: eventoSeleccionado,
       masajes_realizados: 0,
       fecha: new Date().toISOString().split('T')[0]
@@ -3494,14 +3132,12 @@ function VistaMasoterapiaMasiva({ usuario }) {
 // Agregar después de VistaMasoterapiaMasiva
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
+function VistaMasoterapiaEspecifica({ usuario }) {
   const [fichas, setFichas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
-  const [filtroEvento, setFiltroEvento] = useState("Todos");
-  const [filtroMasoterapeuta, setFiltroMasoterapeuta] = useState("Todos");
 
   const zonasDisponibles = [
     "Cuello", "Hombros", "Espalda alta", "Espalda baja", "Brazos", 
@@ -3515,11 +3151,8 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
 
   const cargarDatos = async () => {
     setLoading(true);
-    const query = esAdmin
-      ? "fichas_masoterapia?order=created_at.desc&limit=100"
-      : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`;
     const [fs, evs] = await Promise.all([
-      sb(query, {}, usuario?.token),
+      sb(`fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token)
     ]);
     if (fs) setFichas(fs);
@@ -3564,7 +3197,7 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
     const datos = {
       evento: form.evento,
       masoterapeuta_id: usuario.id,
-      masoterapeuta_nombre: usuario.nombre || usuario.email,
+      masoterapeuta_nombre: usuario.email,
       paciente_nombre: form.paciente_nombre,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       fecha_atencion: new Date().toISOString().split('T')[0],
@@ -3606,11 +3239,7 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
   }
 
   const hoy = new Date().toISOString().split('T')[0];
-  const fichasFiltradas = fichas
-    .filter(f => filtroEvento === "Todos" || f.evento === filtroEvento)
-    .filter(f => filtroMasoterapeuta === "Todos" || f.masoterapeuta_nombre === filtroMasoterapeuta);
-  const masoterapeutasUnicos = [...new Set(fichas.map(f => f.masoterapeuta_nombre).filter(Boolean))];
-  const fichasHoy = fichasFiltradas.filter(f => {
+  const fichasHoy = fichas.filter(f => {
     const fecha = new Date(f.created_at).toISOString().split('T')[0];
     return fecha === hoy;
   });
@@ -3625,37 +3254,9 @@ function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
               {fichasHoy.length} fichas hoy · {fichas.length} fichas totales
             </div>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {esAdmin && (
-              <>
-                <select
-                  style={{ ...S.select, fontSize: 12 }}
-                  value={filtroEvento}
-                  onChange={e => setFiltroEvento(e.target.value)}
-                >
-                  <option value="Todos">Todos los eventos</option>
-                  {eventos.map(e => (
-                    <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
-                  ))}
-                </select>
-                <select
-                  style={{ ...S.select, fontSize: 12 }}
-                  value={filtroMasoterapeuta}
-                  onChange={e => setFiltroMasoterapeuta(e.target.value)}
-                >
-                  <option value="Todos">Todos los masoterapeutas</option>
-                  {masoterapeutasUnicos.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </>
-            )}
-            {!esAdmin && (
-              <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
-                + Nueva Ficha
-              </button>
-            )}
-          </div>
+          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
+            + Nueva Ficha
+          </button>
         </div>
       </div>
 
@@ -4574,70 +4175,11 @@ function VistaGestionCostos({ usuario }) {
   );
 }
 function Dashboard({ carros, usuario, esAdmin, permisos }) {
-  const [alertasStock, setAlertasStock] = useState([]);
-  const [alertasVencimiento, setAlertasVencimiento] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    cargarAlertas();
-  }, []);
-
-  const cargarAlertas = async () => {
-    try {
-      // Obtener todos los items de inventario (carros y bolsos)
-      const data = await sb('contenedores_medicamentos?select=*', {}, usuario?.token);
-      
-      if (data) {
-        // Filtrar items con stock bajo (stock <= minimo)
-        const itemsBajos = data.filter(item => 
-          parseInt(item.stock) <= parseInt(item.minimo)
-        );
-        setAlertasStock(itemsBajos);
-
-        // Filtrar items con fecha de vencimiento
-        const hoy = new Date();
-        const en30dias = new Date();
-        en30dias.setDate(hoy.getDate() + 30);
-
-        const itemsConVencimiento = data.filter(item => item.fecha_vencimiento);
-        
-        const vencidos = itemsConVencimiento.filter(item => {
-          const fechaVenc = new Date(item.fecha_vencimiento);
-          return fechaVenc < hoy;
-        });
-
-        const proximosVencer = itemsConVencimiento.filter(item => {
-          const fechaVenc = new Date(item.fecha_vencimiento);
-          return fechaVenc >= hoy && fechaVenc <= en30dias;
-        });
-
-        setAlertasVencimiento({ vencidos, proximosVencer });
-      }
-    } catch (error) {
-      console.error('Error al cargar alertas:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const todosInsumos = carros.flatMap(c => c.insumos);
   const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const todo = [...todosInsumos, ...todosMeds];
-
-  // Separar alertas por tipo (carro/bolso)
-  const alertasCarros = alertasStock.filter(item => item.tipo === 'carro');
-  const alertasBolsos = alertasStock.filter(item => item.tipo === 'bolso');
-  const totalAlertasStock = alertasStock.length;
-  const totalVencidos = alertasVencimiento.vencidos?.length || 0;
-  const totalProximosVencer = alertasVencimiento.proximosVencer?.length || 0;
-  const totalAlertasVenc = totalVencidos + totalProximosVencer;
-
-  const diasHastaVenc = (fecha) => {
-    const hoy = new Date();
-    const venc = new Date(fecha);
-    const diff = Math.ceil((venc - hoy) / (1000 * 60 * 60 * 24));
-    return diff;
-  };
+  const alertasVenc = todo.filter(i => estadoVenc(i.vencimiento) !== "ok");
+  const stockBajo = todo.filter(i => estadoStock(i) !== "ok");
 
   return (
     <div>
@@ -4647,7 +4189,7 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
         </div>
         <div style={S.subtitle}>
           {esAdmin
-            ? `${new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`
+            ? `SGTRUMAO · ${new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`
             : usuario?.evento_asignado
               ? `📍 Evento asignado: ${usuario.evento_asignado}`
               : "Sin evento asignado hoy"}
@@ -4680,8 +4222,8 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
           { label: "Carros activos", val: carros.length, color: C.accent },
           { label: "Insumos en carros", val: todosInsumos.length, color: C.blue },
           { label: "Medicamentos bolso", val: todosMeds.length, color: C.orange },
-          { label: "Alertas vencimiento", val: loading ? "..." : totalAlertasVenc, color: totalAlertasVenc > 0 ? C.red : C.green },
-          { label: "Stock bajo mínimo", val: loading ? "..." : totalAlertasStock, color: totalAlertasStock > 0 ? C.yellow : C.green },
+          { label: "Alertas vencimiento", val: alertasVenc.length, color: alertasVenc.length > 0 ? C.red : C.green },
+          { label: "Stock bajo mínimo", val: stockBajo.length, color: stockBajo.length > 0 ? C.yellow : C.green },
         ].map(({ label, val, color }) => (
           <div key={label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 10, padding: "18px 20px" }}>
             <div style={{ fontSize: 30, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
@@ -4712,151 +4254,25 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
         </div>
       </div>
 
-      {/* Alertas Críticas - Vencimientos (desde BD) */}
-      {!loading && totalAlertasVenc > 0 && (
+      {/* Alertas */}
+      {(alertasVenc.length > 0 || stockBajo.length > 0) && (
         <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>⚠️ Alertas Críticas - Vencimientos</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>
-              {totalVencidos} vencidos · {totalProximosVencer} próximos a vencer
-            </span>
-          </div>
-
-          {/* Medicamentos Vencidos */}
-          {totalVencidos > 0 && alertasVencimiento.vencidos.map(item => (
-            <div key={item.id} style={{ 
-              background: C.redDim, 
-              border: `1px solid ${C.red}30`, 
-              borderRadius: 8, 
-              padding: "10px 14px", 
-              marginBottom: 8, 
-              fontSize: 13 
-            }}>
-              <strong style={{ color: C.red }}>VENCIDO:</strong> {item.nombre_insumo}
-              <span style={{ color: C.textMuted, marginLeft: 8 }}>
-                ({item.tipo === 'carro' ? '🚑' : '💊'} {item.nombre} · {item.cajon})
-              </span>
-              <span style={{ color: C.red, marginLeft: 8, fontWeight: 700 }}>
-                — venció {new Date(item.fecha_vencimiento).toLocaleDateString("es-CL")}
-              </span>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>⚠️ Alertas Críticas</div>
+          {todo.filter(i => estadoVenc(i.vencimiento) === "vencido").map(i => (
+            <div key={i.id} style={{ background: C.redDim, border: `1px solid ${C.red}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 13 }}>
+              <strong style={{ color: C.red }}>VENCIDO:</strong> {i.nombre} {i.dosis || ""} — venció {new Date(i.vencimiento).toLocaleDateString("es-CL")}
             </div>
           ))}
-
-          {/* Próximos a Vencer (30 días) */}
-          {totalProximosVencer > 0 && alertasVencimiento.proximosVencer.map(item => (
-            <div key={item.id} style={{ 
-              background: C.yellowDim, 
-              border: `1px solid ${C.yellow}30`, 
-              borderRadius: 8, 
-              padding: "10px 14px", 
-              marginBottom: 8, 
-              fontSize: 13 
-            }}>
-              <strong style={{ color: C.yellow }}>Próximo a vencer:</strong> {item.nombre_insumo}
-              <span style={{ color: C.textMuted, marginLeft: 8 }}>
-                ({item.tipo === 'carro' ? '🚑' : '💊'} {item.nombre} · {item.cajon})
-              </span>
-              <span style={{ color: C.yellow, marginLeft: 8, fontWeight: 700 }}>
-                — {diasHastaVenc(item.fecha_vencimiento)} días
-              </span>
+          {todo.filter(i => estadoVenc(i.vencimiento) === "proximo").map(i => (
+            <div key={i.id} style={{ background: C.yellowDim, border: `1px solid ${C.yellow}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 13 }}>
+              <strong style={{ color: C.yellow }}>Próximo a vencer:</strong> {i.nombre} {i.dosis || ""} — {diasHastaVenc(i.vencimiento)} días
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Alertas de Stock Bajo (desde BD) */}
-      {!loading && totalAlertasStock > 0 && (
-        <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>📦 Alertas de Stock Bajo</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>
-              {totalAlertasStock} items requieren atención
-            </span>
-          </div>
-
-          {/* Alertas de Carros Clínicos */}
-          {alertasCarros.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 10 }}>
-                🚑 Carros Clínicos ({alertasCarros.length} items)
-              </div>
-              {alertasCarros.slice(0, 5).map(item => {
-                const estado = parseInt(item.stock) === 0 ? 'AGOTADO' : 'BAJO';
-                const colorEstado = parseInt(item.stock) === 0 ? C.red : C.yellow;
-                
-                return (
-                  <div key={item.id} style={{ 
-                    background: parseInt(item.stock) === 0 ? C.redDim : C.yellowDim, 
-                    border: `1px solid ${colorEstado}30`, 
-                    borderRadius: 8, 
-                    padding: "10px 14px", 
-                    marginBottom: 8, 
-                    fontSize: 13,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <div>
-                      <strong style={{ color: colorEstado }}>{estado}:</strong> {item.nombre_insumo} 
-                      <span style={{ color: C.textMuted, marginLeft: 8 }}>
-                        ({item.nombre} · {item.cajon})
-                      </span>
-                    </div>
-                    <span style={{ fontWeight: 700, color: colorEstado }}>
-                      {item.stock}/{item.minimo} {item.unidad}
-                    </span>
-                  </div>
-                );
-              })}
-              {alertasCarros.length > 5 && (
-                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, textAlign: 'center' }}>
-                  ... y {alertasCarros.length - 5} items más en carros
-                </div>
-              )}
+          {todo.filter(i => estadoStock(i) !== "ok").map(i => (
+            <div key={i.id} style={{ background: C.yellowDim, border: `1px solid ${C.yellow}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, fontSize: 13 }}>
+              <strong style={{ color: C.yellow }}>Stock bajo:</strong> {i.nombre} {i.dosis || ""} — {i.stock}/{i.minimo} {i.unidad}
             </div>
-          )}
-
-          {/* Alertas de Bolsos de Medicamentos */}
-          {alertasBolsos.length > 0 && (
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.orange, marginBottom: 10 }}>
-                💊 Bolsos de Medicamentos ({alertasBolsos.length} items)
-              </div>
-              {alertasBolsos.slice(0, 5).map(item => {
-                const estado = parseInt(item.stock) === 0 ? 'AGOTADO' : 'BAJO';
-                const colorEstado = parseInt(item.stock) === 0 ? C.red : C.yellow;
-                
-                return (
-                  <div key={item.id} style={{ 
-                    background: parseInt(item.stock) === 0 ? C.redDim : C.yellowDim, 
-                    border: `1px solid ${colorEstado}30`, 
-                    borderRadius: 8, 
-                    padding: "10px 14px", 
-                    marginBottom: 8, 
-                    fontSize: 13,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <div>
-                      <strong style={{ color: colorEstado }}>{estado}:</strong> {item.nombre_insumo}
-                      <span style={{ color: C.textMuted, marginLeft: 8 }}>
-                        ({item.nombre} · {item.cajon})
-                      </span>
-                    </div>
-                    <span style={{ fontWeight: 700, color: colorEstado }}>
-                      {item.stock}/{item.minimo} {item.unidad}
-                    </span>
-                  </div>
-                );
-              })}
-              {alertasBolsos.length > 5 && (
-                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, textAlign: 'center' }}>
-                  ... y {alertasBolsos.length - 5} items más en bolsos
-                </div>
-              )}
-            </div>
-          )}
+          ))}
         </div>
       )}
     </div>
@@ -4990,7 +4406,7 @@ const ATENCIONES_INICIALES = [
   },
 ];
 
-function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
+function VistaAtenciones({ carros, usuario, permisos, industria }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -4998,30 +4414,21 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
   const [filtroEvento, setFiltroEvento] = useState("Todos");
   const [filtroProfesion, setFiltroProfesion] = useState("Todas");
   const [fichaVer, setFichaVer] = useState(null);
-  const [eventosDB, setEventosDB] = useState([]);
 
-  // Cargar atenciones y eventos desde Supabase
+  // Cargar atenciones desde Supabase
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      const [data, evs] = await Promise.all([
-        sb("atenciones?order=created_at.desc", {}, usuario?.token),
-        sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
-      ]);
+      const data = await sb("atenciones?order=created_at.desc", {}, usuario?.token);
       if (data) setAtenciones(data);
-      if (evs) setEventosDB(evs);
       setLoading(false);
     };
     cargar();
   }, [usuario]);
 
-  const eventos = ["Todos", ...eventosDB.map(e => e.nombre_evento)];
+  const eventos = ["Todos", ...new Set(carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => c.evento_asignado))];
 
-  const atencionesFiltradas = esAdmin
-    ? atenciones
-    : atenciones.filter(a => a.evento === usuario?.evento_asignado);
-
-  const filtradas = atencionesFiltradas.filter(a => {
+  const filtradas = atenciones.filter(a => {
     const matchEv = filtroEvento === "Todos" || a.evento === filtroEvento;
     const matchProf = filtroProfesion === "Todas" || a.profesion === filtroProfesion;
     return matchEv && matchProf;
@@ -5034,7 +4441,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
     const hh = String(ahora.getHours()).padStart(2, "0");
     const mm = String(ahora.getMinutes()).padStart(2, "0");
     setForm({
-      evento: usuario?.evento_asignado || eventosDB[0]?.nombre_evento || "",
+      evento: carros.find(c => c.evento_asignado !== "Sin asignar")?.evento_asignado || "",
       fecha: ahora.toISOString().slice(0, 10),
       paciente: "", rut: "", edad: "",
       profesion: "Médico", profesional: "",
@@ -5077,7 +4484,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
       {/* Resumen */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
         {PROFESIONES.map(p => {
-          const count = filtradas.filter(a => a.profesion === p).length;
+          const count = atenciones.filter(a => a.profesion === p).length;
           const color = coloresProfesion[p];
           return (
             <div key={p} style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 10, padding: "14px 16px" }}>
@@ -5087,7 +4494,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
           );
         })}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}`, borderRadius: 10, padding: "14px 16px" }}>
-          <div style={{ fontSize: 26, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{filtradas.length}</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{atenciones.length}</div>
           <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>Total atenciones</div>
         </div>
       </div>
@@ -5101,7 +4508,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
           {["Todas", ...PROFESIONES].map(p => <option key={p}>{p}</option>)}
         </select>
         <div style={{ flex: 1 }} />
-        {false && <button style={S.btn("primary")} onClick={abrirNueva}>+ Nueva atención</button>}
+        <button style={S.btn("primary")} onClick={abrirNueva}>+ Nueva atención</button>
       </div>
 
       {/* Tabla */}
@@ -5167,8 +4574,8 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
             <div style={{ background: C.surface2, borderRadius: 8, padding: "12px 16px", marginBottom: 18, fontSize: 13, color: C.textMuted }}>
               <div style={S.formLabel}>Evento</div>
               <select style={{ ...S.select, width: "100%" }} value={form.evento || ""} onChange={e => F("evento", e.target.value)}>
-                {eventosDB.map(e => (
-                  <option key={e.id} value={e.nombre_evento}>{e.nombre_evento}</option>
+                {carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => (
+                  <option key={c.id}>{c.evento_asignado}</option>
                 ))}
                 <option value="Otro">Otro</option>
               </select>
@@ -5613,7 +5020,7 @@ function Login({ onLogin }) {
               TRIAGE<tspan fill="url(#lg1)">360</tspan>
             </text>
             <text x="118" y="60" fill="#7a90a8" fontSize="9" fontFamily="Arial, sans-serif" letterSpacing="3">GESTIÓN CLÍNICA INTELIGENTE</text>
-            
+            <text x="118" y="78" fill="#2d3f52" fontSize="8" fontFamily="Arial, sans-serif" letterSpacing="1">Powered by <tspan fill="#00c2a8" fontWeight="700">SGTRUMAO</tspan></text>
           </svg>
         </div>
         <div style={{ marginBottom: 16 }}>
@@ -5649,56 +5056,14 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
   const [formEdit, setFormEdit] = useState({});
-  const [carrosPermitidos, setCarrosPermitidos] = useState([]);
-
-  const esAdmin = usuario?.rol === 'admin';
 
   const cargarCarros = async () => {
     console.log("cargarCarros ejecutándose...");
-    
-    // Si es admin, cargar todos los carros
-    if (esAdmin) {
-      const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
-      console.log("DEBUG Carros (Admin):", data);
-      if (data) {
-        setCarros(data);
-        setCarrosPermitidos(['Carro 1', 'Carro 2', 'Carro 3', 'Carro 4', 'Carro 5', 'Carro 6', 'Carro 7']);
-        if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
-      }
-    } else {
-      // Si es profesional, obtener eventos donde está asignado
-      const eventos = await sb('equipos_evento?estado=eq.activo', {}, usuario?.token);
-      console.log("DEBUG Eventos activos:", eventos);
-      
-      let carrosAsignados = [];
-      if (eventos) {
-        eventos.forEach(evento => {
-          // Verificar si el usuario está en alguna lista de profesionales
-          const estaAsignado = 
-            (evento.medicos || []).includes(usuario.id) ||
-            (evento.enfermeros || []).includes(usuario.id) ||
-            (evento.paramedicos || []).includes(usuario.id);
-          
-          if (estaAsignado && evento.carros_asignados) {
-            carrosAsignados = [...carrosAsignados, ...evento.carros_asignados];
-          }
-        });
-      }
-      
-      // Eliminar duplicados
-      carrosAsignados = [...new Set(carrosAsignados)];
-      console.log("DEBUG Carros asignados al usuario:", carrosAsignados);
-      setCarrosPermitidos(carrosAsignados);
-      
-      // Cargar solo los carros asignados
-      if (carrosAsignados.length > 0) {
-        const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
-        if (data) {
-          const carrosFiltrados = data.filter(c => carrosAsignados.includes(c.nombre));
-          setCarros(carrosFiltrados);
-          if (carrosFiltrados.length > 0 && !carroSel) setCarroSel(carrosFiltrados[0].nombre);
-        }
-      }
+    const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
+    console.log("DEBUG Carros:", data);
+    if (data) {
+      setCarros(data);
+      if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
     }
     setLoading(false);
   };
@@ -5719,21 +5084,13 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
 
   const abrirEditar = (insumo) => {
     setEditando(insumo.id);
-    setFormEdit({ 
-      stock: insumo.stock, 
-      minimo: insumo.minimo,
-      fecha_vencimiento: insumo.fecha_vencimiento || ''
-    });
+    setFormEdit({ stock: insumo.stock, minimo: insumo.minimo });
   };
 
   const guardarEdicion = async (id) => {
     const { error } = await sb(`contenedores_medicamentos?id=eq.${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ 
-        stock: +formEdit.stock, 
-        minimo: +formEdit.minimo,
-        fecha_vencimiento: formEdit.fecha_vencimiento || null
-      })
+      body: JSON.stringify({ stock: +formEdit.stock, minimo: +formEdit.minimo })
     }, usuario?.token);
     
     if (!error) {
@@ -5746,20 +5103,6 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
   const colores = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#06b6d4'];
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando carros...</div>;
-
-  if (!esAdmin && carrosPermitidos.length === 0) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🚑</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
-          No tienes carros asignados
-        </div>
-        <div style={{ fontSize: 14, color: C.textMuted }}>
-          Solicita al administrador que te asigne a un evento con un carro clínico.
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ display: 'flex', gap: 20 }}>
@@ -5841,7 +5184,6 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>STOCK</th>
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MÍNIMO</th>
                       <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>UNIDAD</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>VENCIMIENTO</th>
                       <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>ACCIONES</th>
                     </tr>
                   </thead>
@@ -5870,20 +5212,6 @@ console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
                             )}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{insumo.unidad}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input 
-                                type="date" 
-                                value={formEdit.fecha_vencimiento} 
-                                onChange={e => setFormEdit({...formEdit, fecha_vencimiento: e.target.value})} 
-                                style={{ width: 130, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} 
-                              />
-                            ) : (
-                              <span style={{ fontSize: 11, color: insumo.fecha_vencimiento ? C.text : C.textFaint }}>
-                                {insumo.fecha_vencimiento ? new Date(insumo.fecha_vencimiento).toLocaleDateString('es-CL') : '—'}
-                              </span>
-                            )}
-                          </td>
                           <td style={{ padding: '10px', textAlign: 'right' }}>
                             {enEdicion ? (
                               <>
@@ -5915,54 +5243,13 @@ function VistaBolsosMedicamentos({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
   const [formEdit, setFormEdit] = useState({});
-  const [bolsosPermitidos, setBolsosPermitidos] = useState([]);
-
-  const esAdmin = usuario?.rol === 'admin';
 
   const cargarBolsos = async () => {
-    // Si es admin, cargar todos los bolsos
-    if (esAdmin) {
-      const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
-      console.log("DEBUG Bolsos (Admin):", data);
-      if (data) {
-        setBolsos(data);
-        setBolsosPermitidos(['Bolso 1', 'Bolso 2', 'Bolso 3']);
-        if (data.length > 0 && !bolsoSel) setBolsoSel(data[0].nombre);
-      }
-    } else {
-      // Si es profesional, obtener eventos donde está asignado
-      const eventos = await sb('equipos_evento?estado=eq.activo', {}, usuario?.token);
-      console.log("DEBUG Eventos activos:", eventos);
-      
-      let bolsosAsignados = [];
-      if (eventos) {
-        eventos.forEach(evento => {
-          // Verificar si el usuario está en alguna lista de profesionales
-          const estaAsignado = 
-            (evento.medicos || []).includes(usuario.id) ||
-            (evento.enfermeros || []).includes(usuario.id) ||
-            (evento.paramedicos || []).includes(usuario.id);
-          
-          if (estaAsignado && evento.bolsos_asignados) {
-            bolsosAsignados = [...bolsosAsignados, ...evento.bolsos_asignados];
-          }
-        });
-      }
-      
-      // Eliminar duplicados
-      bolsosAsignados = [...new Set(bolsosAsignados)];
-      console.log("DEBUG Bolsos asignados al usuario:", bolsosAsignados);
-      setBolsosPermitidos(bolsosAsignados);
-      
-      // Cargar solo los bolsos asignados
-      if (bolsosAsignados.length > 0) {
-        const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
-        if (data) {
-          const bolsosFiltrados = data.filter(b => bolsosAsignados.includes(b.nombre));
-          setBolsos(bolsosFiltrados);
-          if (bolsosFiltrados.length > 0 && !bolsoSel) setBolsoSel(bolsosFiltrados[0].nombre);
-        }
-      }
+    const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
+    console.log("DEBUG Bolsos:", data);
+    if (data) {
+      setBolsos(data);
+      if (data.length > 0 && !bolsoSel) setBolsoSel(data[0].nombre);
     }
     setLoading(false);
   };
@@ -5980,199 +5267,256 @@ function VistaBolsosMedicamentos({ usuario }) {
 
   const toggleCaja = (cajaId) => setCajaAbierta(prev => prev === cajaId ? null : cajaId);
 
-  const abrirEditar = (medicamento) => {
+  const iniciarEdicion = (medicamento) => {
     setEditando(medicamento.id);
-    setFormEdit({ 
-      stock: medicamento.stock, 
-      minimo: medicamento.minimo,
-      fecha_vencimiento: medicamento.fecha_vencimiento || ''
-    });
+    setFormEdit({ stock: medicamento.stock, minimo: medicamento.minimo });
   };
 
-  const guardarEdicion = async (id) => {
-    const { error } = await sb(`contenedores_medicamentos?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ 
-        stock: +formEdit.stock, 
-        minimo: +formEdit.minimo,
-        fecha_vencimiento: formEdit.fecha_vencimiento || null
-      })
-    }, usuario?.token);
-    
-    if (!error) {
+  const guardarEdicion = async (medicamento) => {
+    const data = await sb(
+      \`contenedores_medicamentos?id=eq.\${medicamento.id}\`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ stock: formEdit.stock, minimo: formEdit.minimo })
+      },
+      usuario?.token
+    );
+    if (data) {
+      await cargarBolsos();
       setEditando(null);
-      cargarBolsos();
+      setFormEdit({});
     }
   };
 
-  const CAJAS_META = [
-    { id: "Caja 1 · Inyectables", emoji: "💉", nombre: "Inyectables", color: '#ec4899' },
-    { id: "Caja 2 · Orales", emoji: "💊", nombre: "Orales", color: '#3b82f6' },
-    { id: "Caja 3 · Aerosoles", emoji: "🫁", nombre: "Aerosoles", color: '#8b5cf6' }
-  ];
+  const cancelarEdicion = () => {
+    setEditando(null);
+    setFormEdit({});
+  };
 
-  const bolsosUnicos = [...new Set(bolsos.map(b => b.nombre))];
-  const colores = ['#f59e0b', '#10b981', '#06b6d4'];
+  const CAJAS_META = [
+    { id: "Caja 1 · Inyectables", emoji: "💉", nombre: "Inyectables", color: C.red },
+    { id: "Caja 2 · Orales", emoji: "💊", nombre: "Orales", color: C.blue },
+    { id: "Caja 3 · Aerosoles", emoji: "🫁", nombre: "Aerosoles", color: C.purple }
+  ];
 
   if (loading) {
     return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando bolsos...</div>;
   }
 
-  if (!esAdmin && bolsosPermitidos.length === 0) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>💊</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
-          No tienes bolsos asignados
-        </div>
-        <div style={{ fontSize: 14, color: C.textMuted }}>
-          Solicita al administrador que te asigne a un evento con un bolso de medicamentos.
-        </div>
-      </div>
-    );
-  }
+  const bolsosUnicos = [...new Set(bolsos.map(b => b.nombre))];
 
   return (
-    <div style={{ display: 'flex', gap: 20 }}>
-      {/* Lista de bolsos */}
-      <div style={{ width: 185, flexShrink: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Seleccionar bolso</div>
-        {bolsosUnicos.map((nombreBolso, idx) => {
+    <div style={{ display: 'flex', height: '100%' }}>
+      {/* SIDEBAR - Lista de bolsos */}
+      <div style={{ width: 280, borderRight: \`1px solid \${C.border}\`, padding: 20, overflowY: 'auto' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1 }}>
+          Bolsos de Medicamentos
+        </div>
+        {bolsosUnicos.map(nombreBolso => {
           const alertas = alertasBolso(nombreBolso);
           const activo = bolsoSel === nombreBolso;
-          const color = colores[idx % colores.length];
-          const totalMedicamentos = bolsos.filter(b => b.nombre === nombreBolso).length;
-          
           return (
-            <div key={nombreBolso} onClick={() => { setBolsoSel(nombreBolso); setCajaAbierta(null); }} 
-                 style={{ cursor: 'pointer', background: activo ? C.surface : 'transparent', border: `1px solid ${activo ? color + '50' : C.border}`, borderRadius: 10, padding: '11px 13px', marginBottom: 7, borderLeft: `3px solid ${color}`, transition: 'all 0.12s' }}>
+            <div
+              key={nombreBolso}
+              onClick={() => setBolsoSel(nombreBolso)}
+              style={{
+                padding: '14px 16px',
+                borderRadius: 10,
+                marginBottom: 8,
+                cursor: 'pointer',
+                background: activo ? C.accentDim : C.surface2,
+                border: \`1px solid \${activo ? C.accent : C.border}\`,
+                transition: 'all 0.15s'
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: 14, color: activo ? C.text : C.textMuted }}>{nombreBolso}</span>
-                {alertas > 0 && <span style={{ background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</span>}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: activo ? C.accent : C.text }}>
+                    💊 {nombreBolso}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                    26 medicamentos
+                  </div>
+                </div>
+                {alertas > 0 && (
+                  <div style={{
+                    background: C.red,
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '3px 8px',
+                    borderRadius: 12
+                  }}>
+                    {alertas}
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: 11, color: C.textFaint, marginTop: 2 }}>{totalMedicamentos} medicamentos</div>
             </div>
           );
         })}
       </div>
 
-      {/* Detalle del bolso */}
-      <div style={{ flex: 1 }}>
-        {bolsoSel && (
+      {/* MAIN - Cajas del bolso seleccionado */}
+      <div style={{ flex: 1, padding: 32, overflowY: 'auto' }}>
+        {bolsoSel ? (
           <>
-            {/* Header */}
-            <div style={{ ...S.card, borderLeft: `3px solid ${colores[bolsosUnicos.indexOf(bolsoSel) % colores.length]}`, marginBottom: 20 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: colores[bolsosUnicos.indexOf(bolsoSel) % colores.length] }}>💊 {bolsoSel}</div>
-              <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>
-                {medicamentosBolsoActual.length} medicamentos totales · 3 cajas
-              </div>
+            <div style={{ marginBottom: 32 }}>
+              <div style={S.title}>💊 {bolsoSel}</div>
+              <div style={S.subtitle}>26 medicamentos totales · 3 cajas</div>
             </div>
 
-            {/* Tarjetas de cajas */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+            {/* Grid de cajas */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
               {CAJAS_META.map(caja => {
-                const items = medicamentosCaja(caja.id);
+                const meds = medicamentosCaja(caja.id);
                 const alertas = alertasCaja(caja.id);
                 const abierta = cajaAbierta === caja.id;
-                
+
                 return (
-                  <div key={caja.id} onClick={() => toggleCaja(caja.id)} 
-                       style={{ cursor: 'pointer', background: abierta ? caja.color + '15' : C.surface, border: `2px solid ${abierta ? caja.color : C.border}`, borderRadius: 12, padding: '16px 12px', textAlign: 'center', transition: 'all 0.15s', position: 'relative' }}>
-                    {alertas > 0 && (
-                      <div style={{ position: 'absolute', top: 8, right: 8, background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</div>
-                    )}
-                    <div style={{ fontSize: 28, marginBottom: 6 }}>{caja.emoji}</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: abierta ? caja.color : C.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>{caja.id}</div>
-                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, lineHeight: 1.3 }}>{caja.nombre}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: caja.color, marginTop: 8 }}>{items.length} items</div>
-                    <div style={{ fontSize: 11, marginTop: 4, color: alertas > 0 ? C.red : C.green }}>
-                      {alertas > 0 ? `⚠️ ${alertas} alertas` : '✅ OK'}
+                  <div
+                    key={caja.id}
+                    style={{
+                      background: C.surface,
+                      border: \`1px solid \${C.border}\`,
+                      borderLeft: \`3px solid \${caja.color}\`,
+                      borderRadius: 12,
+                      overflow: 'hidden',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {/* Header de la caja */}
+                    <div
+                      onClick={() => toggleCaja(caja.id)}
+                      style={{
+                        padding: '18px 20px',
+                        cursor: 'pointer',
+                        background: abierta ? C.surface2 : 'transparent',
+                        borderBottom: abierta ? \`1px solid \${C.border}\` : 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: 24, marginBottom: 4 }}>{caja.emoji}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: caja.color }}>
+                            {caja.nombre}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
+                            {meds.length} items
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          {alertas > 0 ? (
+                            <div style={{
+                              background: C.redDim,
+                              color: C.red,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '4px 10px',
+                              borderRadius: 8,
+                              marginBottom: 8
+                            }}>
+                              ⚠️ {alertas} alertas
+                            </div>
+                          ) : (
+                            <div style={{
+                              background: C.greenDim,
+                              color: C.green,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '4px 10px',
+                              borderRadius: 8,
+                              marginBottom: 8
+                            }}>
+                              ✓ OK
+                            </div>
+                          )}
+                          <div style={{ fontSize: 20, color: C.textMuted }}>
+                            {abierta ? '▼' : '▶'}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 10, color: C.textFaint, marginTop: 6 }}>{abierta ? '▲ Cerrar' : '▼ Ver medicamentos'}</div>
+
+                    {/* Contenido de la caja (medicamentos) */}
+                    {abierta && (
+                      <div style={{ padding: 20 }}>
+                        <table style={{ width: '100%', fontSize: 13 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ ...S.th, textAlign: 'left' }}>Medicamento</th>
+                              <th style={{ ...S.th, textAlign: 'center' }}>Stock</th>
+                              <th style={{ ...S.th, textAlign: 'center' }}>Mín</th>
+                              <th style={{ ...S.th, textAlign: 'center' }}>Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {meds.map(med => {
+                              const bajo = med.stock <= med.minimo;
+                              const editandoEste = editando === med.id;
+
+                              return (
+                                <tr key={med.id}>
+                                  <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>
+                                    {med.nombre_insumo || "Sin nombre"}
+                                  </td>
+                                  <td style={{ padding: '10px', textAlign: 'center' }}>
+                                    {editandoEste ? (
+                                      <input
+                                        type="number"
+                                        value={formEdit.stock}
+                                        onChange={e => setFormEdit(f => ({ ...f, stock: parseInt(e.target.value) }))}
+                                        style={{ ...S.input, width: 60, padding: '4px 8px', textAlign: 'center' }}
+                                      />
+                                    ) : (
+                                      <span style={{ color: bajo ? C.red : C.text, fontWeight: bajo ? 700 : 400 }}>
+                                        {med.stock} {med.unidad}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '10px', textAlign: 'center' }}>
+                                    {editandoEste ? (
+                                      <input
+                                        type="number"
+                                        value={formEdit.minimo}
+                                        onChange={e => setFormEdit(f => ({ ...f, minimo: parseInt(e.target.value) }))}
+                                        style={{ ...S.input, width: 60, padding: '4px 8px', textAlign: 'center' }}
+                                      />
+                                    ) : (
+                                      <span style={{ color: C.textMuted }}>{med.minimo}</span>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '10px', textAlign: 'center' }}>
+                                    {editandoEste ? (
+                                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                                        <button onClick={() => guardarEdicion(med)} style={{ ...S.btn('primary'), padding: '4px 12px', fontSize: 12 }}>
+                                          Guardar
+                                        </button>
+                                        <button onClick={cancelarEdicion} style={{ ...S.btn('ghost'), padding: '4px 12px', fontSize: 12 }}>
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => iniciarEdicion(med)} style={{ ...S.btn('ghost'), padding: '4px 12px', fontSize: 12 }}>
+                                        Editar
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
-
-            {/* Contenido de la caja abierta */}
-            {cajaAbierta && (
-              <div style={{ ...S.card, borderTop: `3px solid ${CAJAS_META.find(c => c.id === cajaAbierta)?.color}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <span style={{ fontSize: 22 }}>{CAJAS_META.find(c => c.id === cajaAbierta)?.emoji}</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: CAJAS_META.find(c => c.id === cajaAbierta)?.color }}>{cajaAbierta}</div>
-                    <div style={{ fontSize: 12, color: C.textMuted }}>{CAJAS_META.find(c => c.id === cajaAbierta)?.nombre}</div>
-                  </div>
-                </div>
-
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                      <th style={{ padding: '8px', textAlign: 'left', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MEDICAMENTO</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>STOCK</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MÍNIMO</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>UNIDAD</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>VENCIMIENTO</th>
-                      <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>ACCIONES</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {medicamentosCaja(cajaAbierta).map(med => {
-                      const enEdicion = editando === med.id;
-                      const bajStock = med.stock <= med.minimo;
-                      
-                      return (
-                        <tr key={med.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>{med.nombre_insumo || "Sin nombre"}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input type="number" value={formEdit.stock} onChange={e => setFormEdit({...formEdit, stock: e.target.value})} 
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ color: bajStock ? C.red : C.text, fontWeight: bajStock ? 700 : 400 }}>{med.stock}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input type="number" value={formEdit.minimo} onChange={e => setFormEdit({...formEdit, minimo: e.target.value})} 
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ fontSize: 12, color: C.textMuted }}>{med.minimo}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{med.unidad}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input 
-                                type="date" 
-                                value={formEdit.fecha_vencimiento} 
-                                onChange={e => setFormEdit({...formEdit, fecha_vencimiento: e.target.value})} 
-                                style={{ width: 130, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} 
-                              />
-                            ) : (
-                              <span style={{ fontSize: 11, color: med.fecha_vencimiento ? C.text : C.textFaint }}>
-                                {med.fecha_vencimiento ? new Date(med.fecha_vencimiento).toLocaleDateString('es-CL') : '—'}
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'right' }}>
-                            {enEdicion ? (
-                              <>
-                                <button onClick={() => guardarEdicion(med.id)} style={{ ...S.btn('primary'), fontSize: 11, padding: '4px 10px', marginRight: 5 }}>💾 Guardar</button>
-                                <button onClick={() => setEditando(null)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✖️</button>
-                              </>
-                            ) : (
-                              <button onClick={() => abrirEditar(med)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✏️ Editar</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 60, color: C.textMuted }}>
+            Selecciona un bolso para ver su contenido
+          </div>
         )}
       </div>
     </div>
@@ -6180,7 +5524,6 @@ function VistaBolsosMedicamentos({ usuario }) {
 }
 export default function App() {
   const [tab, setTab] = useState("dashboard");
-  const [subTabMaso, setSubTabMaso] = useState(null);
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [atenciones, setAtenciones] = useState(ATENCIONES_INICIALES);
   const [usuario, setUsuario] = useState(null);
@@ -6201,16 +5544,11 @@ export default function App() {
   const navItems = [
     { id: "dashboard", label: "Inicio", icon: "dashboard" },
     ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros", icon: "carro", badge: alertCarros }] : []),
-    ...(esAdmin || permisos.verBolso ? [{ id: "bolsos", label: "Bolso", icon: "bolso", badge: alertBolso }] : []),
+    ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso }] : []),
     { id: "atenciones", label: "Atenciones", icon: "event" },
-    ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
-    ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "atencionEnfermeria", label: "Atención", icon: "med" }] : []),
-    ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
-    ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kine", icon: "event" }] : []),
-    ...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
-    ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kine", icon: "bolso" }] : []),
     ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
+...(esAdmin ? [{ id: "costos", label: "Costos", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
   ];
@@ -6224,10 +5562,10 @@ export default function App() {
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
 ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
-...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "atencionEnfermeria", label: "Atención", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
 ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
-...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
+...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaMasiva", label: "Masoterapia Masiva", icon: "bolso" }] : []),
+...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaEspecifica", label: "Masoterapia Específica", icon: "event" }] : []),
     ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
@@ -6260,7 +5598,7 @@ export default function App() {
           </nav>
           <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
-            
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
             <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>{usuario?.email}</div>
             <button style={{ ...S.btn("ghost"), width: "100%", fontSize: 12, padding: "7px" }} onClick={handleLogout}>Cerrar sesión</button>
           </div>
@@ -6310,7 +5648,7 @@ export default function App() {
               <div style={S.title}>Atenciones en Carpa Médica 🏥</div>
               <div style={S.subtitle}>Registro por evento · Médico, Enfermero/a, Paramédico, Kinesiólogo/a, Masoterapeuta</div>
             </div>
-            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} esAdmin={esAdmin} />
+            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} />
           </div>
         )}
 {tab === "bolsoKine" && (
@@ -6339,15 +5677,6 @@ export default function App() {
 <VistaAtencionesMedicas usuario={usuario} carros={carros} />
 </div>
 )}
-{tab === "atencionEnfermeria" && (
-<div>
-<div style={{ marginBottom: 24 }}>
-<div style={S.title}>Atención de Enfermería/Paramédico</div>
-<div style={S.subtitle}>Registro de atenciones e insumos utilizados</div>
-</div>
-<VistaAtencionesMedicas usuario={usuario} carros={carros} />
-</div>
-)}
 {tab === "adminMedicamentos" && (
 <div>
 <div style={{ marginBottom: 24 }}>
@@ -6363,45 +5692,25 @@ export default function App() {
 <div style={S.title}>Atenciones de Kinesiología</div>
 <div style={S.subtitle}>Registro de atenciones con bolso individual</div>
 </div>
-<VistaAtencionesKinesiologia usuario={usuario} esAdmin={esAdmin} />
+<VistaAtencionesKinesiologia usuario={usuario} />
 </div>
 )}
-{tab === "masoterapia" && (
+{tab === "masoterapiaMasiva" && (
 <div>
-  <div style={{ marginBottom: 24 }}>
-    <div style={S.title}>Masoterapia</div>
-    <div style={S.subtitle}>Selecciona el tipo de atención</div>
-  </div>
-  <div style={{ display: "flex", gap: 16, marginBottom: 32, flexWrap: "wrap" }}>
-    <div
-      style={{ ...S.card, flex: 1, minWidth: 200, cursor: "pointer", borderColor: C.blue, textAlign: "center", padding: 32 }}
-      onClick={() => setSubTabMaso("masiva")}
-    >
-      <div style={{ fontSize: 32, marginBottom: 8 }}>🏃</div>
-      <div style={{ fontWeight: 700, fontSize: 16, color: C.blue }}>Masoterapia Masiva</div>
-      <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Contador de masajes para eventos masivos</div>
-    </div>
-    <div
-      style={{ ...S.card, flex: 1, minWidth: 200, cursor: "pointer", borderColor: C.blue, textAlign: "center", padding: 32 }}
-      onClick={() => setSubTabMaso("especifica")}
-    >
-      <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-      <div style={{ fontWeight: 700, fontSize: 16, color: C.blue }}>Masoterapia Específica</div>
-      <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Fichas individuales para torneos</div>
-    </div>
-  </div>
-  {subTabMaso === "masiva" && (
-    <div>
-      <button style={{ ...S.btn("ghost"), marginBottom: 16, fontSize: 12 }} onClick={() => setSubTabMaso(null)}>← Volver</button>
-      <VistaMasoterapiaMasiva usuario={usuario} />
-    </div>
-  )}
-  {subTabMaso === "especifica" && (
-    <div>
-      <button style={{ ...S.btn("ghost"), marginBottom: 16, fontSize: 12 }} onClick={() => setSubTabMaso(null)}>← Volver</button>
-      <VistaMasoterapiaEspecifica usuario={usuario} esAdmin={esAdmin} />
-    </div>
-  )}
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Masoterapia Masiva</div>
+<div style={S.subtitle}>Contador de masajes para eventos masivos</div>
+</div>
+<VistaMasoterapiaMasiva usuario={usuario} />
+</div>
+)}
+{tab === "masoterapiaEspecifica" && (
+<div>
+<div style={{ marginBottom: 24 }}>
+<div style={S.title}>Masoterapia Específica</div>
+<div style={S.subtitle}>Fichas individuales para torneos</div>
+</div>
+<VistaMasoterapiaEspecifica usuario={usuario} />
 </div>
 )}
         {tab === "configuracion" && (
