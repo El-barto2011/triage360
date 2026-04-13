@@ -2688,6 +2688,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
 
     if (res) {
       // Descontar insumos del bolso
+      const insumosStockBajo = [];
       for (const insumo of form.insumos_usados || []) {
         const insumoEnBolso = insumos.find(i => i.nombre === insumo.nombre);
         if (insumoEnBolso) {
@@ -2696,6 +2697,34 @@ function VistaAtencionesKinesiologia({ usuario }) {
             method: "PATCH",
             body: JSON.stringify({ stock: nuevoStock })
           }, usuario?.token);
+          // Detectar si queda bajo el mínimo
+          if (nuevoStock <= insumoEnBolso.minimo) {
+            insumosStockBajo.push({ ...insumoEnBolso, stockActual: nuevoStock });
+          }
+        }
+      }
+
+      // Enviar email inmediato si hay stock bajo
+      if (insumosStockBajo.length > 0) {
+        try {
+          await fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tipo: "alerta_stock",
+              destinatario: "alfredo.jara@sgtrumao.cl",
+              insumos: insumosStockBajo.map(i => ({
+                nombre: i.nombre,
+                stockActual: i.stockActual,
+                minimo: i.minimo,
+                unidad: i.unidad
+              })),
+              profesional: usuario.nombre || usuario.email,
+              evento: form.evento
+            })
+          });
+        } catch (e) {
+          console.error("Error enviando alerta stock:", e);
         }
       }
 
@@ -4637,6 +4666,32 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
           </div>
         ))}
       </div>
+
+      {/* Banner alerta stock en tiempo real */}
+      {stockBajo.length > 0 && (
+        <div style={{
+          background: "linear-gradient(135deg, #3a1a00, #5a2a00)",
+          border: "1px solid #ff6b00",
+          borderRadius: 12,
+          padding: "16px 20px",
+          marginBottom: 20,
+          animation: "pulse 2s infinite"
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#ff9944", marginBottom: 10 }}>
+            🚨 Stock bajo mínimo — {stockBajo.length} insumo{stockBajo.length > 1 ? "s" : ""} requieren reposición
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {stockBajo.map((i, idx) => (
+              <div key={idx} style={{ background: "rgba(255,107,0,0.15)", border: "1px solid #ff6b0055", borderRadius: 6, padding: "6px 12px", fontSize: 12 }}>
+                <span style={{ fontWeight: 700, color: "#ffaa55" }}>{i.nombre}</span>
+                <span style={{ color: "#ff6b00", marginLeft: 6 }}>
+                  {i.stock} / {i.minimo} {i.unidad || ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Estado carros */}
       <div style={S.card}>
