@@ -816,7 +816,7 @@ function VistaBolsoKinesiologia({ usuario }) {
 // Agregar este código DESPUÉS de VistaBolsoKinesiologia (línea ~742)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaGestionEventos({ usuario }) {
+function VistaGestionEventos({ usuario, esAdmin }) {
   const [eventos, setEventos] = useState([]);
   const [profesionales, setProfesionales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -858,6 +858,16 @@ function VistaGestionEventos({ usuario }) {
   const abrirEditarEvento = (evento) => {
     setForm({ ...evento });
     setModal("editar");
+  };
+
+  const eliminarEvento = async (evento) => {
+    const confirmar = window.confirm(`¿Estás seguro de eliminar el evento "${evento.nombre_evento}"?\n\nEsta acción no se puede deshacer.`);
+    if (!confirmar) return;
+    const res = await sb(`equipos_evento?id=eq.${evento.id}`, { method: "DELETE" }, usuario?.token);
+    if (res !== null) {
+      setEventos(prev => prev.filter(e => e.id !== evento.id));
+      alert("Evento eliminado correctamente.");
+    }
   };
 
   const guardarEvento = async () => {
@@ -1081,12 +1091,22 @@ function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
-                <button 
-                  style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
-                  onClick={() => abrirEditarEvento(evento)}
-                >
-                  Editar
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button 
+                    style={{ ...S.btn("ghost"), padding: "6px 12px" }} 
+                    onClick={() => abrirEditarEvento(evento)}
+                  >
+                    ✏️ Editar
+                  </button>
+                  {esAdmin && (
+                    <button 
+                      style={{ ...S.btn("ghost"), padding: "6px 12px", color: C.red, borderColor: C.red }} 
+                      onClick={() => eliminarEvento(evento)}
+                    >
+                      🗑️ Eliminar
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -4327,7 +4347,7 @@ function VistaReportes({ usuario, esAdmin }) {
     </div>` : ""}
 
     <div class="footer">
-      <p>TRIAGE360 · Gestión Clínica Inteligente · Powered by SGTRUMAO SPA</p>
+      <p>TRIAGE360 · Gestión Clínica Inteligente</p>
     </div>
   </div>
   <script>window.onload = () => window.print();</script>
@@ -4939,7 +4959,7 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
         </div>
         <div style={S.subtitle}>
           {esAdmin
-            ? `SGTRUMAO · ${new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`
+            ? `${new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`
             : usuario?.evento_asignado
               ? `📍 Evento asignado: ${usuario.evento_asignado}`
               : "Sin evento asignado hoy"}
@@ -5825,7 +5845,7 @@ function Login({ onLogin }) {
               TRIAGE<tspan fill="url(#lg1)">360</tspan>
             </text>
             <text x="118" y="60" fill="#7a90a8" fontSize="9" fontFamily="Arial, sans-serif" letterSpacing="3">GESTIÓN CLÍNICA INTELIGENTE</text>
-            <text x="118" y="78" fill="#2d3f52" fontSize="8" fontFamily="Arial, sans-serif" letterSpacing="1">Powered by <tspan fill="#00c2a8" fontWeight="700">SGTRUMAO</tspan></text>
+            <text x="118" y="78" fill="#2d3f52" fontSize="8" fontFamily="Arial, sans-serif" letterSpacing="1">TRIAGE360</text>
           </svg>
         </div>
         <div style={{ marginBottom: 16 }}>
@@ -6513,8 +6533,7 @@ export default function App() {
             )}
           </nav>
           <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
+            <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>TRIAGE360</div>
             <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>{usuario?.email}</div>
             <button style={{ ...S.btn("ghost"), width: "100%", fontSize: 12, padding: "7px" }} onClick={handleLogout}>Cerrar sesión</button>
           </div>
@@ -6581,7 +6600,7 @@ export default function App() {
 <div style={S.title}>Gestión de Eventos</div>
 <div style={S.subtitle}>Crear y asignar equipos a eventos</div>
 </div>
-<VistaGestionEventos usuario={usuario} />
+<VistaGestionEventos usuario={usuario} esAdmin={esAdmin} />
 </div>
         )}
 {tab === "atencionMedica" && (
