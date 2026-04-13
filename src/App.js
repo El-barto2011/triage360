@@ -1735,7 +1735,8 @@ function VistaAtencionesMedicas({ usuario, carros, esAdmin }) {
                       onChange={e => { 
                         setForm(f => ({ ...f, paciente_rut: e.target.value }));
                         buscarHistorialPaciente(e.target.value);
-                        autocompletarPorRut(e.target.value);
+                        clearTimeout(window._rutTimer);
+                        window._rutTimer = setTimeout(() => autocompletarPorRut(e.target.value), 800);
                       }} 
                       placeholder="12.345.678-9"
                     />
@@ -3000,7 +3001,8 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
                   onChange={e => { 
                     setForm(f => ({ ...f, paciente_rut: e.target.value }));
                     buscarHistorialPaciente(e.target.value);
-                    autocompletarPorRut(e.target.value);
+                    clearTimeout(window._rutTimer);
+                    window._rutTimer = setTimeout(() => autocompletarPorRut(e.target.value), 800);
                   }} 
                   placeholder="12.345.678-9"
                 />
@@ -5212,11 +5214,10 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
 
   const autocompletarRut = async (rut) => {
     if (!rut || rut.length < 5) return;
-    const rutLimpio = rut.replace(/\.|-/g, "").toLowerCase();
     const [kine, med, fichas] = await Promise.all([
-      sb(`atenciones_kinesiologia?paciente_rut=ilike.*${encodeURIComponent(rutLimpio)}*&order=created_at.desc&limit=1`, {}, usuario?.token),
-      sb(`atenciones_medicas?paciente_rut=ilike.*${encodeURIComponent(rutLimpio)}*&order=created_at.desc&limit=1`, {}, usuario?.token),
-      sb(`fichas_masoterapia?paciente_rut=ilike.*${encodeURIComponent(rutLimpio)}*&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`atenciones_kinesiologia?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`atenciones_medicas?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`fichas_masoterapia?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
     ]);
     const found = (kine && kine[0]) || (med && med[0]) || (fichas && fichas[0]);
     if (found) {
@@ -5383,7 +5384,11 @@ function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
               <div style={S.grid2}>
                 <div style={S.formRow}>
                   <label style={S.formLabel}>RUT</label>
-                  <input style={S.input} value={form.rut || ""} onChange={e => { F("rut", e.target.value); autocompletarRut(e.target.value); }} placeholder="12.345.678-9" />
+                  <input style={S.input} value={form.rut || ""} onChange={e => { 
+                    F("rut", e.target.value);
+                    clearTimeout(window._rutTimer);
+                    window._rutTimer = setTimeout(() => autocompletarRut(e.target.value), 800);
+                  }} placeholder="12.345.678-9" />
                 </div>
                 <div style={S.formRow}>
                   <label style={S.formLabel}>Edad</label>
