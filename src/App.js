@@ -1422,11 +1422,18 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   };
 
   const abrirNuevaAtencion = () => {
+    const eventoAsignado = eventos.find(ev =>
+      (ev.medicos || []).includes(usuario?.id) ||
+      (ev.enfermeros || []).includes(usuario?.id) ||
+      (ev.paramedicos || []).includes(usuario?.id)
+    );
+    const eventoDefault = eventoAsignado || (eventos.length > 0 ? eventos[0] : null);
     setForm({
       paciente_nombre: "",
       paciente_rut: "",
       paciente_edad: "",
-      evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
+      evento: eventoDefault?.nombre_evento || "",
+      evento_id: eventoDefault?.id || null,
       motivo_consulta: "",
       diagnostico: "",
       tratamiento: "",
@@ -1761,7 +1768,15 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                     setForm(f => ({ ...f, evento: e.target.value, evento_id: ev ? ev.id : null }));
                   }}
                     >
-                      {eventos.map(ev => (
+                      {eventos.filter(ev => {
+                        if (esAdmin) return true;
+                        const uid = usuario?.id || '';
+                        return (ev.medicos || []).includes(uid) ||
+                               (ev.enfermeros || []).includes(uid) ||
+                               (ev.paramedicos || []).includes(uid) ||
+                               (ev.kinesiologos || []).includes(uid) ||
+                               (ev.masoterapeutas || []).includes(uid);
+                      }).map(ev => (
                         <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
                       ))}
                     </select>
@@ -2611,11 +2626,16 @@ function VistaAtencionesKinesiologia({ usuario }) {
   };
 
   const abrirNuevaAtencion = () => {
+    const eventoAsignado = eventos.find(ev =>
+      (ev.kinesiologos || []).includes(usuario?.id)
+    );
+    const eventoDefault = eventoAsignado || (eventos.length > 0 ? eventos[0] : null);
     setForm({
       paciente_nombre: "",
       paciente_rut: "",
       paciente_edad: "",
-      evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
+      evento: eventoDefault?.nombre_evento || "",
+      evento_id: eventoDefault?.id || null,
       motivo_consulta: "",
       evaluacion_inicial: "",
       tratamiento_realizado: "",
@@ -2959,7 +2979,15 @@ function VistaAtencionesKinesiologia({ usuario }) {
                     setForm(f => ({ ...f, evento: e.target.value, evento_id: ev ? ev.id : null }));
                   }}
                 >
-                  {eventos.map(ev => (
+                  {eventos.filter(ev => {
+                    if (esAdmin) return true;
+                    const uid = usuario?.id || '';
+                    return (ev.medicos || []).includes(uid) ||
+                           (ev.enfermeros || []).includes(uid) ||
+                           (ev.paramedicos || []).includes(uid) ||
+                           (ev.kinesiologos || []).includes(uid) ||
+                           (ev.masoterapeutas || []).includes(uid);
+                  }).map(ev => (
                     <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
                   ))}
                 </select>
@@ -3329,13 +3357,25 @@ function VistaMasoterapiaMasiva({ usuario }) {
         <div style={{ fontSize: 13, color: C.textMuted }}>
           Evento: {eventoSeleccionado}
         </div>
-        {eventos.length > 1 && (
+        {eventos.filter(ev => {
+          if (esAdmin) return true;
+          const uid = usuario?.id || '';
+          return (ev.masoterapeutas || []).includes(uid) ||
+                 (ev.medicos || []).includes(uid) ||
+                 (ev.kinesiologos || []).includes(uid);
+        }).length > 0 && (
           <select 
             style={{ ...S.select, width: "100%", marginTop: 12 }}
             value={eventoSeleccionado}
             onChange={e => cambiarEvento(e.target.value)}
           >
-            {eventos.map(ev => (
+            {eventos.filter(ev => {
+              if (esAdmin) return true;
+              const uid = usuario?.id || '';
+              return (ev.masoterapeutas || []).includes(uid) ||
+                     (ev.medicos || []).includes(uid) ||
+                     (ev.kinesiologos || []).includes(uid);
+            }).map(ev => (
               <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
             ))}
           </select>
