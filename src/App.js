@@ -4027,6 +4027,170 @@ function VistaReportes({ usuario, esAdmin }) {
     setLoading(false);
   };
 
+  const exportarPDF = () => {
+    if (!datosReporte) return;
+
+    const eventoNombre = eventos.find(e => String(e.id) === eventoSeleccionado)?.nombre_evento || eventoSeleccionado;
+    const fecha = new Date().toLocaleDateString("es-CL", { year: "numeric", month: "long", day: "numeric" });
+
+    const desgloseKineHTML = Object.entries(datosReporte.desgloseKine || {}).map(([nombre, total]) =>
+      `<tr><td>${nombre}</td><td>${total} atenciones</td></tr>`
+    ).join("");
+
+    const desgloseMedicoHTML = Object.entries(datosReporte.desgloseMedico || {}).map(([nombre, total]) =>
+      `<tr><td>${nombre}</td><td>${total} atenciones</td></tr>`
+    ).join("");
+
+    const desgloseMasoHTML = Object.entries(datosReporte.desgloseMasoterapeuta || {}).map(([nombre, total]) =>
+      `<tr><td>${nombre}</td><td>${total} atenciones</td></tr>`
+    ).join("");
+
+    const medicamentosHTML = datosReporte.medicamentosUsados.map(m =>
+      `<tr><td>${m.nombre}</td><td>${m.cantidad}</td><td>${m.via || "-"}</td></tr>`
+    ).join("");
+
+    const insumosHTML = datosReporte.insumosUsados.map(i =>
+      `<tr><td>${i.nombre}</td><td>${i.cantidad}</td><td>${i.unidad}</td></tr>`
+    ).join("");
+
+    const atencionesKineHTML = (datosReporte.atencionesKine || []).map(a =>
+      `<tr>
+        <td>${a.paciente_nombre}</td>
+        <td>${a.paciente_rut || "-"}</td>
+        <td>${a.motivo_consulta}</td>
+        <td>${a.tratamiento_realizado || "-"}</td>
+        <td>${a.kinesiologo_nombre}</td>
+        <td>${new Date(a.created_at).toLocaleDateString("es-CL")}</td>
+      </tr>`
+    ).join("");
+
+    const atencionesMedHTML = (datosReporte.atencionesMed || []).map(a =>
+      `<tr>
+        <td>${a.paciente_nombre}</td>
+        <td>${a.paciente_rut || "-"}</td>
+        <td>${a.motivo_consulta}</td>
+        <td>${a.diagnostico || "-"}</td>
+        <td>${a.medico_nombre}</td>
+        <td>${new Date(a.created_at).toLocaleDateString("es-CL")}</td>
+      </tr>`
+    ).join("");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte - ${eventoNombre}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; color: #1e293b; font-size: 13px; }
+    .header { background: linear-gradient(135deg, #002850, #148C8C); color: white; padding: 28px 32px; }
+    .header h1 { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+    .header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+    .body { padding: 24px 32px; }
+    .section { margin-bottom: 24px; }
+    .section-title { font-size: 14px; font-weight: 700; color: #002850; border-bottom: 2px solid #148C8C; padding-bottom: 6px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 8px; }
+    .summary-card { background: #f1f5f9; border-left: 3px solid #148C8C; padding: 12px; border-radius: 6px; }
+    .summary-card .num { font-size: 28px; font-weight: 800; color: #002850; }
+    .summary-card .label { font-size: 11px; color: #64748b; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-weight: 600; color: #64748b; font-size: 11px; text-transform: uppercase; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
+    tr:last-child td { border-bottom: none; }
+    .desglose-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .cost-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; text-align: center; }
+    .cost-box .amount { font-size: 28px; font-weight: 800; color: #15803d; }
+    .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚕️ TRIAGE360 — Reporte de Evento</h1>
+    <p>${eventoNombre} &nbsp;·&nbsp; Generado el ${fecha}</p>
+  </div>
+  <div class="body">
+
+    <div class="section">
+      <div class="section-title">📊 Resumen General</div>
+      <div class="summary-grid">
+        <div class="summary-card"><div class="num">${datosReporte.totalKine}</div><div class="label">Kinesiología</div></div>
+        <div class="summary-card"><div class="num">${datosReporte.totalMedicas}</div><div class="label">Atenciones Médicas</div></div>
+        <div class="summary-card"><div class="num">${datosReporte.totalMasajes}</div><div class="label">Masajes Masivos</div></div>
+        <div class="summary-card"><div class="num">${datosReporte.totalFichasMasoterapia}</div><div class="label">Fichas Masoterapia</div></div>
+      </div>
+    </div>
+
+    ${(desgloseKineHTML || desgloseMedicoHTML || desgloseMasoHTML) ? `
+    <div class="section">
+      <div class="section-title">👨‍⚕️ Desglose por Profesional</div>
+      <div class="desglose-grid">
+        ${desgloseKineHTML ? `<div><strong style="color:#148C8C">🦴 Kinesiología</strong><table style="margin-top:8px">${desgloseKineHTML}</table></div>` : ""}
+        ${desgloseMedicoHTML ? `<div><strong style="color:#148C8C">🩺 Médicos</strong><table style="margin-top:8px">${desgloseMedicoHTML}</table></div>` : ""}
+        ${desgloseMasoHTML ? `<div><strong style="color:#148C8C">💆 Masoterapeutas</strong><table style="margin-top:8px">${desgloseMasoHTML}</table></div>` : ""}
+      </div>
+    </div>` : ""}
+
+    ${atencionesKineHTML ? `
+    <div class="section">
+      <div class="section-title">🦴 Atenciones de Kinesiología</div>
+      <table>
+        <thead><tr><th>Paciente</th><th>RUT</th><th>Motivo</th><th>Tratamiento</th><th>Profesional</th><th>Fecha</th></tr></thead>
+        <tbody>${atencionesKineHTML}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${atencionesMedHTML ? `
+    <div class="section">
+      <div class="section-title">🩺 Atenciones Médicas</div>
+      <table>
+        <thead><tr><th>Paciente</th><th>RUT</th><th>Motivo</th><th>Diagnóstico</th><th>Médico</th><th>Fecha</th></tr></thead>
+        <tbody>${atencionesMedHTML}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${medicamentosHTML ? `
+    <div class="section">
+      <div class="section-title">💊 Medicamentos Prescritos</div>
+      <table>
+        <thead><tr><th>Medicamento</th><th>Cantidad</th><th>Vía</th></tr></thead>
+        <tbody>${medicamentosHTML}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${insumosHTML ? `
+    <div class="section">
+      <div class="section-title">📦 Insumos Utilizados</div>
+      <table>
+        <thead><tr><th>Insumo</th><th>Cantidad</th><th>Unidad</th></tr></thead>
+        <tbody>${insumosHTML}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${esAdmin && datosReporte.costoTotal !== null ? `
+    <div class="section">
+      <div class="section-title">💰 Costo Total del Evento</div>
+      <div class="cost-box">
+        <div class="amount">$${datosReporte.costoTotal.toLocaleString("es-CL")} CLP</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">Basado en costos registrados en el sistema</div>
+      </div>
+    </div>` : ""}
+
+    <div class="footer">
+      <p>TRIAGE360 · Gestión Clínica Inteligente · Powered by SGTRUMAO SPA</p>
+    </div>
+  </div>
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+
+    const ventana = window.open("", "_blank");
+    ventana.document.write(html);
+    ventana.document.close();
+  };
+
   const exportarExcel = () => {
     if (!datosReporte) return;
 
@@ -4137,6 +4301,9 @@ function VistaReportes({ usuario, esAdmin }) {
             <div style={{ display: "flex", gap: 10 }}>
               <button style={{ ...S.btn("ghost"), fontSize: 12 }} onClick={exportarExcel}>
                 📊 Exportar Excel
+              </button>
+              <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={exportarPDF}>
+                📄 Exportar PDF
               </button>
               {esAdmin && eventos.find(e => e.nombre_evento === eventoSeleccionado)?.estado === "activo" && (
                 <button 
