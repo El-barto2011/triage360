@@ -179,6 +179,81 @@ export default async function handler(req, res) {
     }
   }
 
+  if (tipo === 'alerta_stock') {
+    try {
+      const { insumos, profesional, evento } = req.body;
+
+      const filasInsumos = insumos.map(i => `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${i.nombre}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #dc2626; font-weight: 700;">${i.stockActual} ${i.unidad}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #64748b;">${i.minimo} ${i.unidad}</td>
+        </tr>
+      `).join('');
+
+      const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1e293b; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
+    .content { background: white; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px; }
+    .footer { text-align: center; padding: 20px; color: #64748b; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th { background: #f1f5f9; padding: 10px; text-align: left; font-size: 13px; color: #64748b; }
+    .button { display: inline-block; background: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚨 Alerta de Stock Bajo - TRIAGE360</h1>
+    </div>
+    <div class="content">
+      <p>Se ha detectado <strong>stock bajo el mínimo</strong> luego de una atención registrada:</p>
+      <ul style="color: #64748b; font-size: 14px;">
+        <li><strong>Profesional:</strong> ${profesional}</li>
+        <li><strong>Evento:</strong> ${evento}</li>
+        <li><strong>Hora:</strong> ${new Date().toLocaleString('es-CL')}</li>
+      </ul>
+      <table>
+        <thead>
+          <tr>
+            <th>Insumo</th>
+            <th style="text-align:center;">Stock Actual</th>
+            <th style="text-align:center;">Mínimo</th>
+          </tr>
+        </thead>
+        <tbody>${filasInsumos}</tbody>
+      </table>
+      <div style="text-align: center;">
+        <a href="https://triage360.vercel.app" class="button">Ver en TRIAGE360</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p><strong>TRIAGE360</strong> - Gestión Clínica Inteligente | Powered by SGTRUMAO</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const { data, error } = await resend.emails.send({
+        from: 'TRIAGE360 <alfredo.jara@sgtrumao.cl>',
+        to: ['alfredo.jara@sgtrumao.cl', 'francia.munoz@sgtrumao.cl'],
+        subject: `🚨 Stock bajo mínimo en evento: ${evento}`,
+        html: htmlContent
+      });
+
+      if (error) return res.status(400).json({ error });
+      return res.status(200).json({ success: true, data });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   // Otros tipos de emails existentes...
   return res.status(400).json({ error: 'Tipo de email no soportado' });
 }
