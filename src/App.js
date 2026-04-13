@@ -5180,7 +5180,7 @@ const ATENCIONES_INICIALES = [
   },
 ];
 
-function VistaAtenciones({ carros, usuario, permisos, industria }) {
+function VistaAtenciones({ carros, usuario, permisos, industria, esAdmin }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -5212,11 +5212,13 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
 
   const autocompletarRut = async (rut) => {
     if (!rut || rut.length < 5) return;
-    const [kine, med] = await Promise.all([
-      sb(`atenciones_kinesiologia?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
-      sb(`atenciones_medicas?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+    const rutLimpio = rut.replace(/\.|-/g, "").toLowerCase();
+    const [kine, med, fichas] = await Promise.all([
+      sb(`atenciones_kinesiologia?paciente_rut=ilike.*${encodeURIComponent(rutLimpio)}*&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`atenciones_medicas?paciente_rut=ilike.*${encodeURIComponent(rutLimpio)}*&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`fichas_masoterapia?paciente_rut=ilike.*${encodeURIComponent(rutLimpio)}*&order=created_at.desc&limit=1`, {}, usuario?.token),
     ]);
-    const found = (kine && kine[0]) || (med && med[0]);
+    const found = (kine && kine[0]) || (med && med[0]) || (fichas && fichas[0]);
     if (found) {
       setForm(f => ({
         ...f,
@@ -5234,7 +5236,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
       evento: carros.find(c => c.evento_asignado !== "Sin asignar")?.evento_asignado || "",
       fecha: ahora.toISOString().slice(0, 10),
       paciente: "", rut: "", edad: "", categoria: "Jugador",
-      profesion: "Médico", profesional: "",
+      profesion: usuario?.profesion || "Médico", profesional: usuario?.nombre || "",
       tipo: "Consulta general",
       hora_ingreso: `${hh}:${mm}`, hora_egreso: "",
       diagnostico: "", tratamiento: "",
@@ -5403,13 +5405,13 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
             <div style={S.grid2}>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Profesión</label>
-                <select style={{ ...S.select, width: "100%" }} value={form.profesion || "Médico"} onChange={e => F("profesion", e.target.value)}>
-                  {PROFESIONES.map(p => <option key={p}>{p}</option>)}
+                <select style={{ ...S.select, width: "100%" }} value={form.profesion || usuario?.profesion || "Médico"} onChange={e => F("profesion", e.target.value)} disabled={!esAdmin}>
+                  {(esAdmin ? PROFESIONES : [usuario?.profesion || "Médico"]).map(p => <option key={p}>{p}</option>)}
                 </select>
               </div>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Nombre del profesional</label>
-                <input style={S.input} value={form.profesional || ""} onChange={e => F("profesional", e.target.value)} placeholder="Nombre completo" />
+                <input style={S.input} value={form.profesional || ""} onChange={e => F("profesional", e.target.value)} placeholder="Nombre completo" readOnly={!esAdmin} />
               </div>
             </div>
 
@@ -6557,7 +6559,7 @@ export default function App() {
               <div style={S.title}>Atenciones en Carpa Médica 🏥</div>
               <div style={S.subtitle}>Registro por evento · Médico, Enfermero/a, Paramédico, Kinesiólogo/a, Masoterapeuta</div>
             </div>
-            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} />
+            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} esAdmin={esAdmin} />
           </div>
         )}
 {tab === "bolsoKine" && (
