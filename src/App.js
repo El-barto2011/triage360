@@ -1432,6 +1432,8 @@ function VistaAtencionesMedicas({ usuario, carros, esAdmin }) {
       paciente_nombre: "",
       paciente_rut: "",
       paciente_edad: "",
+      fecha_atencion: new Date().toISOString().split('T')[0],
+      categoria_paciente: "Jugador",
       evento: eventoDefault?.nombre_evento || "",
       evento_id: eventoDefault?.id || null,
       motivo_consulta: "",
@@ -1491,6 +1493,22 @@ function VistaAtencionesMedicas({ usuario, carros, esAdmin }) {
     setForm(f => ({ ...f, insumos_medico: ins }));
   };
 
+
+  const autocompletarPorRut = async (rut) => {
+    if (!rut || rut.length < 5) return;
+    const [kine, med] = await Promise.all([
+      sb(`atenciones_kinesiologia?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`atenciones_medicas?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+    ]);
+    const found = (kine && kine[0]) || (med && med[0]);
+    if (found) {
+      setForm(f => ({
+        ...f,
+        paciente_nombre: found.paciente_nombre || f.paciente_nombre,
+        paciente_edad: found.paciente_edad || f.paciente_edad
+      }));
+    }
+  };
   const guardarAtencion = async () => {
     if (!form.paciente_nombre || !form.evento || !form.motivo_consulta) {
       alert("Por favor completa al menos: nombre del paciente, evento y motivo de consulta");
@@ -1516,6 +1534,8 @@ function VistaAtencionesMedicas({ usuario, carros, esAdmin }) {
       paciente_nombre: form.paciente_nombre,
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
+      fecha_atencion: form.fecha_atencion || new Date().toISOString().split('T')[0],
+      categoria_paciente: form.categoria_paciente || 'Jugador',
       evento: form.evento,
       evento_id: form.evento_id || null,
       motivo_consulta: form.motivo_consulta,
@@ -1709,16 +1729,40 @@ function VistaAtencionesMedicas({ usuario, carros, esAdmin }) {
                   </div>
                   <div style={S.formRow}>
                     <label style={S.formLabel}>RUT</label>
-
                     <input 
                       style={S.input} 
                       value={form.paciente_rut || ""} 
                       onChange={e => { 
                         setForm(f => ({ ...f, paciente_rut: e.target.value }));
                         buscarHistorialPaciente(e.target.value);
+                        autocompletarPorRut(e.target.value);
                       }} 
                       placeholder="12.345.678-9"
                     />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Fecha de Atención</label>
+                    <input 
+                      style={S.input} 
+                      type="date"
+                      value={form.fecha_atencion || new Date().toISOString().split('T')[0]} 
+                      onChange={e => setForm(f => ({ ...f, fecha_atencion: e.target.value }))} 
+                    />
+                  </div>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Categoría</label>
+                    <select 
+                      style={{ ...S.select, width: "100%" }}
+                      value={form.categoria_paciente || "Jugador"}
+                      onChange={e => setForm(f => ({ ...f, categoria_paciente: e.target.value }))}
+                    >
+                      <option>Jugador</option>
+                      <option>Staff</option>
+                      <option>Voluntario</option>
+                    </select>
                   </div>
                 </div>
 
@@ -2642,6 +2686,8 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
       paciente_nombre: "",
       paciente_rut: "",
       paciente_edad: "",
+      fecha_atencion: new Date().toISOString().split('T')[0],
+      categoria_paciente: "Jugador",
       evento: eventoDefault?.nombre_evento || "",
       evento_id: eventoDefault?.id || null,
       motivo_consulta: "",
@@ -2674,6 +2720,22 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
     setForm(f => ({ ...f, insumos_usados: ins }));
   };
 
+  const autocompletarPorRut = async (rut) => {
+    if (!rut || rut.length < 5) return;
+    const [kine, med] = await Promise.all([
+      sb(`atenciones_kinesiologia?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`atenciones_medicas?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+    ]);
+    const found = (kine && kine[0]) || (med && med[0]);
+    if (found) {
+      setForm(f => ({
+        ...f,
+        paciente_nombre: found.paciente_nombre || f.paciente_nombre,
+        paciente_edad: found.paciente_edad ? String(found.paciente_edad) : f.paciente_edad
+      }));
+    }
+  };
+
   const guardarAtencion = async () => {
     if (!form.paciente_nombre || !form.evento || !form.motivo_consulta) {
       alert("Por favor completa al menos: nombre del paciente, evento y motivo de consulta");
@@ -2699,6 +2761,8 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
       paciente_nombre: form.paciente_nombre,
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
+      fecha_atencion: form.fecha_atencion || new Date().toISOString().split('T')[0],
+      categoria_paciente: form.categoria_paciente || 'Jugador',
       evento: form.evento,
       evento_id: form.evento_id || null,
       motivo_consulta: form.motivo_consulta,
@@ -2936,9 +3000,34 @@ function VistaAtencionesKinesiologia({ usuario, esAdmin }) {
                   onChange={e => { 
                     setForm(f => ({ ...f, paciente_rut: e.target.value }));
                     buscarHistorialPaciente(e.target.value);
+                    autocompletarPorRut(e.target.value);
                   }} 
                   placeholder="12.345.678-9"
                 />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Fecha de Atención</label>
+                <input 
+                  style={S.input} 
+                  type="date"
+                  value={form.fecha_atencion || new Date().toISOString().split('T')[0]} 
+                  onChange={e => setForm(f => ({ ...f, fecha_atencion: e.target.value }))} 
+                />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Categoría</label>
+                <select 
+                  style={{ ...S.select, width: "100%" }}
+                  value={form.categoria_paciente || "Jugador"}
+                  onChange={e => setForm(f => ({ ...f, categoria_paciente: e.target.value }))}
+                >
+                  <option>Jugador</option>
+                  <option>Staff</option>
+                  <option>Voluntario</option>
+                </select>
               </div>
             </div>
 
