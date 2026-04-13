@@ -3478,7 +3478,7 @@ function VistaMasoterapiaMasiva({ usuario }) {
 // Agregar después de VistaMasoterapiaMasiva
 // ═══════════════════════════════════════════════════════════════════════════
 
-function VistaMasoterapiaEspecifica({ usuario }) {
+function VistaMasoterapiaEspecifica({ usuario, esAdmin }) {
   const [fichas, setFichas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -3497,8 +3497,11 @@ function VistaMasoterapiaEspecifica({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const queryFichas = esAdmin
+      ? `fichas_masoterapia?order=created_at.desc&limit=200`
+      : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`;
     const [fs, evs] = await Promise.all([
-      sb(`fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
+      sb(queryFichas, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token)
     ]);
     if (fs) setFichas(fs);
@@ -6489,7 +6492,7 @@ export default function App() {
 <div style={S.title}>Masoterapia Específica</div>
 <div style={S.subtitle}>Fichas individuales para torneos</div>
 </div>
-<VistaMasoterapiaEspecifica usuario={usuario} />
+<VistaMasoterapiaEspecifica usuario={usuario} esAdmin={esAdmin} />
 </div>
 )}
         {tab === "configuracion" && (
