@@ -5210,6 +5210,22 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
 
   const F = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  const autocompletarRut = async (rut) => {
+    if (!rut || rut.length < 5) return;
+    const [kine, med] = await Promise.all([
+      sb(`atenciones_kinesiologia?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+      sb(`atenciones_medicas?paciente_rut=eq.${encodeURIComponent(rut)}&order=created_at.desc&limit=1`, {}, usuario?.token),
+    ]);
+    const found = (kine && kine[0]) || (med && med[0]);
+    if (found) {
+      setForm(f => ({
+        ...f,
+        paciente: found.paciente_nombre || f.paciente,
+        edad: found.paciente_edad ? String(found.paciente_edad) : f.edad
+      }));
+    }
+  };
+
   const abrirNueva = () => {
     const ahora = new Date();
     const hh = String(ahora.getHours()).padStart(2, "0");
@@ -5217,7 +5233,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
     setForm({
       evento: carros.find(c => c.evento_asignado !== "Sin asignar")?.evento_asignado || "",
       fecha: ahora.toISOString().slice(0, 10),
-      paciente: "", rut: "", edad: "",
+      paciente: "", rut: "", edad: "", categoria: "Jugador",
       profesion: "Médico", profesional: "",
       tipo: "Consulta general",
       hora_ingreso: `${hh}:${mm}`, hora_egreso: "",
@@ -5365,12 +5381,20 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
               <div style={S.grid2}>
                 <div style={S.formRow}>
                   <label style={S.formLabel}>RUT</label>
-                  <input style={S.input} value={form.rut || ""} onChange={e => F("rut", e.target.value)} placeholder="12.345.678-9" />
+                  <input style={S.input} value={form.rut || ""} onChange={e => { F("rut", e.target.value); autocompletarRut(e.target.value); }} placeholder="12.345.678-9" />
                 </div>
                 <div style={S.formRow}>
                   <label style={S.formLabel}>Edad</label>
                   <input style={S.input} type="number" value={form.edad || ""} onChange={e => F("edad", e.target.value)} placeholder="0" />
                 </div>
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Categoría</label>
+                <select style={{ ...S.select, width: "100%" }} value={form.categoria || "Jugador"} onChange={e => F("categoria", e.target.value)}>
+                  <option>Jugador</option>
+                  <option>Staff</option>
+                  <option>Voluntario</option>
+                </select>
               </div>
             </div>
 
