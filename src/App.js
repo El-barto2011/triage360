@@ -1459,6 +1459,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
+  const [historialPaciente, setHistorialPaciente] = useState([]);
 
   useEffect(() => {
     cargarDatos();
@@ -1475,6 +1476,33 @@ function VistaAtencionesMedicas({ usuario, carros }) {
     setLoading(false);
   };
 
+  const buscarPacientePorRut = async (rut) => {
+    if (!rut || rut.length < 8) {
+      setHistorialPaciente([]);
+      return;
+    }
+
+    // Buscar en todas las atenciones médicas
+    const atencionesPaciente = await sb(
+      `atenciones_medicas?paciente_rut=eq.${rut}&order=created_at.desc&limit=10`,
+      {},
+      usuario?.token
+    );
+
+    if (atencionesPaciente && atencionesPaciente.length > 0) {
+      // Autocompletar con los datos del paciente
+      const ultima = atencionesPaciente[0];
+      setForm(f => ({
+        ...f,
+        paciente_nombre: ultima.paciente_nombre,
+        paciente_edad: ultima.paciente_edad
+      }));
+      setHistorialPaciente(atencionesPaciente);
+    } else {
+      setHistorialPaciente([]);
+    }
+  };
+
   const abrirNuevaAtencion = () => {
     setForm({
       paciente_nombre: "",
@@ -1489,6 +1517,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       insumos_medico: [],
       requiere_administracion: false
     });
+    setHistorialPaciente([]);
     setModal("nueva");
   };
 
@@ -1743,9 +1772,18 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                     <input 
                       style={S.input} 
                       value={form.paciente_rut || ""} 
-                      onChange={e => setForm(f => ({ ...f, paciente_rut: e.target.value }))} 
+                      onChange={e => {
+                        const rut = e.target.value;
+                        setForm(f => ({ ...f, paciente_rut: rut }));
+                        buscarPacientePorRut(rut);
+                      }} 
                       placeholder="12.345.678-9"
                     />
+                    {historialPaciente.length > 0 && (
+                      <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>
+                        ✓ {historialPaciente.length} atención{historialPaciente.length > 1 ? 'es' : ''} previa{historialPaciente.length > 1 ? 's' : ''}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1944,6 +1982,43 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                     Si marcas esta opción, la atención aparecerá en la lista de pendientes para enfermeros/paramédicos
                   </div>
                 </div>
+
+                {historialPaciente.length > 0 && (
+                  <div style={{ 
+                    marginTop: 20, 
+                    padding: 16, 
+                    background: C.surface2, 
+                    borderRadius: 8,
+                    border: `1px solid ${C.border}`
+                  }}>
+                    <div style={{ fontWeight: 700, marginBottom: 12, color: C.blue }}>
+                      📋 Historial del Paciente ({historialPaciente.length} atenciones previas)
+                    </div>
+                    <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                      {historialPaciente.map((at, idx) => (
+                        <div key={idx} style={{ 
+                          padding: 10, 
+                          marginBottom: 8, 
+                          background: C.surface,
+                          borderRadius: 6,
+                          fontSize: 12
+                        }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                            {new Date(at.created_at).toLocaleDateString('es-CL')} · {at.evento}
+                          </div>
+                          <div style={{ color: C.textMuted, marginBottom: 4 }}>
+                            Dr/a: {at.medico_nombre?.split('@')[0]}
+                          </div>
+                          {at.diagnostico && (
+                            <div style={{ fontSize: 11 }}>
+                              <strong>Dx:</strong> {at.diagnostico}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
                   <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
@@ -2581,6 +2656,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
+  const [historialPaciente, setHistorialPaciente] = useState([]);
 
   useEffect(() => {
     cargarDatos();
@@ -2599,6 +2675,31 @@ function VistaAtencionesKinesiologia({ usuario }) {
     setLoading(false);
   };
 
+  const buscarPacientePorRut = async (rut) => {
+    if (!rut || rut.length < 8) {
+      setHistorialPaciente([]);
+      return;
+    }
+
+    const atencionesPaciente = await sb(
+      `atenciones_kinesiologia?paciente_rut=eq.${rut}&order=created_at.desc&limit=10`,
+      {},
+      usuario?.token
+    );
+
+    if (atencionesPaciente && atencionesPaciente.length > 0) {
+      const ultima = atencionesPaciente[0];
+      setForm(f => ({
+        ...f,
+        paciente_nombre: ultima.paciente_nombre,
+        paciente_edad: ultima.paciente_edad
+      }));
+      setHistorialPaciente(atencionesPaciente);
+    } else {
+      setHistorialPaciente([]);
+    }
+  };
+
   const abrirNuevaAtencion = () => {
     setForm({
       paciente_nombre: "",
@@ -2612,6 +2713,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
       recomendaciones: "",
       insumos_usados: []
     });
+    setHistorialPaciente([]);
     setModal("nueva");
   };
 
@@ -2849,9 +2951,18 @@ function VistaAtencionesKinesiologia({ usuario }) {
                 <input 
                   style={S.input} 
                   value={form.paciente_rut || ""} 
-                  onChange={e => setForm(f => ({ ...f, paciente_rut: e.target.value }))} 
+                  onChange={e => {
+                    const rut = e.target.value;
+                    setForm(f => ({ ...f, paciente_rut: rut }));
+                    buscarPacientePorRut(rut);
+                  }} 
                   placeholder="12.345.678-9"
                 />
+                {historialPaciente.length > 0 && (
+                  <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>
+                    ✓ {historialPaciente.length} atención{historialPaciente.length > 1 ? 'es' : ''} previa{historialPaciente.length > 1 ? 's' : ''}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2975,6 +3086,43 @@ function VistaAtencionesKinesiologia({ usuario }) {
                 placeholder="Recomendaciones para el paciente..."
               />
             </div>
+
+            {historialPaciente.length > 0 && (
+              <div style={{ 
+                marginTop: 20, 
+                padding: 16, 
+                background: C.surface2, 
+                borderRadius: 8,
+                border: `1px solid ${C.border}`
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 12, color: C.blue }}>
+                  📋 Historial del Paciente ({historialPaciente.length} atenciones previas)
+                </div>
+                <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                  {historialPaciente.map((at, idx) => (
+                    <div key={idx} style={{ 
+                      padding: 10, 
+                      marginBottom: 8, 
+                      background: C.surface,
+                      borderRadius: 6,
+                      fontSize: 12
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                        {new Date(at.created_at).toLocaleDateString('es-CL')} · {at.evento}
+                      </div>
+                      <div style={{ color: C.textMuted, marginBottom: 4 }}>
+                        Kinesiólogo/a: {at.kinesiologo_nombre?.split('@')[0]}
+                      </div>
+                      {at.motivo_consulta && (
+                        <div style={{ fontSize: 11 }}>
+                          <strong>Motivo:</strong> {at.motivo_consulta}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
               <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
