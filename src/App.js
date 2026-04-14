@@ -830,7 +830,27 @@ function VistaGestionEventos({ usuario }) {
         sb("equipos_evento?order=created_at.desc", {}, usuario?.token),
         sb("perfiles?order=nombre", {}, usuario?.token)
       ]);
-      if (evs) setEventos(evs);
+      
+      if (evs) {
+        // Auto-cerrar eventos que ya pasaron su fecha_fin
+        const hoy = new Date().toISOString().split('T')[0];
+        const eventosActualizados = [];
+        
+        for (const ev of evs) {
+          if (ev.estado === "activo" && ev.fecha_fin && ev.fecha_fin < hoy) {
+            // Cerrar automáticamente
+            await sb(`equipos_evento?id=eq.${ev.id}`, { 
+              method: "PATCH", 
+              body: JSON.stringify({ estado: "cerrado", fecha_cierre: new Date().toISOString() }) 
+            }, usuario?.token);
+            eventosActualizados.push({ ...ev, estado: "cerrado", fecha_cierre: new Date().toISOString() });
+          } else {
+            eventosActualizados.push(ev);
+          }
+        }
+        
+        setEventos(eventosActualizados);
+      }
       if (profs) setProfesionales(profs);
       setLoading(false);
     };
@@ -5083,20 +5103,35 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
 // ─── GESTIÓN DE USUARIOS ─────────────────────────────────────────────────────
 function GestionUsuarios({ usuario, carros }) {
   const [usuarios, setUsuarios] = useState([]);
+  const [eventos, setEventos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState({});
 
-  const eventos = carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => c.evento_asignado);
-
   useEffect(() => {
     const cargar = async () => {
-      const data = await sb("perfiles?order=nombre", {}, usuario?.token);
-      if (data) setUsuarios(data);
+      const [users, evs] = await Promise.all([
+        sb("perfiles?order=nombre", {}, usuario?.token),
+        sb("equipos_evento?estado=eq.activo", {}, usuario?.token)
+      ]);
+      if (users) setUsuarios(users);
+      if (evs) setEventos(evs);
       setLoading(false);
     };
     cargar();
   }, [usuario]);
+
+  // Calcular eventos asignados por profesional
+  const getEventosAsignados = (userId) => {
+    const eventosUsuario = eventos.filter(ev => 
+      ev.medicos?.includes(userId) ||
+      ev.enfermeros?.includes(userId) ||
+      ev.paramedicos?.includes(userId) ||
+      ev.kinesiologos?.includes(userId) ||
+      ev.masoterapeutas?.includes(userId)
+    );
+    return eventosUsuario.map(ev => ev.nombre_evento);
+  };
 
   const abrirEditar = (u) => { setForm({ ...u }); setEditando(u.id); };
 
@@ -5137,9 +5172,16 @@ function GestionUsuarios({ usuario, carros }) {
                   <span style={S.badge(u.rol === "admin" ? C.accent : C.blue, u.rol === "admin" ? C.accentDim : C.blueDim)}>
                     {u.rol === "admin" ? "Admin" : "Profesional"}
                   </span>
-                  {u.evento_asignado
-                    ? <span style={S.badge(C.green, C.greenDim)}>📍 {u.evento_asignado}</span>
-                    : <span style={S.badge(C.textFaint, C.surface2)}>Sin evento</span>}
+                  {(() => {
+                    const eventosAsignados = getEventosAsignados(u.id);
+                    if (eventosAsignados.length === 0) {
+                      return <span style={S.badge(C.textFaint, C.surface2)}>Sin evento</span>;
+                    } else if (eventosAsignados.length === 1) {
+                      return <span style={S.badge(C.green, C.greenDim)}>📍 {eventosAsignados[0]}</span>;
+                    } else {
+                      return <span style={S.badge(C.green, C.greenDim)}>📍 {eventosAsignados.length} eventos</span>;
+                    }
+                  })()}
                 </div>
               </div>
             </div>
