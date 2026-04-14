@@ -4699,10 +4699,9 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
   const [fichaVer, setFichaVer] = useState(null);
 
   // Cargar atenciones desde Supabase
-  const esAdmin = usuario?.rol === "admin";
-
   useEffect(() => {
     const cargarUnificado = async () => {
+      const esAdmin = usuario?.rol === "admin";
       const ev = usuario?.evento_asignado || "";
       const sufijo = esAdmin ? "" : "&evento=eq." + ev;
       const [medicas, kine, maso] = await Promise.all([
