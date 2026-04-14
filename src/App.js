@@ -3119,9 +3119,18 @@ function VistaMasoterapiaMasiva({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const esAdmin = usuario?.rol === "admin";
+    
     const [evs, hist] = await Promise.all([
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Masivo&order=created_at.desc", {}, usuario?.token),
-      sb(`atenciones_masoterapia_masiva?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=30`, {}, usuario?.token)
+      // Admin ve todos los registros, masoterapeutas solo los suyos
+      sb(
+        esAdmin
+          ? `atenciones_masoterapia_masiva?order=created_at.desc&limit=100`
+          : `atenciones_masoterapia_masiva?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=30`,
+        {},
+        usuario?.token
+      )
     ]);
 
     if (evs) {
@@ -3371,8 +3380,17 @@ function VistaMasoterapiaEspecifica({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const esAdmin = usuario?.rol === "admin";
+    
     const [fs, evs] = await Promise.all([
-      sb(`fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
+      // Admin ve todas las fichas, masoterapeutas solo las suyas
+      sb(
+        esAdmin 
+          ? `fichas_masoterapia?order=created_at.desc&limit=100`
+          : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
+        {}, 
+        usuario?.token
+      ),
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token)
     ]);
     if (fs) setFichas(fs);
