@@ -1504,7 +1504,10 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   };
 
   const abrirNuevaAtencion = () => {
+    const ahora = new Date();
     setForm({
+      fecha_atencion: ahora.toISOString().split('T')[0],
+      hora_atencion: ahora.toTimeString().slice(0,5),
       paciente_nombre: "",
       paciente_rut: "",
       paciente_edad: "",
@@ -1573,9 +1576,17 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       return;
     }
 
+    // Crear timestamp personalizado con fecha y hora seleccionadas
+    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || '00:00'}:00`;
+    const timestampPersonalizado = new Date(fechaHora).toISOString();
+
+    // Detectar si es médico o enfermero/paramédico
+    const esMedico = usuario.profesion === "Médico";
+    const esEnfermero = usuario.profesion === "Enfermero/a" || usuario.profesion === "Paramédico";
+
     const datos = {
-      medico_id: usuario.id,
-      medico_nombre: usuario.email,
+      ...(esMedico ? { medico_id: usuario.id, medico_nombre: usuario.email } : {}),
+      ...(esEnfermero ? { enfermero_id: usuario.id, enfermero_nombre: usuario.email } : {}),
       paciente_nombre: form.paciente_nombre,
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
@@ -1587,7 +1598,8 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       medicamentos_prescritos: form.medicamentos_prescritos || [],
       insumos_medico: form.insumos_medico || [],
       requiere_administracion: form.requiere_administracion || false,
-      administracion_completada: false
+      administracion_completada: false,
+      created_at: timestampPersonalizado
     };
 
     const res = await sb("atenciones_medicas", { 
@@ -1757,6 +1769,27 @@ function VistaAtencionesMedicas({ usuario, carros }) {
 
             {modal === "nueva" && (
               <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Fecha de Atención *</label>
+                    <input 
+                      style={S.input} 
+                      type="date"
+                      value={form.fecha_atencion || new Date().toISOString().split('T')[0]} 
+                      onChange={e => setForm(f => ({ ...f, fecha_atencion: e.target.value }))} 
+                    />
+                  </div>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Hora de Atención</label>
+                    <input 
+                      style={S.input} 
+                      type="time"
+                      value={form.hora_atencion || new Date().toTimeString().slice(0,5)} 
+                      onChange={e => setForm(f => ({ ...f, hora_atencion: e.target.value }))} 
+                    />
+                  </div>
+                </div>
+
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
                   <div style={S.formRow}>
                     <label style={S.formLabel}>Nombre del Paciente *</label>
@@ -2701,7 +2734,10 @@ function VistaAtencionesKinesiologia({ usuario }) {
   };
 
   const abrirNuevaAtencion = () => {
+    const ahora = new Date();
     setForm({
+      fecha_atencion: ahora.toISOString().split('T')[0],
+      hora_atencion: ahora.toTimeString().slice(0,5),
       paciente_nombre: "",
       paciente_rut: "",
       paciente_edad: "",
@@ -2743,6 +2779,10 @@ function VistaAtencionesKinesiologia({ usuario }) {
       return;
     }
 
+    // Crear timestamp personalizado
+    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || '00:00'}:00`;
+    const timestampPersonalizado = new Date(fechaHora).toISOString();
+
     const datos = {
       kinesiologo_id: usuario.id,
       kinesiologo_nombre: usuario.email,
@@ -2755,7 +2795,8 @@ function VistaAtencionesKinesiologia({ usuario }) {
       tratamiento_realizado: form.tratamiento_realizado || null,
       observaciones: form.observaciones || null,
       recomendaciones: form.recomendaciones || null,
-      insumos_usados: form.insumos_usados || []
+      insumos_usados: form.insumos_usados || [],
+      created_at: timestampPersonalizado
     };
 
     const res = await sb("atenciones_kinesiologia", { 
@@ -2934,6 +2975,27 @@ function VistaAtencionesKinesiologia({ usuario }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <div style={{ fontSize: 17, fontWeight: 700 }}>Nueva Atención Kinesiológica</div>
               <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>×</button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Fecha de Atención *</label>
+                <input 
+                  style={S.input} 
+                  type="date"
+                  value={form.fecha_atencion || new Date().toISOString().split('T')[0]} 
+                  onChange={e => setForm(f => ({ ...f, fecha_atencion: e.target.value }))} 
+                />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Hora de Atención</label>
+                <input 
+                  style={S.input} 
+                  type="time"
+                  value={form.hora_atencion || new Date().toTimeString().slice(0,5)} 
+                  onChange={e => setForm(f => ({ ...f, hora_atencion: e.target.value }))} 
+                />
+              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
@@ -6227,7 +6289,7 @@ export default function App() {
 ...(esAdmin || permisos.verBolso ? [{ id: "bolsos", label: "Bolso de Medicamentos", icon: "bolso" }] : []),
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
-...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
+...(esAdmin || permisos.recetarMedicamentos || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
 ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
 ...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
