@@ -2947,25 +2947,107 @@ function VistaAtencionesKinesiologia({ usuario }) {
         return fecha !== hoy;
       }).length > 0 && (
         <div style={{ ...S.card, marginTop: 20 }}>
-          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Atenciones Anteriores</div>
-          {atenciones.filter(a => {
-            const fecha = new Date(a.created_at).toISOString().split('T')[0];
-            return fecha !== hoy;
-          }).slice(0, 5).map(atencion => (
-            <div key={atencion.id} style={{ 
-              padding: 12, 
-              border: `1px solid ${C.border}`, 
-              borderRadius: 6, 
-              marginBottom: 8,
-              cursor: "pointer",
-              opacity: 0.7
-            }} onClick={() => verDetalleAtencion(atencion)}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Atenciones Anteriores por Evento</div>
+          {(() => {
+            // Agrupar atenciones por evento
+            const atencionesAnteriores = atenciones.filter(a => {
+              const fecha = new Date(a.created_at).toISOString().split('T')[0];
+              return fecha !== hoy;
+            });
+            
+            const porEvento = atencionesAnteriores.reduce((acc, atencion) => {
+              const evento = atencion.evento || "Sin evento";
+              if (!acc[evento]) {
+                acc[evento] = [];
+              }
+              acc[evento].push(atencion);
+              return acc;
+            }, {});
+
+            return Object.entries(porEvento).map(([evento, atencionesEvento]) => (
+              <div key={evento} style={{ 
+                marginBottom: 16, 
+                padding: 16, 
+                background: C.surface2, 
+                borderRadius: 8,
+                border: `1px solid ${C.border}`
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center",
+                  marginBottom: 12 
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.blue }}>
+                      {evento}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                      {atencionesEvento.length} atención{atencionesEvento.length !== 1 ? 'es' : ''} realizadas
+                    </div>
+                  </div>
+                  <div style={{ 
+                    fontSize: 24, 
+                    fontWeight: 700, 
+                    color: C.blue,
+                    background: C.surface,
+                    padding: "8px 16px",
+                    borderRadius: 6
+                  }}>
+                    {atencionesEvento.length}
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: "grid", 
+                  gap: 8,
+                  maxHeight: 200,
+                  overflowY: "auto"
+                }}>
+                  {atencionesEvento.slice(0, 5).map(atencion => (
+                    <div key={atencion.id} style={{ 
+                      padding: 10, 
+                      background: C.surface,
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 12
+                    }} onClick={() => verDetalleAtencion(atencion)}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>{atencion.paciente_nombre}</div>
+                          <div style={{ color: C.textMuted, fontSize: 11 }}>
+                            {new Date(atencion.created_at).toLocaleDateString('es-CL')} · 
+                            {atencion.motivo_consulta?.substring(0, 30)}{atencion.motivo_consulta?.length > 30 ? '...' : ''}
+                          </div>
+                        </div>
+                        <div style={{ 
+                          fontSize: 10, 
+                          color: C.textMuted,
+                          background: C.surface2,
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          marginLeft: 8
+                        }}>
+                          {atencion.kinesiologo_nombre?.split('@')[0] || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {atencionesEvento.length > 5 && (
+                    <div style={{ 
+                      fontSize: 11, 
+                      color: C.textMuted, 
+                      textAlign: "center",
+                      padding: 8
+                    }}>
+                      +{atencionesEvento.length - 5} atenciones más
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       )}
 
