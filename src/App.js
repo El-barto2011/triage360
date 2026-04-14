@@ -1729,6 +1729,22 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                   </div>
                 </div>
 
+                {historialPaciente.length > 0 && (
+                  <div style={{ background: C.surface2, border: `1px solid ${C.green}40`, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 8 }}>📋 Atenciones previas</div>
+                    {historialPaciente.map((at, i) => (
+                      <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: i < historialPaciente.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                          <span style={{ fontWeight: 600 }}>{at.fecha_atencion || at.created_at?.split("T")[0]}</span>
+                          <span style={{ color: C.textMuted }}>{at.evento}</span>
+                        </div>
+                        {at.diagnostico && <div style={{ color: C.textMuted }}>Dx: {at.diagnostico}</div>}
+                        {at.motivo_consulta && <div style={{ color: C.textMuted }}>Motivo: {at.motivo_consulta}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16, marginBottom: 16 }}>
                   <div style={S.formRow}>
                     <label style={S.formLabel}>Edad</label>
@@ -2885,6 +2901,22 @@ function VistaAtencionesKinesiologia({ usuario }) {
                 )}
               </div>
             </div>
+
+            {historialPaciente.length > 0 && (
+              <div style={{ background: C.surface2, border: `1px solid ${C.green}40`, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 8 }}>📋 Atenciones previas</div>
+                {historialPaciente.map((at, i) => (
+                  <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: i < historialPaciente.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600 }}>{at.fecha_atencion || at.created_at?.split("T")[0]}</span>
+                      <span style={{ color: C.textMuted }}>{at.evento}</span>
+                    </div>
+                    {at.motivo_consulta && <div style={{ color: C.textMuted }}>Motivo: {at.motivo_consulta}</div>}
+                    {at.tratamiento_realizado && <div style={{ color: C.textMuted }}>Tto: {at.tratamiento_realizado}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16, marginBottom: 16 }}>
               <div style={S.formRow}>
