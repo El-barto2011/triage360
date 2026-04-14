@@ -4703,11 +4703,41 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
     const cargar = async () => {
       setLoading(true);
       const esAdmin = usuario?.rol === "admin";
-      const query = esAdmin
-        ? "atenciones?order=created_at.desc"
-        : `atenciones?profesional=eq.${usuario?.email}&order=created_at.desc`;
-      const data = await sb(query, {}, usuario?.token);
-      if (data) setAtenciones(data);
+      const ev = usuario?.evento_asignado || "";
+      const sufijo = esAdmin ? "" : "&evento=eq." + ev;
+      const [medicas, kine, maso] = await Promise.all([
+        sb("atenciones_medicas?order=created_at.desc" + sufijo, {}, usuario?.token),
+        sb("atenciones_kinesiologia?order=created_at.desc" + sufijo, {}, usuario?.token),
+        sb("fichas_masoterapia?order=created_at.desc" + sufijo, {}, usuario?.token)
+      ]);
+      const norm = [
+        ...(medicas || []).map(a => ({
+          id: "med_" + a.id, paciente: a.paciente_nombre, rut: a.paciente_rut,
+          edad: a.paciente_edad, evento: a.evento,
+          profesional: a.enfermero_nombre || a.medico_nombre || "",
+          profesion: a.enfermero_nombre ? "Enfermero/a" : "Médico",
+          tipo: a.motivo_consulta, diagnostico: a.diagnostico,
+          hora_ingreso: (a.created_at || "").slice(11,16),
+          derivacion: "No", created_at: a.created_at
+        })),
+        ...(kine || []).map(a => ({
+          id: "kine_" + a.id, paciente: a.paciente_nombre, rut: a.paciente_rut,
+          edad: a.paciente_edad, evento: a.evento,
+          profesional: a.kinesiologo_nombre, profesion: "Kinesiólogo/a",
+          tipo: a.motivo_consulta, diagnostico: a.evaluacion_inicial,
+          hora_ingreso: (a.created_at || "").slice(11,16),
+          derivacion: "No", created_at: a.created_at
+        })),
+        ...(maso || []).map(a => ({
+          id: "maso_" + a.id, paciente: a.paciente_nombre, rut: null,
+          edad: a.paciente_edad, evento: a.evento,
+          profesional: a.masoterapeuta_nombre, profesion: "Masoterapeuta",
+          tipo: "Masoterapia", diagnostico: a.zona_afectada,
+          hora_ingreso: a.hora_inicio || "",
+          derivacion: "No", created_at: a.created_at
+        }))
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      if (norm) setAtenciones(norm);
       setLoading(false);
     };
     cargar();
