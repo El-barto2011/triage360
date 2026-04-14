@@ -4716,6 +4716,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
         ...(maso || []).map(a => ({ id: "maso_" + a.id, paciente: a.paciente_nombre, rut: null, edad: a.paciente_edad, evento: a.evento, profesional: a.masoterapeuta_nombre, profesion: "Masoterapeuta", tipo: "Masoterapia", diagnostico: a.zona_afectada, hora_ingreso: a.hora_inicio || "", derivacion: "No", created_at: a.created_at }))
       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       setAtenciones(norm);
+      setLoading(false);
     };
     cargarUnificado();
   }, [usuario]);
