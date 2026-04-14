@@ -3499,25 +3499,108 @@ function VistaMasoterapiaEspecifica({ usuario }) {
         return fecha !== hoy;
       }).length > 0 && (
         <div style={{ ...S.card, marginTop: 20 }}>
-          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Fichas Anteriores</div>
-          {fichas.filter(f => {
-            const fecha = new Date(f.created_at).toISOString().split('T')[0];
-            return fecha !== hoy;
-          }).slice(0, 10).map(ficha => (
-            <div key={ficha.id} style={{ 
-              padding: 12, 
-              border: `1px solid ${C.border}`, 
-              borderRadius: 6, 
-              marginBottom: 8,
-              cursor: "pointer",
-              opacity: 0.7
-            }} onClick={() => verDetalleFicha(ficha)}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{ficha.paciente_nombre}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                {new Date(ficha.created_at).toLocaleDateString('es-CL')} · {ficha.evento}
+          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Fichas Anteriores por Evento</div>
+          {(() => {
+            // Agrupar fichas por evento
+            const fichasAnteriores = fichas.filter(f => {
+              const fecha = new Date(f.created_at).toISOString().split('T')[0];
+              return fecha !== hoy;
+            });
+            
+            const porEvento = fichasAnteriores.reduce((acc, ficha) => {
+              const evento = ficha.evento || "Sin evento";
+              if (!acc[evento]) {
+                acc[evento] = [];
+              }
+              acc[evento].push(ficha);
+              return acc;
+            }, {});
+
+            return Object.entries(porEvento).map(([evento, fichasEvento]) => (
+              <div key={evento} style={{ 
+                marginBottom: 16, 
+                padding: 16, 
+                background: C.surface2, 
+                borderRadius: 8,
+                border: `1px solid ${C.border}`
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center",
+                  marginBottom: 12 
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.blue }}>
+                      {evento}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                      {fichasEvento.length} ficha{fichasEvento.length !== 1 ? 's' : ''} realizadas
+                    </div>
+                  </div>
+                  <div style={{ 
+                    fontSize: 24, 
+                    fontWeight: 700, 
+                    color: C.blue,
+                    background: C.surface,
+                    padding: "8px 16px",
+                    borderRadius: 6
+                  }}>
+                    {fichasEvento.length}
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: "grid", 
+                  gap: 8,
+                  maxHeight: 200,
+                  overflowY: "auto"
+                }}>
+                  {fichasEvento.slice(0, 5).map(ficha => (
+                    <div key={ficha.id} style={{ 
+                      padding: 10, 
+                      background: C.surface,
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 12
+                    }} onClick={() => verDetalleFicha(ficha)}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>{ficha.paciente_nombre}</div>
+                          <div style={{ color: C.textMuted, fontSize: 11 }}>
+                            {new Date(ficha.created_at).toLocaleDateString('es-CL')} · 
+                            {ficha.duracion_minutos} min · 
+                            Dolor: {ficha.dolor_inicial}→{ficha.dolor_posterior}
+                          </div>
+                        </div>
+                        <div style={{ 
+                          fontSize: 10, 
+                          color: C.textMuted,
+                          background: C.surface2,
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          marginLeft: 8
+                        }}>
+                          {ficha.masoterapeuta_nombre?.split('@')[0] || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {fichasEvento.length > 5 && (
+                    <div style={{ 
+                      fontSize: 11, 
+                      color: C.textMuted, 
+                      textAlign: "center",
+                      padding: 8
+                    }}>
+                      +{fichasEvento.length - 5} fichas más
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       )}
 
