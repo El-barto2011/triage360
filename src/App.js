@@ -3805,6 +3805,70 @@ function VistaMasoterapiaEspecifica({ usuario }) {
   );
 }
 // ═══════════════════════════════════════════════════════════════════════════
+// COMPONENTE: MASOTERAPIA UNIFICADA (Con subtabs Masiva/Específica)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VistaMasoterapiaUnificada({ usuario }) {
+  const [subTab, setSubTab] = useState("masiva");
+
+  return (
+    <div>
+      {/* Subtabs */}
+      <div style={{ 
+        display: "flex", 
+        gap: 8, 
+        marginBottom: 24,
+        borderBottom: `2px solid ${C.border}`,
+        paddingBottom: 8
+      }}>
+        <button 
+          style={{
+            ...S.btn(subTab === "masiva" ? "primary" : "secondary"),
+            flex: 1,
+            fontSize: 14,
+            fontWeight: 600
+          }}
+          onClick={() => setSubTab("masiva")}
+        >
+          🙌 Masiva
+        </button>
+        <button 
+          style={{
+            ...S.btn(subTab === "especifica" ? "primary" : "secondary"),
+            flex: 1,
+            fontSize: 14,
+            fontWeight: 600
+          }}
+          onClick={() => setSubTab("especifica")}
+        >
+          📋 Específica
+        </button>
+      </div>
+
+      {/* Contenido según subtab */}
+      {subTab === "masiva" && (
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.textMuted }}>Masoterapia Masiva</div>
+            <div style={{ fontSize: 12, color: C.textMuted }}>Contador de masajes para eventos masivos</div>
+          </div>
+          <VistaMasoterapiaMasiva usuario={usuario} />
+        </div>
+      )}
+
+      {subTab === "especifica" && (
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.textMuted }}>Masoterapia Específica</div>
+            <div style={{ fontSize: 12, color: C.textMuted }}>Fichas individuales para torneos</div>
+          </div>
+          <VistaMasoterapiaEspecifica usuario={usuario} />
+        </div>
+      )}
+    </div>
+  );
+}
+// ═══════════════════════════════════════════════════════════════════════════
 // COMPONENTE: REPORTES COMPLETOS (Con costos y exportación)
 // Reemplazar el componente VistaReportes existente
 // ═══════════════════════════════════════════════════════════════════════════
@@ -5958,8 +6022,7 @@ export default function App() {
 ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
 ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
-...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaMasiva", label: "Masoterapia Masiva", icon: "bolso" }] : []),
-...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaEspecifica", label: "Masoterapia Específica", icon: "event" }] : []),
+...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
     ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
@@ -6089,22 +6152,13 @@ export default function App() {
 <VistaAtencionesKinesiologia usuario={usuario} />
 </div>
 )}
-{tab === "masoterapiaMasiva" && (
+{tab === "masoterapia" && (
 <div>
 <div style={{ marginBottom: 24 }}>
-<div style={S.title}>Masoterapia Masiva</div>
-<div style={S.subtitle}>Contador de masajes para eventos masivos</div>
+<div style={S.title}>Masoterapia</div>
+<div style={S.subtitle}>Gestión de atenciones masivas y específicas</div>
 </div>
-<VistaMasoterapiaMasiva usuario={usuario} />
-</div>
-)}
-{tab === "masoterapiaEspecifica" && (
-<div>
-<div style={{ marginBottom: 24 }}>
-<div style={S.title}>Masoterapia Específica</div>
-<div style={S.subtitle}>Fichas individuales para torneos</div>
-</div>
-<VistaMasoterapiaEspecifica usuario={usuario} />
+<VistaMasoterapiaUnificada usuario={usuario} />
 </div>
 )}
         {tab === "configuracion" && (
