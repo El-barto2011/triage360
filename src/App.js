@@ -2697,8 +2697,17 @@ function VistaAtencionesKinesiologia({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const esAdmin = usuario?.rol === "admin";
+    
     const [ats, ins, evs] = await Promise.all([
-      sb(`atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
+      // Admin ve todas las atenciones, kinesiologos solo las suyas
+      sb(
+        esAdmin
+          ? `atenciones_kinesiologia?order=created_at.desc&limit=100`
+          : `atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
+        {},
+        usuario?.token
+      ),
       sb(`insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
     ]);
