@@ -4709,6 +4709,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
         sb("atenciones_kinesiologia?order=created_at.desc" + sufijo, {}, usuario?.token),
         sb("fichas_masoterapia?order=created_at.desc" + sufijo, {}, usuario?.token)
       ]);
+      console.log("medicas:", medicas, "kine:", kine, "maso:", maso);
       const norm = [
         ...(medicas || []).map(a => ({ id: "med_" + a.id, paciente: a.paciente_nombre, rut: a.paciente_rut, edad: a.paciente_edad, evento: a.evento, profesional: a.enfermero_nombre || a.medico_nombre || "", profesion: a.enfermero_nombre ? "Enfermero/a" : "Medico", tipo: a.motivo_consulta, diagnostico: a.diagnostico, hora_ingreso: a.created_at ? a.created_at.slice(11,16) : "", derivacion: "No", created_at: a.created_at || "" })),
         ...(kine || []).map(a => ({ id: "kine_" + a.id, paciente: a.paciente_nombre, rut: a.paciente_rut, edad: a.paciente_edad, evento: a.evento, profesional: a.kinesiologo_nombre, profesion: "Kinesiologo/a", tipo: a.motivo_consulta, diagnostico: a.evaluacion_inicial, hora_ingreso: a.created_at ? a.created_at.slice(11,16) : "", derivacion: "No", created_at: a.created_at || "" })),
