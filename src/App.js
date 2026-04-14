@@ -4702,7 +4702,11 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      const data = await sb("atenciones?order=created_at.desc", {}, usuario?.token);
+      const esAdmin = usuario?.rol === "admin";
+      const query = esAdmin
+        ? "atenciones?order=created_at.desc"
+        : `atenciones?profesional=eq.${usuario?.email}&order=created_at.desc`;
+      const data = await sb(query, {}, usuario?.token);
       if (data) setAtenciones(data);
       setLoading(false);
     };
