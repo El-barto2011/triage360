@@ -3169,6 +3169,34 @@ function VistaAtencionesKinesiologia({ usuario }) {
 // Agregar después de VistaAtencionesKinesiologia
 // ═══════════════════════════════════════════════════════════════════════════
 
+function MasoterapiaTabs({ usuario }) {
+  const [subtab, setSubtab] = useState("masiva");
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {[["masiva", "Masiva"], ["especifica", "Específica"]].map(([id, label]) => (
+          <button
+            key={id}
+            style={{
+              padding: "8px 20px",
+              borderRadius: 8,
+              border: "none",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 13,
+              background: subtab === id ? C.accent : C.surface2,
+              color: subtab === id ? "#fff" : C.textMuted
+            }}
+            onClick={() => setSubtab(id)}
+          >{label}</button>
+        ))}
+      </div>
+      {subtab === "masiva" && <VistaMasoterapiaMasiva usuario={usuario} />}
+      {subtab === "especifica" && <VistaMasoterapiaEspecifica usuario={usuario} />}
+    </div>
+  );
+}
+
 function VistaMasoterapiaMasiva({ usuario }) {
   const [registroHoy, setRegistroHoy] = useState(null);
   const [historial, setHistorial] = useState([]);
@@ -5970,8 +5998,7 @@ export default function App() {
 ...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
 ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
-...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaMasiva", label: "Masoterapia Masiva", icon: "bolso" }] : []),
-...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapiaEspecifica", label: "Masoterapia Específica", icon: "event" }] : []),
+...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
     ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
@@ -6101,22 +6128,13 @@ export default function App() {
 <VistaAtencionesKinesiologia usuario={usuario} />
 </div>
 )}
-{tab === "masoterapiaMasiva" && (
+{tab === "masoterapia" && (
 <div>
 <div style={{ marginBottom: 24 }}>
-<div style={S.title}>Masoterapia Masiva</div>
-<div style={S.subtitle}>Contador de masajes para eventos masivos</div>
+<div style={S.title}>Masoterapia</div>
+<div style={S.subtitle}>Masoterapia Masiva y Específica</div>
 </div>
-<VistaMasoterapiaMasiva usuario={usuario} />
-</div>
-)}
-{tab === "masoterapiaEspecifica" && (
-<div>
-<div style={{ marginBottom: 24 }}>
-<div style={S.title}>Masoterapia Específica</div>
-<div style={S.subtitle}>Fichas individuales para torneos</div>
-</div>
-<VistaMasoterapiaEspecifica usuario={usuario} />
+<MasoterapiaTabs usuario={usuario} />
 </div>
 )}
         {tab === "configuracion" && (
