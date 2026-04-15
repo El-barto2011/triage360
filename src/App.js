@@ -4837,7 +4837,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
                 <td style={S.td}>
                   <div style={{ fontSize: 13 }}>{a.hora_ingreso} → {a.hora_egreso || "—"}</div>
                 </td>
-                <td style={S.td}><span style={{ fontSize: 13, color: C.textMuted }}>{a.diagnostico.slice(0, 35)}{a.diagnostico.length > 35 ? "…" : ""}</span></td>
+                <td style={S.td}><span style={{ fontSize: 13, color: C.textMuted }}>{(a.diagnostico || "").slice(0, 35)}{(a.diagnostico || "").length > 35 ? "…" : ""}</span></td>
                 <td style={S.td}>
                   {a.derivacion === "No"
                     ? <span style={S.pill(C.green, C.greenDim)}>No</span>
