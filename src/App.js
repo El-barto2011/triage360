@@ -1482,9 +1482,12 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       return;
     }
 
+    // Determinar el campo a buscar según tipo_identificacion
+    const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
+
     // Buscar en todas las atenciones médicas
     const atencionesPaciente = await sb(
-      `atenciones_medicas?paciente_rut=eq.${rut}&order=created_at.desc&limit=10`,
+      `atenciones_medicas?${campo}=eq.${rut}&order=created_at.desc&limit=10`,
       {},
       usuario?.token
     );
@@ -2819,8 +2822,11 @@ function VistaAtencionesKinesiologia({ usuario }) {
       return;
     }
 
+    // Determinar el campo a buscar según tipo_identificacion
+    const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
+
     const atencionesPaciente = await sb(
-      `atenciones_kinesiologia?paciente_rut=eq.${rut}&order=created_at.desc&limit=10`,
+      `atenciones_kinesiologia?${campo}=eq.${rut}&order=created_at.desc&limit=10`,
       {},
       usuario?.token
     );
