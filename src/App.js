@@ -830,7 +830,27 @@ function VistaGestionEventos({ usuario }) {
         sb("equipos_evento?order=created_at.desc", {}, usuario?.token),
         sb("perfiles?order=nombre", {}, usuario?.token)
       ]);
-      if (evs) setEventos(evs);
+      
+      if (evs) {
+        // Auto-cerrar eventos que ya pasaron su fecha_fin
+        const hoy = new Date().toISOString().split('T')[0];
+        const eventosActualizados = [];
+        
+        for (const ev of evs) {
+          if (ev.estado === "activo" && ev.fecha_fin && ev.fecha_fin < hoy) {
+            // Cerrar automáticamente
+            await sb(`equipos_evento?id=eq.${ev.id}`, { 
+              method: "PATCH", 
+              body: JSON.stringify({ estado: "cerrado", fecha_cierre: new Date().toISOString() }) 
+            }, usuario?.token);
+            eventosActualizados.push({ ...ev, estado: "cerrado", fecha_cierre: new Date().toISOString() });
+          } else {
+            eventosActualizados.push(ev);
+          }
+        }
+        
+        setEventos(eventosActualizados);
+      }
       if (profs) setProfesionales(profs);
       setLoading(false);
     };
@@ -841,9 +861,13 @@ function VistaGestionEventos({ usuario }) {
     setForm({
       nombre_evento: "",
       fecha_evento: new Date().toISOString().split('T')[0],
+      fecha_fin: "",
+      hora_inicio: "",
+      hora_fin: "",
       ubicacion: "",
       tipo_evento: "Deportivo",
       tipo_masoterapia: "Masivo",
+      observaciones: "",
       medicos: [],
       enfermeros: [],
       paramedicos: [],
@@ -869,9 +893,13 @@ function VistaGestionEventos({ usuario }) {
     const datos = {
       nombre_evento: form.nombre_evento,
       fecha_evento: form.fecha_evento,
+      fecha_fin: form.fecha_fin || null,
+      hora_inicio: form.hora_inicio || null,
+      hora_fin: form.hora_fin || null,
       ubicacion: form.ubicacion || "",
       tipo_evento: form.tipo_evento,
       tipo_masoterapia: form.tipo_masoterapia,
+      observaciones: form.observaciones || null,
       medicos: form.medicos || [],
       enfermeros: form.enfermeros || [],
       paramedicos: form.paramedicos || [],
@@ -1148,7 +1176,7 @@ function VistaGestionEventos({ usuario }) {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
-                <label style={S.formLabel}>Fecha</label>
+                <label style={S.formLabel}>Fecha Inicio</label>
                 <input 
                   style={S.input} 
                   type="date" 
@@ -1156,6 +1184,39 @@ function VistaGestionEventos({ usuario }) {
                   onChange={e => setForm(p => ({ ...p, fecha_evento: e.target.value }))} 
                 />
               </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Fecha Fin</label>
+                <input 
+                  style={S.input} 
+                  type="date" 
+                  value={form.fecha_fin || ""} 
+                  onChange={e => setForm(p => ({ ...p, fecha_fin: e.target.value }))} 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Hora Inicio</label>
+                <input 
+                  style={S.input} 
+                  type="time" 
+                  value={form.hora_inicio || ""} 
+                  onChange={e => setForm(p => ({ ...p, hora_inicio: e.target.value }))} 
+                />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Hora Fin</label>
+                <input 
+                  style={S.input} 
+                  type="time" 
+                  value={form.hora_fin || ""} 
+                  onChange={e => setForm(p => ({ ...p, hora_fin: e.target.value }))} 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Tipo de Evento</label>
                 <select 
@@ -1184,6 +1245,16 @@ function VistaGestionEventos({ usuario }) {
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
                 Masivo = contador simple | Específico = fichas individuales
               </div>
+            </div>
+
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Observaciones</label>
+              <textarea 
+                style={{ ...S.input, minHeight: 80, resize: "vertical" }} 
+                value={form.observaciones || ""} 
+                onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} 
+                placeholder="Notas adicionales sobre el evento..."
+              />
             </div>
 
             <div style={{ marginTop: 20 }}>
@@ -1390,18 +1461,6 @@ function VistaAtencionesMedicas({ usuario, carros }) {
   const [eventos, setEventos] = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
 
-  const buscarPacientePorRut = async (valor) => {
-    if (!valor || valor.length < 6) { setHistorialPaciente([]); return; }
-    const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
-    const res = await sb(`atenciones_medicas?${campo}=eq.${encodeURIComponent(valor)}&order=created_at.desc&limit=10`, {}, usuario?.token);
-    if (res && res.length > 0) {
-      setForm(f => ({ ...f, paciente_nombre: res[0].paciente_nombre, paciente_edad: res[0].paciente_edad }));
-      setHistorialPaciente(res);
-    } else {
-      setHistorialPaciente([]);
-    }
-  };
-
   useEffect(() => {
     cargarDatos();
   }, [usuario]);
@@ -1417,13 +1476,42 @@ function VistaAtencionesMedicas({ usuario, carros }) {
     setLoading(false);
   };
 
+  const buscarPacientePorRut = async (rut) => {
+    if (!rut || rut.length < 8) {
+      setHistorialPaciente([]);
+      return;
+    }
+
+    // Buscar en todas las atenciones médicas
+    const atencionesPaciente = await sb(
+      `atenciones_medicas?paciente_rut=eq.${rut}&order=created_at.desc&limit=10`,
+      {},
+      usuario?.token
+    );
+
+    if (atencionesPaciente && atencionesPaciente.length > 0) {
+      // Autocompletar con los datos del paciente
+      const ultima = atencionesPaciente[0];
+      setForm(f => ({
+        ...f,
+        paciente_nombre: ultima.paciente_nombre,
+        paciente_edad: ultima.paciente_edad
+      }));
+      setHistorialPaciente(atencionesPaciente);
+    } else {
+      setHistorialPaciente([]);
+    }
+  };
+
   const abrirNuevaAtencion = () => {
+    const ahora = new Date();
     setForm({
+      fecha_atencion: ahora.toISOString().split('T')[0],
+      hora_atencion: ahora.toTimeString().slice(0,5),
       paciente_nombre: "",
       paciente_rut: "",
-      paciente_pasaporte: "",
-      tipo_identificacion: "rut",
       paciente_edad: "",
+      categoria_paciente: "Jugador",
       evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
       motivo_consulta: "",
       diagnostico: "",
@@ -1433,6 +1521,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       insumos_medico: [],
       requiere_administracion: false
     });
+    setHistorialPaciente([]);
     setModal("nueva");
   };
 
@@ -1488,14 +1577,21 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       return;
     }
 
+    // Crear timestamp personalizado con fecha y hora seleccionadas
+    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || '00:00'}:00`;
+    const timestampPersonalizado = new Date(fechaHora).toISOString();
+
+    // Detectar si es médico o enfermero/paramédico
+    const esMedico = usuario.profesion === "Médico";
+    const esEnfermero = usuario.profesion === "Enfermero/a" || usuario.profesion === "Paramédico";
+
     const datos = {
-      medico_id: usuario.id,
-      medico_nombre: usuario.email,
+      ...(esMedico ? { medico_id: usuario.id, medico_nombre: usuario.email } : {}),
+      ...(esEnfermero ? { enfermero_id: usuario.id, enfermero_nombre: usuario.email } : {}),
       paciente_nombre: form.paciente_nombre,
-      paciente_rut: form.tipo_identificacion === "rut" ? (form.paciente_rut || null) : null,
-      paciente_pasaporte: form.tipo_identificacion === "pasaporte" ? (form.paciente_pasaporte || null) : null,
-      tipo_identificacion: form.tipo_identificacion || "rut",
+      paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
+      categoria_paciente: form.categoria_paciente || "Jugador",
       evento: form.evento,
       motivo_consulta: form.motivo_consulta,
       diagnostico: form.diagnostico || null,
@@ -1504,7 +1600,8 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       medicamentos_prescritos: form.medicamentos_prescritos || [],
       insumos_medico: form.insumos_medico || [],
       requiere_administracion: form.requiere_administracion || false,
-      administracion_completada: false
+      administracion_completada: false,
+      created_at: timestampPersonalizado
     };
 
     const res = await sb("atenciones_medicas", { 
@@ -1637,26 +1734,108 @@ function VistaAtencionesMedicas({ usuario, carros }) {
         return fecha !== hoy;
       }).length > 0 && (
         <div style={{ ...S.card, marginTop: 20 }}>
-          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Atenciones Anteriores</div>
-          {atenciones.filter(a => {
+          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Atenciones Anteriores por Evento</div>
+          {(() => {
+            // Agrupar atenciones por evento
             const hoy = new Date().toISOString().split('T')[0];
-            const fecha = new Date(a.created_at).toISOString().split('T')[0];
-            return fecha !== hoy;
-          }).slice(0, 5).map(atencion => (
-            <div key={atencion.id} style={{ 
-              padding: 12, 
-              border: `1px solid ${C.border}`, 
-              borderRadius: 6, 
-              marginBottom: 8,
-              cursor: "pointer",
-              opacity: 0.7
-            }} onClick={() => verDetalleAtencion(atencion)}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+            const atencionesAnteriores = atenciones.filter(a => {
+              const fecha = new Date(a.created_at).toISOString().split('T')[0];
+              return fecha !== hoy;
+            });
+            
+            const porEvento = atencionesAnteriores.reduce((acc, atencion) => {
+              const evento = atencion.evento || "Sin evento";
+              if (!acc[evento]) {
+                acc[evento] = [];
+              }
+              acc[evento].push(atencion);
+              return acc;
+            }, {});
+
+            return Object.entries(porEvento).map(([evento, atencionesEvento]) => (
+              <div key={evento} style={{ 
+                marginBottom: 16, 
+                padding: 16, 
+                background: C.surface2, 
+                borderRadius: 8,
+                border: `1px solid ${C.border}`
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center",
+                  marginBottom: 12 
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.blue }}>
+                      {evento}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                      {atencionesEvento.length} atención{atencionesEvento.length !== 1 ? 'es' : ''} médica{atencionesEvento.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <div style={{ 
+                    fontSize: 24, 
+                    fontWeight: 700, 
+                    color: C.blue,
+                    background: C.surface,
+                    padding: "8px 16px",
+                    borderRadius: 6
+                  }}>
+                    {atencionesEvento.length}
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: "grid", 
+                  gap: 8,
+                  maxHeight: 200,
+                  overflowY: "auto"
+                }}>
+                  {atencionesEvento.slice(0, 5).map(atencion => (
+                    <div key={atencion.id} style={{ 
+                      padding: 10, 
+                      background: C.surface,
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 12
+                    }} onClick={() => verDetalleAtencion(atencion)}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>{atencion.paciente_nombre}</div>
+                          <div style={{ color: C.textMuted, fontSize: 11 }}>
+                            {new Date(atencion.created_at).toLocaleDateString('es-CL')} · 
+                            {atencion.diagnostico?.substring(0, 30)}{atencion.diagnostico?.length > 30 ? '...' : ''}
+                          </div>
+                        </div>
+                        <div style={{ 
+                          fontSize: 10, 
+                          color: C.textMuted,
+                          background: C.surface2,
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          marginLeft: 8
+                        }}>
+                          {(atencion.medico_nombre || atencion.enfermero_nombre || 'N/A').split('@')[0]}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {atencionesEvento.length > 5 && (
+                    <div style={{ 
+                      fontSize: 11, 
+                      color: C.textMuted, 
+                      textAlign: "center",
+                      padding: 8
+                    }}>
+                      +{atencionesEvento.length - 5} atenciones más
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       )}
 
@@ -1676,6 +1855,27 @@ function VistaAtencionesMedicas({ usuario, carros }) {
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
                   <div style={S.formRow}>
+                    <label style={S.formLabel}>Fecha de Atención *</label>
+                    <input 
+                      style={S.input} 
+                      type="date"
+                      value={form.fecha_atencion || new Date().toISOString().split('T')[0]} 
+                      onChange={e => setForm(f => ({ ...f, fecha_atencion: e.target.value }))} 
+                    />
+                  </div>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Hora de Atención</label>
+                    <input 
+                      style={S.input} 
+                      type="time"
+                      value={form.hora_atencion || new Date().toTimeString().slice(0,5)} 
+                      onChange={e => setForm(f => ({ ...f, hora_atencion: e.target.value }))} 
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div style={S.formRow}>
                     <label style={S.formLabel}>Nombre del Paciente *</label>
                     <input 
                       style={S.input} 
@@ -1685,42 +1885,17 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                     />
                   </div>
                   <div style={S.formRow}>
-                    <label style={S.formLabel}>Identificación</label>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                      {["rut", "pasaporte"].map(tipo => (
-                        <button
-                          key={tipo}
-                          style={{
-                            ...S.btn(form.tipo_identificacion === tipo ? "primary" : "ghost"),
-                            fontSize: 11, padding: "3px 12px"
-                          }}
-                          onClick={() => setForm(f => ({ ...f, tipo_identificacion: tipo, paciente_rut: "", paciente_pasaporte: "" }))}
-                        >{tipo === "rut" ? "RUT" : "Pasaporte"}</button>
-                      ))}
-                    </div>
-                    {form.tipo_identificacion === "rut" ? (
-                      <input
-                        style={S.input}
-                        value={form.paciente_rut || ""}
-                        onChange={e => {
-                          const v = e.target.value;
-                          setForm(f => ({ ...f, paciente_rut: v }));
-                          buscarPacientePorRut(v);
-                        }}
-                        placeholder="12.345.678-9"
-                      />
-                    ) : (
-                      <input
-                        style={S.input}
-                        value={form.paciente_pasaporte || ""}
-                        onChange={e => {
-                          const v = e.target.value;
-                          setForm(f => ({ ...f, paciente_pasaporte: v }));
-                          buscarPacientePorRut(v);
-                        }}
-                        placeholder="AB123456"
-                      />
-                    )}
+                    <label style={S.formLabel}>RUT</label>
+                    <input 
+                      style={S.input} 
+                      value={form.paciente_rut || ""} 
+                      onChange={e => {
+                        const rut = e.target.value;
+                        setForm(f => ({ ...f, paciente_rut: rut }));
+                        buscarPacientePorRut(rut);
+                      }} 
+                      placeholder="12.345.678-9"
+                    />
                     {historialPaciente.length > 0 && (
                       <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>
                         ✓ {historialPaciente.length} atención{historialPaciente.length > 1 ? 'es' : ''} previa{historialPaciente.length > 1 ? 's' : ''}
@@ -1729,23 +1904,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                   </div>
                 </div>
 
-                {historialPaciente.length > 0 && (
-                  <div style={{ background: C.surface2, border: `1px solid ${C.green}40`, borderRadius: 8, padding: 12, marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 8 }}>📋 Atenciones previas</div>
-                    {historialPaciente.map((at, i) => (
-                      <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: i < historialPaciente.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                          <span style={{ fontWeight: 600 }}>{at.fecha_atencion || at.created_at?.split("T")[0]}</span>
-                          <span style={{ color: C.textMuted }}>{at.evento}</span>
-                        </div>
-                        {at.diagnostico && <div style={{ color: C.textMuted }}>Dx: {at.diagnostico}</div>}
-                        {at.motivo_consulta && <div style={{ color: C.textMuted }}>Motivo: {at.motivo_consulta}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16, marginBottom: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
                   <div style={S.formRow}>
                     <label style={S.formLabel}>Edad</label>
                     <input 
@@ -1755,6 +1914,18 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                       onChange={e => setForm(f => ({ ...f, paciente_edad: e.target.value }))} 
                       placeholder="35"
                     />
+                  </div>
+                  <div style={S.formRow}>
+                    <label style={S.formLabel}>Categoría</label>
+                    <select 
+                      style={{ ...S.select, width: "100%" }} 
+                      value={form.categoria_paciente || "Jugador"} 
+                      onChange={e => setForm(f => ({ ...f, categoria_paciente: e.target.value }))}
+                    >
+                      <option>Jugador</option>
+                      <option>Staff</option>
+                      <option>Voluntario</option>
+                    </select>
                   </div>
                   <div style={S.formRow}>
                     <label style={S.formLabel}>Evento *</label>
@@ -1941,6 +2112,43 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                   </div>
                 </div>
 
+                {historialPaciente.length > 0 && (
+                  <div style={{ 
+                    marginTop: 20, 
+                    padding: 16, 
+                    background: C.surface2, 
+                    borderRadius: 8,
+                    border: `1px solid ${C.border}`
+                  }}>
+                    <div style={{ fontWeight: 700, marginBottom: 12, color: C.blue }}>
+                      📋 Historial del Paciente ({historialPaciente.length} atenciones previas)
+                    </div>
+                    <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                      {historialPaciente.map((at, idx) => (
+                        <div key={idx} style={{ 
+                          padding: 10, 
+                          marginBottom: 8, 
+                          background: C.surface,
+                          borderRadius: 6,
+                          fontSize: 12
+                        }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                            {new Date(at.created_at).toLocaleDateString('es-CL')} · {at.evento}
+                          </div>
+                          <div style={{ color: C.textMuted, marginBottom: 4 }}>
+                            Dr/a: {at.medico_nombre?.split('@')[0]}
+                          </div>
+                          {at.diagnostico && (
+                            <div style={{ fontSize: 11 }}>
+                              <strong>Dx:</strong> {at.diagnostico}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
                   <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
                   <button style={S.btn("primary")} onClick={guardarAtencion}>
@@ -1954,7 +2162,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
               <div>
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{form.paciente_nombre}</div>
-                  {(form.paciente_rut || form.paciente_pasaporte) && <div style={{ fontSize: 13, color: C.textMuted }}>{form.tipo_identificacion === "pasaporte" ? "Pasaporte" : "RUT"}: {form.paciente_rut || form.paciente_pasaporte}</div>}
+                  {form.paciente_rut && <div style={{ fontSize: 13, color: C.textMuted }}>RUT: {form.paciente_rut}</div>}
                   {form.paciente_edad && <div style={{ fontSize: 13, color: C.textMuted }}>Edad: {form.paciente_edad} años</div>}
                   <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
                     Evento: {form.evento} · {new Date(form.created_at).toLocaleString('es-CL')}
@@ -2579,26 +2787,23 @@ function VistaAtencionesKinesiologia({ usuario }) {
   const [eventos, setEventos] = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
 
-  const buscarPacientePorRut = async (valor) => {
-    if (!valor || valor.length < 6) { setHistorialPaciente([]); return; }
-    const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
-    const res = await sb(`atenciones_kinesiologia?${campo}=eq.${encodeURIComponent(valor)}&order=created_at.desc&limit=10`, {}, usuario?.token);
-    if (res && res.length > 0) {
-      setForm(f => ({ ...f, paciente_nombre: res[0].paciente_nombre, paciente_edad: res[0].paciente_edad }));
-      setHistorialPaciente(res);
-    } else {
-      setHistorialPaciente([]);
-    }
-  };
-
   useEffect(() => {
     cargarDatos();
   }, [usuario]);
 
   const cargarDatos = async () => {
     setLoading(true);
+    const esAdmin = usuario?.rol === "admin";
+    
     const [ats, ins, evs] = await Promise.all([
-      sb(`atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
+      // Admin ve todas las atenciones, kinesiologos solo las suyas
+      sb(
+        esAdmin
+          ? `atenciones_kinesiologia?order=created_at.desc&limit=100`
+          : `atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
+        {},
+        usuario?.token
+      ),
       sb(`insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token)
     ]);
@@ -2608,13 +2813,40 @@ function VistaAtencionesKinesiologia({ usuario }) {
     setLoading(false);
   };
 
+  const buscarPacientePorRut = async (rut) => {
+    if (!rut || rut.length < 8) {
+      setHistorialPaciente([]);
+      return;
+    }
+
+    const atencionesPaciente = await sb(
+      `atenciones_kinesiologia?paciente_rut=eq.${rut}&order=created_at.desc&limit=10`,
+      {},
+      usuario?.token
+    );
+
+    if (atencionesPaciente && atencionesPaciente.length > 0) {
+      const ultima = atencionesPaciente[0];
+      setForm(f => ({
+        ...f,
+        paciente_nombre: ultima.paciente_nombre,
+        paciente_edad: ultima.paciente_edad
+      }));
+      setHistorialPaciente(atencionesPaciente);
+    } else {
+      setHistorialPaciente([]);
+    }
+  };
+
   const abrirNuevaAtencion = () => {
+    const ahora = new Date();
     setForm({
+      fecha_atencion: ahora.toISOString().split('T')[0],
+      hora_atencion: ahora.toTimeString().slice(0,5),
       paciente_nombre: "",
       paciente_rut: "",
-      paciente_pasaporte: "",
-      tipo_identificacion: "rut",
       paciente_edad: "",
+      categoria_paciente: "Jugador",
       evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
       motivo_consulta: "",
       evaluacion_inicial: "",
@@ -2623,6 +2855,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
       recomendaciones: "",
       insumos_usados: []
     });
+    setHistorialPaciente([]);
     setModal("nueva");
   };
 
@@ -2652,13 +2885,15 @@ function VistaAtencionesKinesiologia({ usuario }) {
       return;
     }
 
+    // Crear timestamp personalizado
+    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || '00:00'}:00`;
+    const timestampPersonalizado = new Date(fechaHora).toISOString();
+
     const datos = {
       kinesiologo_id: usuario.id,
       kinesiologo_nombre: usuario.email,
       paciente_nombre: form.paciente_nombre,
-      paciente_rut: form.tipo_identificacion === "rut" ? (form.paciente_rut || null) : null,
-      paciente_pasaporte: form.tipo_identificacion === "pasaporte" ? (form.paciente_pasaporte || null) : null,
-      tipo_identificacion: form.tipo_identificacion || "rut",
+      paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       evento: form.evento,
       motivo_consulta: form.motivo_consulta,
@@ -2666,7 +2901,8 @@ function VistaAtencionesKinesiologia({ usuario }) {
       tratamiento_realizado: form.tratamiento_realizado || null,
       observaciones: form.observaciones || null,
       recomendaciones: form.recomendaciones || null,
-      insumos_usados: form.insumos_usados || []
+      insumos_usados: form.insumos_usados || [],
+      created_at: timestampPersonalizado
     };
 
     const res = await sb("atenciones_kinesiologia", { 
@@ -2817,25 +3053,107 @@ function VistaAtencionesKinesiologia({ usuario }) {
         return fecha !== hoy;
       }).length > 0 && (
         <div style={{ ...S.card, marginTop: 20 }}>
-          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Atenciones Anteriores</div>
-          {atenciones.filter(a => {
-            const fecha = new Date(a.created_at).toISOString().split('T')[0];
-            return fecha !== hoy;
-          }).slice(0, 5).map(atencion => (
-            <div key={atencion.id} style={{ 
-              padding: 12, 
-              border: `1px solid ${C.border}`, 
-              borderRadius: 6, 
-              marginBottom: 8,
-              cursor: "pointer",
-              opacity: 0.7
-            }} onClick={() => verDetalleAtencion(atencion)}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{atencion.paciente_nombre}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                {new Date(atencion.created_at).toLocaleDateString('es-CL')} · {atencion.evento}
+          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Atenciones Anteriores por Evento</div>
+          {(() => {
+            // Agrupar atenciones por evento
+            const atencionesAnteriores = atenciones.filter(a => {
+              const fecha = new Date(a.created_at).toISOString().split('T')[0];
+              return fecha !== hoy;
+            });
+            
+            const porEvento = atencionesAnteriores.reduce((acc, atencion) => {
+              const evento = atencion.evento || "Sin evento";
+              if (!acc[evento]) {
+                acc[evento] = [];
+              }
+              acc[evento].push(atencion);
+              return acc;
+            }, {});
+
+            return Object.entries(porEvento).map(([evento, atencionesEvento]) => (
+              <div key={evento} style={{ 
+                marginBottom: 16, 
+                padding: 16, 
+                background: C.surface2, 
+                borderRadius: 8,
+                border: `1px solid ${C.border}`
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center",
+                  marginBottom: 12 
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.blue }}>
+                      {evento}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                      {atencionesEvento.length} atención{atencionesEvento.length !== 1 ? 'es' : ''} realizadas
+                    </div>
+                  </div>
+                  <div style={{ 
+                    fontSize: 24, 
+                    fontWeight: 700, 
+                    color: C.blue,
+                    background: C.surface,
+                    padding: "8px 16px",
+                    borderRadius: 6
+                  }}>
+                    {atencionesEvento.length}
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: "grid", 
+                  gap: 8,
+                  maxHeight: 200,
+                  overflowY: "auto"
+                }}>
+                  {atencionesEvento.slice(0, 5).map(atencion => (
+                    <div key={atencion.id} style={{ 
+                      padding: 10, 
+                      background: C.surface,
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 12
+                    }} onClick={() => verDetalleAtencion(atencion)}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>{atencion.paciente_nombre}</div>
+                          <div style={{ color: C.textMuted, fontSize: 11 }}>
+                            {new Date(atencion.created_at).toLocaleDateString('es-CL')} · 
+                            {atencion.motivo_consulta?.substring(0, 30)}{atencion.motivo_consulta?.length > 30 ? '...' : ''}
+                          </div>
+                        </div>
+                        <div style={{ 
+                          fontSize: 10, 
+                          color: C.textMuted,
+                          background: C.surface2,
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          marginLeft: 8
+                        }}>
+                          {atencion.kinesiologo_nombre?.split('@')[0] || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {atencionesEvento.length > 5 && (
+                    <div style={{ 
+                      fontSize: 11, 
+                      color: C.textMuted, 
+                      textAlign: "center",
+                      padding: 8
+                    }}>
+                      +{atencionesEvento.length - 5} atenciones más
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       )}
 
@@ -2849,6 +3167,27 @@ function VistaAtencionesKinesiologia({ usuario }) {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div style={S.formRow}>
+                <label style={S.formLabel}>Fecha de Atención *</label>
+                <input 
+                  style={S.input} 
+                  type="date"
+                  value={form.fecha_atencion || new Date().toISOString().split('T')[0]} 
+                  onChange={e => setForm(f => ({ ...f, fecha_atencion: e.target.value }))} 
+                />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Hora de Atención</label>
+                <input 
+                  style={S.input} 
+                  type="time"
+                  value={form.hora_atencion || new Date().toTimeString().slice(0,5)} 
+                  onChange={e => setForm(f => ({ ...f, hora_atencion: e.target.value }))} 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div style={S.formRow}>
                 <label style={S.formLabel}>Nombre del Paciente *</label>
                 <input 
                   style={S.input} 
@@ -2858,42 +3197,17 @@ function VistaAtencionesKinesiologia({ usuario }) {
                 />
               </div>
               <div style={S.formRow}>
-                <label style={S.formLabel}>Identificación</label>
-                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                  {["rut", "pasaporte"].map(tipo => (
-                    <button
-                      key={tipo}
-                      style={{
-                        ...S.btn(form.tipo_identificacion === tipo ? "primary" : "ghost"),
-                        fontSize: 11, padding: "3px 12px"
-                      }}
-                      onClick={() => setForm(f => ({ ...f, tipo_identificacion: tipo, paciente_rut: "", paciente_pasaporte: "" }))}
-                    >{tipo === "rut" ? "RUT" : "Pasaporte"}</button>
-                  ))}
-                </div>
-                {form.tipo_identificacion === "rut" ? (
-                  <input
-                    style={S.input}
-                    value={form.paciente_rut || ""}
-                    onChange={e => {
-                      const v = e.target.value;
-                      setForm(f => ({ ...f, paciente_rut: v }));
-                      buscarPacientePorRut(v);
-                    }}
-                    placeholder="12.345.678-9"
-                  />
-                ) : (
-                  <input
-                    style={S.input}
-                    value={form.paciente_pasaporte || ""}
-                    onChange={e => {
-                      const v = e.target.value;
-                      setForm(f => ({ ...f, paciente_pasaporte: v }));
-                      buscarPacientePorRut(v);
-                    }}
-                    placeholder="AB123456"
-                  />
-                )}
+                <label style={S.formLabel}>RUT</label>
+                <input 
+                  style={S.input} 
+                  value={form.paciente_rut || ""} 
+                  onChange={e => {
+                    const rut = e.target.value;
+                    setForm(f => ({ ...f, paciente_rut: rut }));
+                    buscarPacientePorRut(rut);
+                  }} 
+                  placeholder="12.345.678-9"
+                />
                 {historialPaciente.length > 0 && (
                   <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>
                     ✓ {historialPaciente.length} atención{historialPaciente.length > 1 ? 'es' : ''} previa{historialPaciente.length > 1 ? 's' : ''}
@@ -2902,23 +3216,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
               </div>
             </div>
 
-            {historialPaciente.length > 0 && (
-              <div style={{ background: C.surface2, border: `1px solid ${C.green}40`, borderRadius: 8, padding: 12, marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 8 }}>📋 Atenciones previas</div>
-                {historialPaciente.map((at, i) => (
-                  <div key={i} style={{ fontSize: 12, padding: "6px 0", borderBottom: i < historialPaciente.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontWeight: 600 }}>{at.fecha_atencion || at.created_at?.split("T")[0]}</span>
-                      <span style={{ color: C.textMuted }}>{at.evento}</span>
-                    </div>
-                    {at.motivo_consulta && <div style={{ color: C.textMuted }}>Motivo: {at.motivo_consulta}</div>}
-                    {at.tratamiento_realizado && <div style={{ color: C.textMuted }}>Tto: {at.tratamiento_realizado}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 16, marginBottom: 16 }}>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Edad</label>
                 <input 
@@ -2928,6 +3226,18 @@ function VistaAtencionesKinesiologia({ usuario }) {
                   onChange={e => setForm(f => ({ ...f, paciente_edad: e.target.value }))} 
                   placeholder="35"
                 />
+              </div>
+              <div style={S.formRow}>
+                <label style={S.formLabel}>Categoría</label>
+                <select 
+                  style={{ ...S.select, width: "100%" }} 
+                  value={form.categoria_paciente || "Jugador"} 
+                  onChange={e => setForm(f => ({ ...f, categoria_paciente: e.target.value }))}
+                >
+                  <option>Jugador</option>
+                  <option>Staff</option>
+                  <option>Voluntario</option>
+                </select>
               </div>
               <div style={S.formRow}>
                 <label style={S.formLabel}>Evento *</label>
@@ -3039,6 +3349,43 @@ function VistaAtencionesKinesiologia({ usuario }) {
               />
             </div>
 
+            {historialPaciente.length > 0 && (
+              <div style={{ 
+                marginTop: 20, 
+                padding: 16, 
+                background: C.surface2, 
+                borderRadius: 8,
+                border: `1px solid ${C.border}`
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 12, color: C.blue }}>
+                  📋 Historial del Paciente ({historialPaciente.length} atenciones previas)
+                </div>
+                <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                  {historialPaciente.map((at, idx) => (
+                    <div key={idx} style={{ 
+                      padding: 10, 
+                      marginBottom: 8, 
+                      background: C.surface,
+                      borderRadius: 6,
+                      fontSize: 12
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                        {new Date(at.created_at).toLocaleDateString('es-CL')} · {at.evento}
+                      </div>
+                      <div style={{ color: C.textMuted, marginBottom: 4 }}>
+                        Kinesiólogo/a: {at.kinesiologo_nombre?.split('@')[0]}
+                      </div>
+                      {at.motivo_consulta && (
+                        <div style={{ fontSize: 11 }}>
+                          <strong>Motivo:</strong> {at.motivo_consulta}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
               <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
               <button style={S.btn("primary")} onClick={guardarAtencion}>Guardar Atención</button>
@@ -3057,7 +3404,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
 
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{form.paciente_nombre}</div>
-              {(form.paciente_rut || form.paciente_pasaporte) && <div style={{ fontSize: 13, color: C.textMuted }}>{form.tipo_identificacion === "pasaporte" ? "Pasaporte" : "RUT"}: {form.paciente_rut || form.paciente_pasaporte}</div>}
+              {form.paciente_rut && <div style={{ fontSize: 13, color: C.textMuted }}>RUT: {form.paciente_rut}</div>}
               {form.paciente_edad && <div style={{ fontSize: 13, color: C.textMuted }}>Edad: {form.paciente_edad} años</div>}
               <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
                 Evento: {form.evento} · {new Date(form.created_at).toLocaleString('es-CL')}
@@ -3169,34 +3516,6 @@ function VistaAtencionesKinesiologia({ usuario }) {
 // Agregar después de VistaAtencionesKinesiologia
 // ═══════════════════════════════════════════════════════════════════════════
 
-function MasoterapiaTabs({ usuario }) {
-  const [subtab, setSubtab] = useState("masiva");
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {[["masiva", "Masiva"], ["especifica", "Específica"]].map(([id, label]) => (
-          <button
-            key={id}
-            style={{
-              padding: "8px 20px",
-              borderRadius: 8,
-              border: "none",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 13,
-              background: subtab === id ? C.accent : C.surface2,
-              color: subtab === id ? "#fff" : C.textMuted
-            }}
-            onClick={() => setSubtab(id)}
-          >{label}</button>
-        ))}
-      </div>
-      {subtab === "masiva" && <VistaMasoterapiaMasiva usuario={usuario} />}
-      {subtab === "especifica" && <VistaMasoterapiaEspecifica usuario={usuario} />}
-    </div>
-  );
-}
-
 function VistaMasoterapiaMasiva({ usuario }) {
   const [registroHoy, setRegistroHoy] = useState(null);
   const [historial, setHistorial] = useState([]);
@@ -3210,9 +3529,18 @@ function VistaMasoterapiaMasiva({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const esAdmin = usuario?.rol === "admin";
+    
     const [evs, hist] = await Promise.all([
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Masivo&order=created_at.desc", {}, usuario?.token),
-      sb(`atenciones_masoterapia_masiva?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=30`, {}, usuario?.token)
+      // Admin ve todos los registros, masoterapeutas solo los suyos
+      sb(
+        esAdmin
+          ? `atenciones_masoterapia_masiva?order=created_at.desc&limit=100`
+          : `atenciones_masoterapia_masiva?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=30`,
+        {},
+        usuario?.token
+      )
     ]);
 
     if (evs) {
@@ -3462,8 +3790,17 @@ function VistaMasoterapiaEspecifica({ usuario }) {
 
   const cargarDatos = async () => {
     setLoading(true);
+    const esAdmin = usuario?.rol === "admin";
+    
     const [fs, evs] = await Promise.all([
-      sb(`fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`, {}, usuario?.token),
+      // Admin ve todas las fichas, masoterapeutas solo las suyas
+      sb(
+        esAdmin 
+          ? `fichas_masoterapia?order=created_at.desc&limit=100`
+          : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
+        {}, 
+        usuario?.token
+      ),
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token)
     ]);
     if (fs) setFichas(fs);
@@ -3610,25 +3947,108 @@ function VistaMasoterapiaEspecifica({ usuario }) {
         return fecha !== hoy;
       }).length > 0 && (
         <div style={{ ...S.card, marginTop: 20 }}>
-          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Fichas Anteriores</div>
-          {fichas.filter(f => {
-            const fecha = new Date(f.created_at).toISOString().split('T')[0];
-            return fecha !== hoy;
-          }).slice(0, 10).map(ficha => (
-            <div key={ficha.id} style={{ 
-              padding: 12, 
-              border: `1px solid ${C.border}`, 
-              borderRadius: 6, 
-              marginBottom: 8,
-              cursor: "pointer",
-              opacity: 0.7
-            }} onClick={() => verDetalleFicha(ficha)}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{ficha.paciente_nombre}</div>
-              <div style={{ fontSize: 11, color: C.textMuted }}>
-                {new Date(ficha.created_at).toLocaleDateString('es-CL')} · {ficha.evento}
+          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Fichas Anteriores por Evento</div>
+          {(() => {
+            // Agrupar fichas por evento
+            const fichasAnteriores = fichas.filter(f => {
+              const fecha = new Date(f.created_at).toISOString().split('T')[0];
+              return fecha !== hoy;
+            });
+            
+            const porEvento = fichasAnteriores.reduce((acc, ficha) => {
+              const evento = ficha.evento || "Sin evento";
+              if (!acc[evento]) {
+                acc[evento] = [];
+              }
+              acc[evento].push(ficha);
+              return acc;
+            }, {});
+
+            return Object.entries(porEvento).map(([evento, fichasEvento]) => (
+              <div key={evento} style={{ 
+                marginBottom: 16, 
+                padding: 16, 
+                background: C.surface2, 
+                borderRadius: 8,
+                border: `1px solid ${C.border}`
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center",
+                  marginBottom: 12 
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.blue }}>
+                      {evento}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                      {fichasEvento.length} ficha{fichasEvento.length !== 1 ? 's' : ''} realizadas
+                    </div>
+                  </div>
+                  <div style={{ 
+                    fontSize: 24, 
+                    fontWeight: 700, 
+                    color: C.blue,
+                    background: C.surface,
+                    padding: "8px 16px",
+                    borderRadius: 6
+                  }}>
+                    {fichasEvento.length}
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: "grid", 
+                  gap: 8,
+                  maxHeight: 200,
+                  overflowY: "auto"
+                }}>
+                  {fichasEvento.slice(0, 5).map(ficha => (
+                    <div key={ficha.id} style={{ 
+                      padding: 10, 
+                      background: C.surface,
+                      border: `1px solid ${C.border}`, 
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 12
+                    }} onClick={() => verDetalleFicha(ficha)}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}>{ficha.paciente_nombre}</div>
+                          <div style={{ color: C.textMuted, fontSize: 11 }}>
+                            {new Date(ficha.created_at).toLocaleDateString('es-CL')} · 
+                            {ficha.duracion_minutos} min · 
+                            Dolor: {ficha.dolor_inicial}→{ficha.dolor_posterior}
+                          </div>
+                        </div>
+                        <div style={{ 
+                          fontSize: 10, 
+                          color: C.textMuted,
+                          background: C.surface2,
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          marginLeft: 8
+                        }}>
+                          {ficha.masoterapeuta_nombre?.split('@')[0] || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {fichasEvento.length > 5 && (
+                    <div style={{ 
+                      fontSize: 11, 
+                      color: C.textMuted, 
+                      textAlign: "center",
+                      padding: 8
+                    }}>
+                      +{fichasEvento.length - 5} fichas más
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       )}
 
@@ -3827,6 +4247,70 @@ function VistaMasoterapiaEspecifica({ usuario }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPONENTE: MASOTERAPIA UNIFICADA (Con subtabs Masiva/Específica)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function VistaMasoterapiaUnificada({ usuario }) {
+  const [subTab, setSubTab] = useState("masiva");
+
+  return (
+    <div>
+      {/* Subtabs */}
+      <div style={{ 
+        display: "flex", 
+        gap: 8, 
+        marginBottom: 24,
+        borderBottom: `2px solid ${C.border}`,
+        paddingBottom: 8
+      }}>
+        <button 
+          style={{
+            ...S.btn(subTab === "masiva" ? "primary" : "secondary"),
+            flex: 1,
+            fontSize: 14,
+            fontWeight: 600
+          }}
+          onClick={() => setSubTab("masiva")}
+        >
+          🙌 Masiva
+        </button>
+        <button 
+          style={{
+            ...S.btn(subTab === "especifica" ? "primary" : "secondary"),
+            flex: 1,
+            fontSize: 14,
+            fontWeight: 600
+          }}
+          onClick={() => setSubTab("especifica")}
+        >
+          📋 Específica
+        </button>
+      </div>
+
+      {/* Contenido según subtab */}
+      {subTab === "masiva" && (
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.textMuted }}>Masoterapia Masiva</div>
+            <div style={{ fontSize: 12, color: C.textMuted }}>Contador de masajes para eventos masivos</div>
+          </div>
+          <VistaMasoterapiaMasiva usuario={usuario} />
+        </div>
+      )}
+
+      {subTab === "especifica" && (
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.textMuted }}>Masoterapia Específica</div>
+            <div style={{ fontSize: 12, color: C.textMuted }}>Fichas individuales para torneos</div>
+          </div>
+          <VistaMasoterapiaEspecifica usuario={usuario} />
         </div>
       )}
     </div>
@@ -4720,7 +5204,6 @@ const ATENCIONES_INICIALES = [
 function VistaAtenciones({ carros, usuario, permisos, industria }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [cargando, setCargando] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [filtroEvento, setFiltroEvento] = useState("Todos");
@@ -4729,24 +5212,13 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
 
   // Cargar atenciones desde Supabase
   useEffect(() => {
-    const cargarUnificado = async () => {
-      const esAdmin = usuario?.rol === "admin";
-      const ev = usuario?.evento_asignado || "";
-      const sufijo = esAdmin ? "" : "&evento=eq." + ev;
-      const [medicas, kine, maso] = await Promise.all([
-        sb("atenciones_medicas?order=created_at.desc" + sufijo, {}, usuario?.token),
-        sb("atenciones_kinesiologia?order=created_at.desc" + sufijo, {}, usuario?.token),
-        sb("fichas_masoterapia?order=created_at.desc" + sufijo, {}, usuario?.token)
-      ]);
-      const norm = [
-        ...(medicas || []).map(a => ({ id: "med_" + a.id, paciente: a.paciente_nombre, rut: a.paciente_rut, edad: a.paciente_edad, evento: a.evento, profesional: a.enfermero_nombre || a.medico_nombre || "", profesion: a.enfermero_nombre ? "Enfermero/a" : "Medico", tipo: a.motivo_consulta, diagnostico: a.diagnostico, hora_ingreso: a.created_at ? a.created_at.slice(11,16) : "", derivacion: "No", created_at: a.created_at || "" })),
-        ...(kine || []).map(a => ({ id: "kine_" + a.id, paciente: a.paciente_nombre, rut: a.paciente_rut, edad: a.paciente_edad, evento: a.evento, profesional: a.kinesiologo_nombre, profesion: "Kinesiologo/a", tipo: a.motivo_consulta, diagnostico: a.evaluacion_inicial, hora_ingreso: a.created_at ? a.created_at.slice(11,16) : "", derivacion: "No", created_at: a.created_at || "" })),
-        ...(maso || []).map(a => ({ id: "maso_" + a.id, paciente: a.paciente_nombre, rut: null, edad: a.paciente_edad, evento: a.evento, profesional: a.masoterapeuta_nombre, profesion: "Masoterapeuta", tipo: "Masoterapia", diagnostico: a.zona_afectada, hora_ingreso: a.hora_inicio || "", derivacion: "No", created_at: a.created_at || "" }))
-      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      setAtenciones(norm);
-      setCargando(false);
+    const cargar = async () => {
+      setLoading(true);
+      const data = await sb("atenciones?order=created_at.desc", {}, usuario?.token);
+      if (data) setAtenciones(data);
+      setLoading(false);
     };
-    cargarUnificado();
+    cargar();
   }, [usuario]);
 
   const eventos = ["Todos", ...new Set(carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => c.evento_asignado))];
@@ -4800,7 +5272,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
     "Kinesiólogo/a": C.green, "Masoterapeuta": C.purple
   };
 
-  if (cargando) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando atenciones...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando atenciones...</div>;
 
   return (
     <div>
@@ -4865,7 +5337,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
                 <td style={S.td}>
                   <div style={{ fontSize: 13 }}>{a.hora_ingreso} → {a.hora_egreso || "—"}</div>
                 </td>
-                <td style={S.td}><span style={{ fontSize: 13, color: C.textMuted }}>{(a.diagnostico || "").slice(0, 35)}{(a.diagnostico || "").length > 35 ? "…" : ""}</span></td>
+                <td style={S.td}><span style={{ fontSize: 13, color: C.textMuted }}>{a.diagnostico.slice(0, 35)}{a.diagnostico.length > 35 ? "…" : ""}</span></td>
                 <td style={S.td}>
                   {a.derivacion === "No"
                     ? <span style={S.pill(C.green, C.greenDim)}>No</span>
@@ -5059,20 +5531,35 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
 // ─── GESTIÓN DE USUARIOS ─────────────────────────────────────────────────────
 function GestionUsuarios({ usuario, carros }) {
   const [usuarios, setUsuarios] = useState([]);
+  const [eventos, setEventos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState({});
 
-  const eventos = carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => c.evento_asignado);
-
   useEffect(() => {
     const cargar = async () => {
-      const data = await sb("perfiles?order=nombre", {}, usuario?.token);
-      if (data) setUsuarios(data);
+      const [users, evs] = await Promise.all([
+        sb("perfiles?order=nombre", {}, usuario?.token),
+        sb("equipos_evento?estado=eq.activo", {}, usuario?.token)
+      ]);
+      if (users) setUsuarios(users);
+      if (evs) setEventos(evs);
       setLoading(false);
     };
     cargar();
   }, [usuario]);
+
+  // Calcular eventos asignados por profesional
+  const getEventosAsignados = (userId) => {
+    const eventosUsuario = eventos.filter(ev => 
+      ev.medicos?.includes(userId) ||
+      ev.enfermeros?.includes(userId) ||
+      ev.paramedicos?.includes(userId) ||
+      ev.kinesiologos?.includes(userId) ||
+      ev.masoterapeutas?.includes(userId)
+    );
+    return eventosUsuario.map(ev => ev.nombre_evento);
+  };
 
   const abrirEditar = (u) => { setForm({ ...u }); setEditando(u.id); };
 
@@ -5113,9 +5600,16 @@ function GestionUsuarios({ usuario, carros }) {
                   <span style={S.badge(u.rol === "admin" ? C.accent : C.blue, u.rol === "admin" ? C.accentDim : C.blueDim)}>
                     {u.rol === "admin" ? "Admin" : "Profesional"}
                   </span>
-                  {u.evento_asignado
-                    ? <span style={S.badge(C.green, C.greenDim)}>📍 {u.evento_asignado}</span>
-                    : <span style={S.badge(C.textFaint, C.surface2)}>Sin evento</span>}
+                  {(() => {
+                    const eventosAsignados = getEventosAsignados(u.id);
+                    if (eventosAsignados.length === 0) {
+                      return <span style={S.badge(C.textFaint, C.surface2)}>Sin evento</span>;
+                    } else if (eventosAsignados.length === 1) {
+                      return <span style={S.badge(C.green, C.greenDim)}>📍 {eventosAsignados[0]}</span>;
+                    } else {
+                      return <span style={S.badge(C.green, C.greenDim)}>📍 {eventosAsignados.length} eventos</span>;
+                    }
+                  })()}
                 </div>
               </div>
             </div>
@@ -5995,7 +6489,7 @@ export default function App() {
 ...(esAdmin || permisos.verBolso ? [{ id: "bolsos", label: "Bolso de Medicamentos", icon: "bolso" }] : []),
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
-...(esAdmin || permisos.recetarMedicamentos ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
+...(esAdmin || permisos.recetarMedicamentos || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
 ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
 ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
 ...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
@@ -6132,9 +6626,9 @@ export default function App() {
 <div>
 <div style={{ marginBottom: 24 }}>
 <div style={S.title}>Masoterapia</div>
-<div style={S.subtitle}>Masoterapia Masiva y Específica</div>
+<div style={S.subtitle}>Gestión de atenciones masivas y específicas</div>
 </div>
-<MasoterapiaTabs usuario={usuario} />
+<VistaMasoterapiaUnificada usuario={usuario} />
 </div>
 )}
         {tab === "configuracion" && (
