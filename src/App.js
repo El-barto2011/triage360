@@ -1592,6 +1592,15 @@ function VistaAtencionesMedicas({ usuario, carros }) {
     const datos = {
       ...(esMedico ? { medico_id: usuario.id, medico_nombre: usuario.email } : {}),
       ...(esEnfermero ? { enfermero_id: usuario.id, enfermero_nombre: usuario.email } : {}),
+      codigo_triaje: form.codigo_triaje || "VERDE",
+      es_emergencia: form.codigo_triaje === "ROJO" || form.codigo_triaje === "NEGRO",
+      tiempo_espera_minutos: form.tiempo_espera_minutos !== undefined ? form.tiempo_espera_minutos : 60,
+      presion_sistolica: form.presion_sistolica ? parseInt(form.presion_sistolica) : null,
+      presion_diastolica: form.presion_diastolica ? parseInt(form.presion_diastolica) : null,
+      frecuencia_cardiaca: form.frecuencia_cardiaca ? parseInt(form.frecuencia_cardiaca) : null,
+      temperatura: form.temperatura ? parseFloat(form.temperatura) : null,
+      saturacion_oxigeno: form.saturacion_oxigeno ? parseInt(form.saturacion_oxigeno) : null,
+      frecuencia_respiratoria: form.frecuencia_respiratoria ? parseInt(form.frecuencia_respiratoria) : null,
       paciente_nombre: form.paciente_nombre,
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
@@ -1924,11 +1933,20 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                           cursor: "pointer",
                           transition: "all 0.2s"
                         }}
-                        onClick={() => setForm(f => ({ 
-                          ...f, 
-                          codigo_triaje: t.codigo,
-                          es_emergencia: t.codigo === "ROJO" || t.codigo === "NEGRO"
-                        }))}
+                        onClick={() => {
+                          const tiempos = {
+                            'VERDE': 60,
+                            'AMARILLO': 30,
+                            'ROJO': 0,
+                            'NEGRO': null
+                          };
+                          setForm(f => ({ 
+                            ...f, 
+                            codigo_triaje: t.codigo,
+                            es_emergencia: t.codigo === "ROJO" || t.codigo === "NEGRO",
+                            tiempo_espera_minutos: tiempos[t.codigo]
+                          }));
+                        }}
                       >
                         {t.label.split(" - ")[0]}
                       </button>
@@ -1940,9 +1958,33 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                     {form.codigo_triaje === "ROJO" && "⚠️ URGENTE - Atención inmediata"}
                     {form.codigo_triaje === "NEGRO" && "Sin signos vitales"}
                   </div>
+                  {form.tiempo_espera_minutos !== undefined && form.tiempo_espera_minutos !== null && (
+                    <div style={{ 
+                      marginTop: 8, 
+                      padding: "8px 12px", 
+                      background: 
+                        form.codigo_triaje === "ROJO" ? "#fef2f2" :
+                        form.codigo_triaje === "AMARILLO" ? "#fffbeb" :
+                        "#f0fdf4",
+                      border: `1px solid ${
+                        form.codigo_triaje === "ROJO" ? "#ef4444" :
+                        form.codigo_triaje === "AMARILLO" ? "#f59e0b" :
+                        "#10b981"
+                      }`,
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 
+                        form.codigo_triaje === "ROJO" ? "#991b1b" :
+                        form.codigo_triaje === "AMARILLO" ? "#92400e" :
+                        "#166534"
+                    }}>
+                      ⏱️ Tiempo de espera esperado: {form.tiempo_espera_minutos === 0 ? "INMEDIATO" : `${form.tiempo_espera_minutos} minutos`}
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
                   <div style={S.formRow}>
                     <label style={S.formLabel}>Nombre del Paciente *</label>
                     <input 
@@ -2017,6 +2059,79 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                 </div>
 
                 <div style={S.formRow}>
+                {/* Signos Vitales */}
+                <div style={{ ...S.card, padding: 16, marginBottom: 16, background: C.surface }}>
+                  <div style={{ fontWeight: 700, marginBottom: 12, color: C.blue }}>💓 Signos Vitales</div>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div style={S.formRow}>
+                      <label style={S.formLabel}>Presión Arterial (mmHg)</label>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input 
+                          style={{ ...S.input, width: "70px" }} 
+                          type="number"
+                          placeholder="120"
+                          value={form.presion_sistolica || ""} 
+                          onChange={e => setForm(f => ({ ...f, presion_sistolica: e.target.value }))} 
+                        />
+                        <span style={{ color: C.textMuted }}>/</span>
+                        <input 
+                          style={{ ...S.input, width: "70px" }} 
+                          type="number"
+                          placeholder="80"
+                          value={form.presion_diastolica || ""} 
+                          onChange={e => setForm(f => ({ ...f, presion_diastolica: e.target.value }))} 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div style={S.formRow}>
+                      <label style={S.formLabel}>Frec. Cardíaca (lpm)</label>
+                      <input 
+                        style={S.input} 
+                        type="number"
+                        placeholder="72"
+                        value={form.frecuencia_cardiaca || ""} 
+                        onChange={e => setForm(f => ({ ...f, frecuencia_cardiaca: e.target.value }))} 
+                      />
+                    </div>
+                    
+                    <div style={S.formRow}>
+                      <label style={S.formLabel}>Temperatura (°C)</label>
+                      <input 
+                        style={S.input} 
+                        type="number"
+                        step="0.1"
+                        placeholder="36.5"
+                        value={form.temperatura || ""} 
+                        onChange={e => setForm(f => ({ ...f, temperatura: e.target.value }))} 
+                      />
+                    </div>
+                    
+                    <div style={S.formRow}>
+                      <label style={S.formLabel}>Sat. Oxígeno (%)</label>
+                      <input 
+                        style={S.input} 
+                        type="number"
+                        placeholder="98"
+                        value={form.saturacion_oxigeno || ""} 
+                        onChange={e => setForm(f => ({ ...f, saturacion_oxigeno: e.target.value }))} 
+                      />
+                    </div>
+                    
+                    <div style={S.formRow}>
+                      <label style={S.formLabel}>Frec. Respiratoria (rpm)</label>
+                      <input 
+                        style={S.input} 
+                        type="number"
+                        placeholder="16"
+                        value={form.frecuencia_respiratoria || ""} 
+                        onChange={e => setForm(f => ({ ...f, frecuencia_respiratoria: e.target.value }))} 
+                      />
+                    </div>
+                  </div>
+                </div>
+
                   <label style={S.formLabel}>Motivo de Consulta *</label>
                   <textarea 
                     style={{ ...S.input, minHeight: 60 }} 
@@ -5539,26 +5654,47 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
                   </div>
                 </td>
                 <td style={S.td}>
-                  {a.codigo_triaje && (
-                    <span style={{ 
-                      padding: "4px 8px",
-                      borderRadius: 4,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      background: 
-                        a.codigo_triaje === "ROJO" ? "#ef4444" :
-                        a.codigo_triaje === "AMARILLO" ? "#f59e0b" :
-                        a.codigo_triaje === "NEGRO" ? "#1f2937" :
-                        "#10b981",
-                      color: "#fff"
-                    }}>
-                      {a.codigo_triaje === "VERDE" && "🟢"}
-                      {a.codigo_triaje === "AMARILLO" && "🟡"}
-                      {a.codigo_triaje === "ROJO" && "🔴"}
-                      {a.codigo_triaje === "NEGRO" && "⚫"}
-                      {" " + a.codigo_triaje}
-                    </span>
-                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {a.codigo_triaje && (
+                      <span style={{ 
+                        padding: "4px 8px",
+                        borderRadius: 4,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: 
+                          a.codigo_triaje === "ROJO" ? "#ef4444" :
+                          a.codigo_triaje === "AMARILLO" ? "#f59e0b" :
+                          a.codigo_triaje === "NEGRO" ? "#1f2937" :
+                          "#10b981",
+                        color: "#fff"
+                      }}>
+                        {a.codigo_triaje === "VERDE" && "🟢"}
+                        {a.codigo_triaje === "AMARILLO" && "🟡"}
+                        {a.codigo_triaje === "ROJO" && "🔴"}
+                        {a.codigo_triaje === "NEGRO" && "⚫"}
+                        {" " + a.codigo_triaje}
+                      </span>
+                    )}
+                    {(() => {
+                      if (!a.tiempo_espera_minutos && a.tiempo_espera_minutos !== 0) return null;
+                      const ahora = new Date();
+                      const creacion = new Date(a.created_at);
+                      const transcurrido = Math.floor((ahora - creacion) / 60000);
+                      const excedido = transcurrido > a.tiempo_espera_minutos;
+                      
+                      if (a.codigo_triaje === "NEGRO") return null;
+                      
+                      return (
+                        <span style={{ 
+                          fontSize: 9,
+                          color: excedido ? "#dc2626" : "#6b7280",
+                          fontWeight: excedido ? 700 : 400
+                        }}>
+                          {excedido && "⚠️ "}{transcurrido} min
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </td>
                 <td style={S.td}>
                   <div style={{ fontSize: 13 }}>{new Date(a.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</div>
