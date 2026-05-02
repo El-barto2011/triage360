@@ -5298,7 +5298,7 @@ function Dashboard({ carros, usuario, esAdmin, permisos }) {
         </div>
         <div style={S.subtitle}>
           {esAdmin
-            ? `SGTRUMAO · ${new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`
+            ? `TRIAGE360 · ${new Date().toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`
             : usuario?.evento_asignado
               ? `📍 Evento asignado: ${usuario.evento_asignado}`
               : "Sin evento asignado hoy"}
@@ -6195,7 +6195,7 @@ function Login({ onLogin }) {
               TRIAGE<tspan fill="url(#lg1)">360</tspan>
             </text>
             <text x="118" y="60" fill="#7a90a8" fontSize="9" fontFamily="Arial, sans-serif" letterSpacing="3">GESTIÓN CLÍNICA INTELIGENTE</text>
-            <text x="118" y="78" fill="#2d3f52" fontSize="8" fontFamily="Arial, sans-serif" letterSpacing="1">Powered by <tspan fill="#00c2a8" fontWeight="700">SGTRUMAO</tspan></text>
+            <text x="118" y="78" fill="#2d3f52" fontSize="8" fontFamily="Arial, sans-serif" letterSpacing="1">Powered by <tspan fill="#00c2a8" fontWeight="700">TRIAGE360</tspan></text>
           </svg>
         </div>
         <div style={{ marginBottom: 16 }}>
@@ -6883,7 +6883,7 @@ export default function App() {
           </nav>
           <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>SGTRUMAO</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.accent }}>TRIAGE360</div>
             <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>{usuario?.email}</div>
             <button style={{ ...S.btn("ghost"), width: "100%", fontSize: 12, padding: "7px" }} onClick={handleLogout}>Cerrar sesión</button>
           </div>
