@@ -1718,6 +1718,27 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {/* Badge de código de triaje */}
+                  {atencion.codigo_triaje && (
+                    <span style={{ 
+                      padding: "4px 8px",
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: 
+                        atencion.codigo_triaje === "ROJO" ? "#ef4444" :
+                        atencion.codigo_triaje === "AMARILLO" ? "#f59e0b" :
+                        atencion.codigo_triaje === "NEGRO" ? "#1f2937" :
+                        "#10b981",
+                      color: "#fff"
+                    }}>
+                      {atencion.codigo_triaje === "VERDE" && "🟢"}
+                      {atencion.codigo_triaje === "AMARILLO" && "🟡"}
+                      {atencion.codigo_triaje === "ROJO" && "🔴"}
+                      {atencion.codigo_triaje === "NEGRO" && "⚫"}
+                      {" " + atencion.codigo_triaje}
+                    </span>
+                  )}
                   {atencion.requiere_administracion && !atencion.administracion_completada && (
                     <span style={{ ...S.badge(C.orange, C.orangeDim), fontSize: 10 }}>Pendiente admin.</span>
                   )}
@@ -1874,6 +1895,48 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                       value={form.hora_atencion || new Date().toTimeString().slice(0,5)} 
                       onChange={e => setForm(f => ({ ...f, hora_atencion: e.target.value }))} 
                     />
+                  </div>
+                </div>
+
+                {/* Selector de Código de Triaje */}
+                <div style={S.formRow}>
+                  <label style={S.formLabel}>Código de Triaje *</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                    {[
+                      { codigo: "VERDE", color: "#10b981", label: "🟢 VERDE - Leve" },
+                      { codigo: "AMARILLO", color: "#f59e0b", label: "🟡 AMARILLO - Moderado" },
+                      { codigo: "ROJO", color: "#ef4444", label: "🔴 ROJO - Urgente" },
+                      { codigo: "NEGRO", color: "#1f2937", label: "⚫ NEGRO - Fallecido" }
+                    ].map(t => (
+                      <button
+                        key={t.codigo}
+                        type="button"
+                        style={{
+                          padding: "12px 8px",
+                          border: form.codigo_triaje === t.codigo ? `3px solid ${t.color}` : `1px solid ${C.border}`,
+                          borderRadius: 8,
+                          background: form.codigo_triaje === t.codigo ? t.color + "20" : C.surface,
+                          color: form.codigo_triaje === t.codigo ? t.color : C.text,
+                          fontWeight: form.codigo_triaje === t.codigo ? 700 : 400,
+                          fontSize: 11,
+                          cursor: "pointer",
+                          transition: "all 0.2s"
+                        }}
+                        onClick={() => setForm(f => ({ 
+                          ...f, 
+                          codigo_triaje: t.codigo,
+                          es_emergencia: t.codigo === "ROJO" || t.codigo === "NEGRO"
+                        }))}
+                      >
+                        {t.label.split(" - ")[0]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                    {form.codigo_triaje === "VERDE" && "Leve - Puede esperar"}
+                    {form.codigo_triaje === "AMARILLO" && "Moderado - Atención pronto"}
+                    {form.codigo_triaje === "ROJO" && "⚠️ URGENTE - Atención inmediata"}
+                    {form.codigo_triaje === "NEGRO" && "Sin signos vitales"}
                   </div>
                 </div>
 
@@ -5337,18 +5400,22 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      const data = await sb("atenciones?order=created_at.desc", {}, usuario?.token);
+      const data = await sb("atenciones_medicas?order=created_at.desc&limit=100", {}, usuario?.token);
       if (data) setAtenciones(data);
       setLoading(false);
     };
     cargar();
   }, [usuario]);
 
-  const eventos = ["Todos", ...new Set(carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => c.evento_asignado))];
+  const eventos = ["Todos", ...new Set(atenciones.map(a => a.evento).filter(Boolean))];
 
   const filtradas = atenciones.filter(a => {
     const matchEv = filtroEvento === "Todos" || a.evento === filtroEvento;
-    const matchProf = filtroProfesion === "Todas" || a.profesion === filtroProfesion;
+    // Determinar profesión desde medico_nombre, enfermero_nombre o paramedico_nombre
+    const prof = a.medico_nombre ? "Médico" : 
+                 a.enfermero_nombre ? "Enfermero/a" : 
+                 a.paramedico_nombre ? "Paramédico" : "N/A";
+    const matchProf = filtroProfesion === "Todas" || prof.includes(filtroProfesion);
     return matchEv && matchProf;
   });
 
@@ -5426,7 +5493,6 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
           {["Todas", ...PROFESIONES].map(p => <option key={p}>{p}</option>)}
         </select>
         <div style={{ flex: 1 }} />
-        <button style={S.btn("primary")} onClick={abrirNueva}>+ Nueva atención</button>
       </div>
 
       {/* Tabla */}
@@ -5445,33 +5511,53 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
             ) : filtradas.map(a => (
               <tr key={a.id}>
                 <td style={S.td}>
-                  <div style={{ fontWeight: 600 }}>{a.paciente}</div>
-                  <div style={{ fontSize: 11, color: C.textFaint }}>{a.rut} · {a.edad} años</div>
+                  <div style={{ fontWeight: 600 }}>{a.paciente_nombre}</div>
+                  {a.paciente_edad && <div style={{ fontSize: 11, color: C.textFaint }}>{a.paciente_edad} años</div>}
                 </td>
                 <td style={S.td}>
                   <div style={{ fontSize: 13 }}>{a.evento}</div>
-                  <div style={{ fontSize: 11, color: C.textFaint }}>{new Date(a.fecha).toLocaleDateString("es-CL")}</div>
+                  <div style={{ fontSize: 11, color: C.textFaint }}>{new Date(a.created_at).toLocaleDateString("es-CL")}</div>
                 </td>
                 <td style={S.td}>
-                  <span style={{ ...S.badge(coloresProfesion[a.profesion], coloresProfesion[a.profesion] + "20"), marginBottom: 4, display: "inline-flex" }}>{a.profesion}</span>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 3 }}>{a.profesional}</div>
-                </td>
-                <td style={S.td}><span style={S.pill(C.blue, C.blueDim)}>{a.tipo}</span></td>
-                <td style={S.td}>
-                  <div style={{ fontSize: 13 }}>{a.hora_ingreso} → {a.hora_egreso || "—"}</div>
-                </td>
-                <td style={S.td}><span style={{ fontSize: 13, color: C.textMuted }}>{a.diagnostico.slice(0, 35)}{a.diagnostico.length > 35 ? "…" : ""}</span></td>
-                <td style={S.td}>
-                  {a.derivacion === "No"
-                    ? <span style={S.pill(C.green, C.greenDim)}>No</span>
-                    : <span style={S.pill(C.red, C.redDim)}>{a.derivacion}</span>}
-                </td>
-                <td style={S.td}>
-                  <div style={{ display: "flex", gap: 5 }}>
-                    <button style={{ ...S.btn("ghost"), padding: "4px 8px", fontSize: 11 }} onClick={() => setFichaVer(a)}>Ver</button>
-                    <button style={{ ...S.btn("ghost"), padding: "4px 8px" }} onClick={() => { setForm({ ...a }); setModal("editar"); }}><Icon name="edit" size={12} color={C.textMuted} /></button>
-                    <button style={{ ...S.btn("ghost"), padding: "4px 8px" }} onClick={() => eliminar(a.id)}><Icon name="trash" size={12} color={C.red} /></button>
+                  <div style={{ fontSize: 12 }}>
+                    {a.medico_nombre?.split('@')[0] || 
+                     a.enfermero_nombre?.split('@')[0] || 
+                     a.paramedico_nombre?.split('@')[0] || 'N/A'}
                   </div>
+                </td>
+                <td style={S.td}>
+                  {a.codigo_triaje && (
+                    <span style={{ 
+                      padding: "4px 8px",
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: 
+                        a.codigo_triaje === "ROJO" ? "#ef4444" :
+                        a.codigo_triaje === "AMARILLO" ? "#f59e0b" :
+                        a.codigo_triaje === "NEGRO" ? "#1f2937" :
+                        "#10b981",
+                      color: "#fff"
+                    }}>
+                      {a.codigo_triaje === "VERDE" && "🟢"}
+                      {a.codigo_triaje === "AMARILLO" && "🟡"}
+                      {a.codigo_triaje === "ROJO" && "🔴"}
+                      {a.codigo_triaje === "NEGRO" && "⚫"}
+                      {" " + a.codigo_triaje}
+                    </span>
+                  )}
+                </td>
+                <td style={S.td}>
+                  <div style={{ fontSize: 13 }}>{new Date(a.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</div>
+                </td>
+                <td style={S.td}>
+                  <span style={{ fontSize: 13, color: C.textMuted }}>
+                    {a.diagnostico ? (a.diagnostico.slice(0, 35) + (a.diagnostico.length > 35 ? "…" : "")) : "---"}
+                  </span>
+                </td>
+                <td style={S.td}>---</td>
+                <td style={S.td}>
+                  <button style={{ ...S.btn("ghost"), padding: "4px 8px", fontSize: 11 }} onClick={() => setFichaVer(a)}>Ver</button>
                 </td>
               </tr>
             ))}
