@@ -2901,6 +2901,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
       paciente_nombre: form.paciente_nombre,
       paciente_rut: form.paciente_rut || null,
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
+      categoria_paciente: form.categoria_paciente || "Jugador",
       evento: form.evento,
       motivo_consulta: form.motivo_consulta,
       evaluacion_inicial: form.evaluacion_inicial || null,
@@ -3815,9 +3816,16 @@ function VistaMasoterapiaEspecifica({ usuario }) {
   };
 
   const abrirNuevaFicha = () => {
+    const ahora = new Date();
     setForm({
+      fecha_atencion: ahora.toISOString().split('T')[0],
+      hora_atencion: ahora.toTimeString().slice(0,5),
       paciente_nombre: "",
+      paciente_rut: "",
+      paciente_pasaporte: "",
+      tipo_identificacion: "rut",
       paciente_edad: "",
+      categoria_paciente: "Jugador",
       evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
       zonas_trabajadas: [],
       dolor_inicial: 5,
@@ -3825,7 +3833,35 @@ function VistaMasoterapiaEspecifica({ usuario }) {
       duracion_minutos: 30,
       observaciones: ""
     });
+    setHistorialPaciente([]);
     setModal("nueva");
+  };
+
+  const buscarPacientePorRut = async (rut) => {
+    if (!rut || rut.length < 8) {
+      setHistorialPaciente([]);
+      return;
+    }
+
+    const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
+
+    const fichasPaciente = await sb(
+      `fichas_masoterapia?${campo}=eq.${rut}&order=created_at.desc&limit=10`,
+      {},
+      usuario?.token
+    );
+
+    if (fichasPaciente && fichasPaciente.length > 0) {
+      const ultima = fichasPaciente[0];
+      setForm(f => ({
+        ...f,
+        paciente_nombre: ultima.paciente_nombre,
+        paciente_edad: ultima.paciente_edad
+      }));
+      setHistorialPaciente(fichasPaciente);
+    } else {
+      setHistorialPaciente([]);
+    }
   };
 
   const toggleZona = (zona) => {
@@ -3848,18 +3884,27 @@ function VistaMasoterapiaEspecifica({ usuario }) {
       return;
     }
 
+    // Crear timestamp personalizado
+    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || '00:00'}:00`;
+    const timestampPersonalizado = new Date(fechaHora).toISOString();
+
     const datos = {
       evento: form.evento,
       masoterapeuta_id: usuario.id,
       masoterapeuta_nombre: usuario.email,
       paciente_nombre: form.paciente_nombre,
+      paciente_rut: form.tipo_identificacion === "rut" ? (form.paciente_rut || null) : null,
+      paciente_pasaporte: form.tipo_identificacion === "pasaporte" ? (form.paciente_pasaporte || null) : null,
+      tipo_identificacion: form.tipo_identificacion || "rut",
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
-      fecha_atencion: new Date().toISOString().split('T')[0],
+      categoria_paciente: form.categoria_paciente || "Jugador",
+      fecha_atencion: form.fecha_atencion,
       duracion_minutos: parseInt(form.duracion_minutos) || 30,
       zonas_trabajadas: form.zonas_trabajadas,
       dolor_inicial: parseInt(form.dolor_inicial) || 5,
       dolor_posterior: parseInt(form.dolor_posterior) || 5,
-      observaciones: form.observaciones || null
+      observaciones: form.observaciones || null,
+      created_at: timestampPersonalizado
     };
 
     const res = await sb("fichas_masoterapia", {
@@ -4065,6 +4110,77 @@ function VistaMasoterapiaEspecifica({ usuario }) {
               <div style={{ fontSize: 17, fontWeight: 700 }}>Nueva Ficha de Masoterapia</div>
               <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>×</button>
             </div>
+
+            {/* Toggle RUT/Pasaporte */}
+            <div style={S.formRow}>
+              <label style={S.formLabel}>Tipo de Identificación</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["rut", "pasaporte"].map(tipo => (
+                  <button
+                    key={tipo}
+                    style={{
+                      ...S.btn(form.tipo_identificacion === tipo ? "primary" : "ghost"),
+                      flex: 1
+                    }}
+                    onClick={() => setForm(f => ({ ...f, tipo_identificacion: tipo, paciente_rut: "", paciente_pasaporte: "" }))}
+                  >
+                    {tipo === "rut" ? "RUT" : "Pasaporte"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Campo RUT o Pasaporte */}
+            <div style={S.formRow}>
+              <label style={S.formLabel}>{form.tipo_identificacion === "rut" ? "RUT" : "Pasaporte"}</label>
+              {form.tipo_identificacion === "rut" ? (
+                <input 
+                  style={S.input} 
+                  value={form.paciente_rut || ""}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setForm(f => ({ ...f, paciente_rut: v }));
+                    if (v.length >= 8) buscarPacientePorRut(v);
+                  }}
+                  placeholder="12345678-9"
+                />
+              ) : (
+                <input 
+                  style={S.input} 
+                  value={form.paciente_pasaporte || ""}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setForm(f => ({ ...f, paciente_pasaporte: v }));
+                    if (v.length >= 8) buscarPacientePorRut(v);
+                  }}
+                  placeholder="AB123456"
+                />
+              )}
+            </div>
+
+            {/* Historial de paciente */}
+            {historialPaciente.length > 0 && (
+              <div style={{ 
+                background: C.surface2, 
+                padding: 12, 
+                borderRadius: 8, 
+                marginBottom: 16,
+                border: \`1px solid \${C.border}\`
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: C.blue }}>
+                  ✓ {historialPaciente.length} atención{historialPaciente.length !== 1 ? 'es' : ''} previa{historialPaciente.length !== 1 ? 's' : ''}
+                </div>
+                <div style={{ fontSize: 12, color: C.textMuted, maxHeight: 150, overflowY: "auto" }}>
+                  {historialPaciente.slice(0, 5).map((h, i) => (
+                    <div key={i} style={{ padding: "6px 0", borderBottom: i < 4 ? \`1px solid \${C.border}\` : "none" }}>
+                      <div style={{ fontWeight: 600 }}>{new Date(h.created_at).toLocaleDateString('es-CL')} - {h.evento}</div>
+                      <div>Zonas: {h.zonas_trabajadas?.join(", ") || "N/A"} · Dolor: {h.dolor_inicial}→{h.dolor_posterior}</div>
+                      <div style={{ fontSize: 11, color: C.textMuted }}>Por: {h.masoterapeuta_nombre?.split('@')[0]}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
               <div style={S.formRow}>
