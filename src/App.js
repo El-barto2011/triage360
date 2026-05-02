@@ -1516,6 +1516,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       paciente_edad: "",
       categoria_paciente: "Jugador",
       evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
+      evento_id: eventos.length > 0 ? eventos[0].id : null,
       motivo_consulta: "",
       diagnostico: "",
       tratamiento: "",
@@ -1596,6 +1597,7 @@ function VistaAtencionesMedicas({ usuario, carros }) {
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       categoria_paciente: form.categoria_paciente || "Jugador",
       evento: form.evento,
+      evento_id: form.evento_id || null,
       motivo_consulta: form.motivo_consulta,
       diagnostico: form.diagnostico || null,
       tratamiento: form.tratamiento || null,
@@ -1998,7 +2000,14 @@ function VistaAtencionesMedicas({ usuario, carros }) {
                     <select 
                       style={{ ...S.select, width: "100%" }} 
                       value={form.evento || ""} 
-                      onChange={e => setForm(f => ({ ...f, evento: e.target.value }))}
+                      onChange={e => {
+                        const eventoSeleccionado = eventos.find(ev => ev.nombre_evento === e.target.value);
+                        setForm(f => ({ 
+                          ...f, 
+                          evento: e.target.value,
+                          evento_id: eventoSeleccionado?.id || null
+                        }));
+                      }}
                     >
                       {eventos.map(ev => (
                         <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
@@ -2917,6 +2926,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
       paciente_edad: "",
       categoria_paciente: "Jugador",
       evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
+      evento_id: eventos.length > 0 ? eventos[0].id : null,
       motivo_consulta: "",
       evaluacion_inicial: "",
       tratamiento_realizado: "",
@@ -2966,6 +2976,7 @@ function VistaAtencionesKinesiologia({ usuario }) {
       paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
       categoria_paciente: form.categoria_paciente || "Jugador",
       evento: form.evento,
+      evento_id: form.evento_id || null,
       motivo_consulta: form.motivo_consulta,
       evaluacion_inicial: form.evaluacion_inicial || null,
       tratamiento_realizado: form.tratamiento_realizado || null,
@@ -3891,6 +3902,7 @@ function VistaMasoterapiaEspecifica({ usuario }) {
       paciente_edad: "",
       categoria_paciente: "Jugador",
       evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
+      evento_id: eventos.length > 0 ? eventos[0].id : null,
       zonas_trabajadas: [],
       dolor_inicial: 5,
       dolor_posterior: 5,
@@ -3954,6 +3966,7 @@ function VistaMasoterapiaEspecifica({ usuario }) {
 
     const datos = {
       evento: form.evento,
+      evento_id: form.evento_id || null,
       masoterapeuta_id: usuario.id,
       masoterapeuta_nombre: usuario.email,
       paciente_nombre: form.paciente_nombre,
