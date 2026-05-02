@@ -3784,6 +3784,7 @@ function VistaMasoterapiaEspecifica({ usuario }) {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
+  const [historialPaciente, setHistorialPaciente] = useState([]);
 
   const zonasDisponibles = [
     "Cuello", "Hombros", "Espalda alta", "Espalda baja", "Brazos", 
@@ -4165,14 +4166,14 @@ function VistaMasoterapiaEspecifica({ usuario }) {
                 padding: 12, 
                 borderRadius: 8, 
                 marginBottom: 16,
-                border: \`1px solid \${C.border}\`
+                border: `1px solid ${C.border}`
               }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: C.blue }}>
                   ✓ {historialPaciente.length} atención{historialPaciente.length !== 1 ? 'es' : ''} previa{historialPaciente.length !== 1 ? 's' : ''}
                 </div>
                 <div style={{ fontSize: 12, color: C.textMuted, maxHeight: 150, overflowY: "auto" }}>
                   {historialPaciente.slice(0, 5).map((h, i) => (
-                    <div key={i} style={{ padding: "6px 0", borderBottom: i < 4 ? \`1px solid \${C.border}\` : "none" }}>
+                    <div key={i} style={{ padding: "6px 0", borderBottom: i < 4 ? `1px solid ${C.border}` : "none" }}>
                       <div style={{ fontWeight: 600 }}>{new Date(h.created_at).toLocaleDateString('es-CL')} - {h.evento}</div>
                       <div>Zonas: {h.zonas_trabajadas?.join(", ") || "N/A"} · Dolor: {h.dolor_inicial}→{h.dolor_posterior}</div>
                       <div style={{ fontSize: 11, color: C.textMuted }}>Por: {h.masoterapeuta_nombre?.split('@')[0]}</div>
