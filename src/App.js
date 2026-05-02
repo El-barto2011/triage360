@@ -5841,7 +5841,7 @@ function VistaAtenciones({ carros, usuario, permisos, industria }) {
             <div style={{ background: C.surface2, borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Paciente</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                {[["Nombre", fichaVer.paciente], ["RUT", fichaVer.rut], ["Edad", fichaVer.edad + " años"]].map(([l, v]) => (
+                {[["Nombre", fichaVer.paciente], ["RUT", fichaVer.rut], ["Edad", fichaVer.paciente_edad ? fichaVer.paciente_edad + " años" : "---"]].map(([l, v]) => (
                   <div key={l}><div style={{ fontSize: 11, color: C.textMuted }}>{l}</div><div style={{ fontWeight: 600, marginTop: 2 }}>{v}</div></div>
                 ))}
               </div>
