@@ -1,244 +1,412 @@
-import { useState, useEffect } from "react";
-import { C, S, Icon } from "../../config/theme";
+import { useState, useEffect, useMemo } from "react";
+import { C } from "../../config/theme";
 import { sb } from "../../config/supabase";
-import { CAJONES_META, estadoVenc, estadoStock } from "../../config/constants";
+import { CAJONES_META } from "../../config/constants";
+import {
+  useReactTable, getCoreRowModel, getSortedRowModel,
+  getFilteredRowModel, getPaginationRowModel, flexRender,
+} from "@tanstack/react-table";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Badge } from "../ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { cn } from "../../lib/utils";
+import { ArrowUpDown, Search, Save, Pencil, X, Truck, AlertTriangle } from "lucide-react";
+
+const CARRO_COLORS = ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#ef4444","#06b6d4"];
 
 export function VistaCarrosClinicosDB({ usuario }) {
-console.log("VistaCarrosClinicosDB renderizado, usuario:", usuario);
-  const [carros, setCarros] = useState([]);
-  const [carroSel, setCarroSel] = useState(null);
-  const [cajonAbierto, setCajonAbierto] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editando, setEditando] = useState(null);
-  const [formEdit, setFormEdit] = useState({});
-  const [carrosPermitidos, setCarrosPermitidos] = useState([]);
+  const [carros,          setCarros]          = useState([]);
+  const [carroSel,        setCarroSel]        = useState(null);
+  const [cajonAbierto,    setCajonAbierto]    = useState(null);
+  const [loading,         setLoading]         = useState(true);
+  const [editando,        setEditando]        = useState(null);
+  const [formEdit,        setFormEdit]        = useState({});
+  const [carrosPermitidos,setCarrosPermitidos]= useState([]);
 
-  const esAdmin = usuario?.rol === 'admin';
+  /* TanStack state */
+  const [sorting,      setSorting]      = useState([]);
+  const [globalFilter, setGlobalFilter] = useState("");
 
+  const esAdmin = usuario?.rol === "admin";
+
+  /* ── Data loading (unchanged) ───────────────────────── */
   const cargarCarros = async () => {
-    console.log("cargarCarros ejecutándose...");
-
-    // Si es admin, cargar todos los carros
     if (esAdmin) {
-      const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
-      console.log("DEBUG Carros (Admin):", data);
+      const data = await sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token);
       if (data) {
         setCarros(data);
-        setCarrosPermitidos(['Carro 1', 'Carro 2', 'Carro 3', 'Carro 4', 'Carro 5', 'Carro 6', 'Carro 7']);
+        setCarrosPermitidos(["Carro 1","Carro 2","Carro 3","Carro 4","Carro 5","Carro 6","Carro 7"]);
         if (data.length > 0 && !carroSel) setCarroSel(data[0].nombre);
       }
     } else {
-      // Si es profesional, obtener eventos donde está asignado
-      const eventos = await sb('equipos_evento?estado=eq.activo', {}, usuario?.token);
-      console.log("DEBUG Eventos activos:", eventos);
-
+      const eventos = await sb("equipos_evento?estado=eq.activo", {}, usuario?.token);
       let carrosAsignados = [];
       if (eventos) {
-        eventos.forEach(evento => {
-          // Verificar si el usuario está en alguna lista de profesionales
+        eventos.forEach(ev => {
           const estaAsignado =
-            (evento.medicos || []).includes(usuario.id) ||
-            (evento.enfermeros || []).includes(usuario.id) ||
-            (evento.paramedicos || []).includes(usuario.id);
-
-          if (estaAsignado && evento.carros_asignados) {
-            carrosAsignados = [...carrosAsignados, ...evento.carros_asignados];
-          }
+            (ev.medicos     || []).includes(usuario.id) ||
+            (ev.enfermeros  || []).includes(usuario.id) ||
+            (ev.paramedicos || []).includes(usuario.id);
+          if (estaAsignado && ev.carros_asignados)
+            carrosAsignados = [...carrosAsignados, ...ev.carros_asignados];
         });
       }
-
-      // Eliminar duplicados
       carrosAsignados = [...new Set(carrosAsignados)];
-      console.log("DEBUG Carros asignados al usuario:", carrosAsignados);
       setCarrosPermitidos(carrosAsignados);
-
-      // Cargar solo los carros asignados
       if (carrosAsignados.length > 0) {
-        const data = await sb('contenedores_medicamentos?tipo=eq.carro&select=*', {}, usuario?.token);
+        const data = await sb("contenedores_medicamentos?tipo=eq.carro&select=*", {}, usuario?.token);
         if (data) {
-          const carrosFiltrados = data.filter(c => carrosAsignados.includes(c.nombre));
-          setCarros(carrosFiltrados);
-          if (carrosFiltrados.length > 0 && !carroSel) setCarroSel(carrosFiltrados[0].nombre);
+          const filtrados = data.filter(c => carrosAsignados.includes(c.nombre));
+          setCarros(filtrados);
+          if (filtrados.length > 0 && !carroSel) setCarroSel(filtrados[0].nombre);
         }
       }
     }
     setLoading(false);
   };
 
-  useEffect(() => {
-    console.log("useEffect ejecutándose...");
-    cargarCarros();
-  }, []);
+  useEffect(() => { cargarCarros(); }, []);
 
-  const carroActual = carros.filter(c => c.nombre === carroSel);
-  const insumosCarroActual = carroActual;
+  /* ── Helpers (unchanged) ────────────────────────────── */
+  const carroActual       = carros.filter(c => c.nombre === carroSel);
+  const insumosCajon      = (id) => carroActual.filter(i => i.cajon === id);
+  const alertasCajon      = (id) => insumosCajon(id).filter(i => i.stock <= i.minimo).length;
+  const alertasCarro      = (n)  => carros.filter(c => c.nombre === n && c.stock <= c.minimo).length;
+  const carrosUnicos      = [...new Set(carros.map(c => c.nombre))];
+  const toggleCajon       = (id) => { setCajonAbierto(p => p === id ? null : id); setGlobalFilter(""); setSorting([]); };
 
-  const insumosCajon = (cajonId) => insumosCarroActual.filter(i => i.cajon === cajonId);
-  const alertasCajon = (cajonId) => insumosCajon(cajonId).filter(i => i.stock <= i.minimo).length;
-  const alertasCarro = (nombreCarro) => carros.filter(c => c.nombre === nombreCarro && c.stock <= c.minimo).length;
-
-  const toggleCajon = (cajonId) => setCajonAbierto(prev => prev === cajonId ? null : cajonId);
-
-  const abrirEditar = (insumo) => {
-    setEditando(insumo.id);
-    setFormEdit({ stock: insumo.stock, minimo: insumo.minimo });
-  };
+  const abrirEditar  = (insumo) => { setEditando(insumo.id); setFormEdit({ stock: insumo.stock, minimo: insumo.minimo }); };
+  const cancelarEdit = ()       => setEditando(null);
 
   const guardarEdicion = async (id) => {
-    const { error } = await sb(`contenedores_medicamentos?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ stock: +formEdit.stock, minimo: +formEdit.minimo })
+    await sb(`contenedores_medicamentos?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ stock: +formEdit.stock, minimo: +formEdit.minimo }),
     }, usuario?.token);
-
-    if (!error) {
-      setEditando(null);
-      cargarCarros();
-    }
+    setEditando(null);
+    cargarCarros();
   };
 
-  const carrosUnicos = [...new Set(carros.map(c => c.nombre))];
-  const colores = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#06b6d4'];
+  /* ── TanStack columns ───────────────────────────────── */
+  const columns = useMemo(() => [
+    {
+      accessorFn: (row) => row.nombre_insumo || "",
+      id: "nombre_insumo",
+      header: ({ column }) => (
+        <button
+          className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider hover:text-foreground transition-colors"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Medicamento <ArrowUpDown size={11} />
+        </button>
+      ),
+      cell: ({ row }) => (
+        <span className="font-semibold text-sm">{row.original.nombre_insumo || "Sin nombre"}</span>
+      ),
+    },
+    {
+      accessorKey: "stock",
+      header: ({ column }) => (
+        <button
+          className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider hover:text-foreground transition-colors"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Stock <ArrowUpDown size={11} />
+        </button>
+      ),
+      cell: ({ row }) => {
+        const ins = row.original;
+        const bajStock = ins.stock <= ins.minimo;
+        if (editando === ins.id) {
+          return (
+            <Input
+              type="number"
+              value={formEdit.stock}
+              onChange={e => setFormEdit(f => ({ ...f, stock: e.target.value }))}
+              className="w-16 h-7 text-center text-xs"
+            />
+          );
+        }
+        return (
+          <span className={cn("font-semibold", bajStock ? "text-red-400" : "")}>
+            {ins.stock}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "minimo",
+      header: ({ column }) => (
+        <button
+          className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider hover:text-foreground transition-colors"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Mínimo <ArrowUpDown size={11} />
+        </button>
+      ),
+      cell: ({ row }) => {
+        const ins = row.original;
+        if (editando === ins.id) {
+          return (
+            <Input
+              type="number"
+              value={formEdit.minimo}
+              onChange={e => setFormEdit(f => ({ ...f, minimo: e.target.value }))}
+              className="w-16 h-7 text-center text-xs"
+            />
+          );
+        }
+        return <span className="text-xs text-muted-foreground">{ins.minimo}</span>;
+      },
+    },
+    {
+      accessorKey: "unidad",
+      header: () => <span className="text-xs font-bold uppercase tracking-wider">Unidad</span>,
+      cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.unidad}</span>,
+    },
+    {
+      id: "estado",
+      header: () => <span className="text-xs font-bold uppercase tracking-wider">Estado</span>,
+      cell: ({ row }) => {
+        const ins = row.original;
+        if (ins.stock === 0)        return <Badge variant="danger"  className="text-xs">Agotado</Badge>;
+        if (ins.stock <= ins.minimo) return <Badge variant="warning" className="text-xs">Stock bajo</Badge>;
+        return <Badge variant="success" className="text-xs">OK</Badge>;
+      },
+    },
+    {
+      id: "acciones",
+      header: () => <span className="text-xs font-bold uppercase tracking-wider">Acciones</span>,
+      cell: ({ row }) => {
+        const ins = row.original;
+        if (editando === ins.id) {
+          return (
+            <div className="flex gap-1.5">
+              <Button size="sm" variant="teal"  className="h-7 text-xs px-2" onClick={() => guardarEdicion(ins.id)}>
+                <Save size={11} /> Guardar
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={cancelarEdit}>
+                <X size={11} />
+              </Button>
+            </div>
+          );
+        }
+        return (
+          <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => abrirEditar(ins)}>
+            <Pencil size={11} /> Editar
+          </Button>
+        );
+      },
+    },
+  ], [editando, formEdit]);
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Cargando carros...</div>;
+  /* ── TanStack table instance ────────────────────────── */
+  const tableData = useMemo(
+    () => cajonAbierto ? insumosCajon(cajonAbierto) : [],
+    [cajonAbierto, carros, carroSel]
+  );
+
+  const table = useReactTable({
+    data: tableData,
+    columns,
+    state:  { sorting, globalFilter },
+    onSortingChange:      setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    getCoreRowModel:       getCoreRowModel(),
+    getSortedRowModel:     getSortedRowModel(),
+    getFilteredRowModel:   getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: 20 } },
+  });
+
+  /* ── Early returns ──────────────────────────────────── */
+  if (loading) return <div className="p-10 text-center text-sm" style={{ color: C.textMuted }}>Cargando carros...</div>;
 
   if (!esAdmin && carrosPermitidos.length === 0) {
     return (
-      <div style={{ padding: 40, textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🚑</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
-          No tienes carros asignados
-        </div>
-        <div style={{ fontSize: 14, color: C.textMuted }}>
-          Solicita al administrador que te asigne a un evento con un carro clínico.
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-10 text-center">
+          <div className="text-5xl mb-4">🚑</div>
+          <p className="text-lg font-bold mb-2">No tienes carros asignados</p>
+          <p className="text-sm" style={{ color: C.textMuted }}>Solicita al administrador que te asigne a un evento con un carro clínico.</p>
+        </CardContent>
+      </Card>
     );
   }
 
-  return (
-    <div style={{ display: 'flex', gap: 20 }}>
-      {/* Lista de carros */}
-      <div style={{ width: 185, flexShrink: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>Seleccionar carro</div>
-        {carrosUnicos.map((nombreCarro, idx) => {
-          const alertas = alertasCarro(nombreCarro);
-          const activo = carroSel === nombreCarro;
-          const color = colores[idx % colores.length];
-          const totalInsumos = carros.filter(c => c.nombre === nombreCarro).length;
+  const cajonMeta  = CAJONES_META.find(c => c.id === cajonAbierto);
+  const carroColor = CARRO_COLORS[carrosUnicos.indexOf(carroSel) % CARRO_COLORS.length];
 
+  /* ── Render ─────────────────────────────────────────── */
+  return (
+    <div className="flex gap-4">
+
+      {/* ── Sidebar: selección de carro ─────────────────── */}
+      <div className="w-44 shrink-0 space-y-1.5">
+        <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.textFaint }}>
+          Seleccionar carro
+        </p>
+        {carrosUnicos.map((nombre, idx) => {
+          const alertas = alertasCarro(nombre);
+          const activo  = carroSel === nombre;
+          const color   = CARRO_COLORS[idx % CARRO_COLORS.length];
+          const total   = carros.filter(c => c.nombre === nombre).length;
           return (
-            <div key={nombreCarro} onClick={() => { setCarroSel(nombreCarro); setCajonAbierto(null); }}
-                 style={{ cursor: 'pointer', background: activo ? C.surface : 'transparent', border: `1px solid ${activo ? color + '50' : C.border}`, borderRadius: 10, padding: '11px 13px', marginBottom: 7, borderLeft: `3px solid ${color}`, transition: 'all 0.12s' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: 14, color: activo ? C.text : C.textMuted }}>{nombreCarro}</span>
-                {alertas > 0 && <span style={{ background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</span>}
+            <div
+              key={nombre}
+              onClick={() => { setCarroSel(nombre); setCajonAbierto(null); setGlobalFilter(""); }}
+              className="rounded-lg border p-3 cursor-pointer transition-all"
+              style={{
+                borderLeft:   `3px solid ${color}`,
+                borderColor:  activo ? `${color}50` : C.border,
+                borderLeftColor: color,
+                background:   activo ? C.surface : "transparent",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold" style={{ color: activo ? C.text : C.textMuted }}>{nombre}</span>
+                {alertas > 0 && (
+                  <span className="text-xs font-bold text-white rounded-full px-1.5 py-0.5" style={{ background: C.red, fontSize: 9 }}>{alertas}</span>
+                )}
               </div>
-              <div style={{ fontSize: 11, color: C.textFaint, marginTop: 2 }}>{totalInsumos} medicamentos</div>
+              <p className="text-xs mt-0.5" style={{ color: C.textFaint }}>{total} meds.</p>
             </div>
           );
         })}
       </div>
 
-      {/* Detalle del carro */}
-      <div style={{ flex: 1 }}>
+      {/* ── Detalle del carro ───────────────────────────── */}
+      <div className="flex-1 space-y-4">
         {carroSel && (
           <>
-            {/* Header */}
-            <div style={{ ...S.card, borderLeft: `3px solid ${colores[carrosUnicos.indexOf(carroSel) % colores.length]}`, marginBottom: 20 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: colores[carrosUnicos.indexOf(carroSel) % colores.length] }}>{carroSel}</div>
-              <div style={{ fontSize: 13, color: C.textMuted, marginTop: 3 }}>
-                {insumosCarroActual.length} medicamentos totales · 5 cajones
-              </div>
-            </div>
+            {/* Header carro */}
+            <Card style={{ borderLeft: `3px solid ${carroColor}` }}>
+              <CardContent className="p-5">
+                <h2 className="text-xl font-extrabold" style={{ color: carroColor }}>{carroSel}</h2>
+                <p className="text-xs mt-1" style={{ color: C.textMuted }}>
+                  {carroActual.length} medicamentos totales · {CAJONES_META.length} cajones
+                </p>
+              </CardContent>
+            </Card>
 
-            {/* Tarjetas de cajones */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
+            {/* Grid de cajones */}
+            <div className="grid grid-cols-5 gap-3">
               {CAJONES_META.map(cj => {
-                const items = insumosCajon(cj.id);
+                const items   = insumosCajon(cj.id);
                 const alertas = alertasCajon(cj.id);
                 const abierto = cajonAbierto === cj.id;
-
                 return (
-                  <div key={cj.id} onClick={() => toggleCajon(cj.id)}
-                       style={{ cursor: 'pointer', background: abierto ? cj.color + '15' : C.surface, border: `2px solid ${abierto ? cj.color : C.border}`, borderRadius: 12, padding: '16px 12px', textAlign: 'center', transition: 'all 0.15s', position: 'relative' }}>
+                  <div
+                    key={cj.id}
+                    onClick={() => toggleCajon(cj.id)}
+                    className="relative rounded-xl border-2 p-4 text-center cursor-pointer transition-all hover:shadow-md"
+                    style={{
+                      borderColor: abierto ? cj.color : C.border,
+                      background:  abierto ? `${cj.color}15` : C.surface,
+                    }}
+                  >
                     {alertas > 0 && (
-                      <div style={{ position: 'absolute', top: 8, right: 8, background: C.red, color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: 8, padding: '1px 5px' }}>{alertas}</div>
+                      <span className="absolute top-2 right-2 text-white text-xs font-bold rounded-full px-1.5 py-0.5" style={{ background: C.red, fontSize: 9 }}>
+                        {alertas}
+                      </span>
                     )}
-                    <div style={{ fontSize: 28, marginBottom: 6 }}>{cj.emoji}</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: abierto ? cj.color : C.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>{cj.id}</div>
-                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, lineHeight: 1.3 }}>{cj.nombre}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: cj.color, marginTop: 8 }}>{items.length} items</div>
-                    <div style={{ fontSize: 11, marginTop: 4, color: alertas > 0 ? C.red : C.green }}>
-                      {alertas > 0 ? `⚠️ ${alertas} alertas` : '✅ OK'}
-                    </div>
-                    <div style={{ fontSize: 10, color: C.textFaint, marginTop: 6 }}>{abierto ? '▲ Cerrar' : '▼ Ver medicamentos'}</div>
+                    <div className="text-2xl mb-1.5">{cj.emoji}</div>
+                    <p className="text-xs font-extrabold uppercase tracking-wider" style={{ color: abierto ? cj.color : C.text }}>{cj.id}</p>
+                    <p className="text-xs mt-1 leading-tight" style={{ color: C.textMuted }}>{cj.nombre}</p>
+                    <p className="text-sm font-bold mt-2" style={{ color: cj.color }}>{items.length} items</p>
+                    <p className="text-xs mt-1" style={{ color: alertas > 0 ? C.red : C.green }}>
+                      {alertas > 0 ? `⚠️ ${alertas} alertas` : "✅ OK"}
+                    </p>
+                    <p className="text-xs mt-1.5" style={{ color: C.textFaint }}>{abierto ? "▲ Cerrar" : "▼ Ver"}</p>
                   </div>
                 );
               })}
             </div>
 
-            {/* Contenido del cajón abierto */}
-            {cajonAbierto && (
-              <div style={{ ...S.card, borderTop: `3px solid ${CAJONES_META.find(c => c.id === cajonAbierto)?.color}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <span style={{ fontSize: 22 }}>{CAJONES_META.find(c => c.id === cajonAbierto)?.emoji}</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: CAJONES_META.find(c => c.id === cajonAbierto)?.color }}>{cajonAbierto}</div>
-                    <div style={{ fontSize: 12, color: C.textMuted }}>{CAJONES_META.find(c => c.id === cajonAbierto)?.nombre}</div>
+            {/* Tabla del cajón abierto */}
+            {cajonAbierto && cajonMeta && (
+              <Card style={{ borderTop: `3px solid ${cajonMeta.color}` }}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm" style={{ color: cajonMeta.color }}>
+                    <span className="text-lg">{cajonMeta.emoji}</span>
+                    {cajonAbierto} — {cajonMeta.nombre}
+                    <span className="ml-auto text-xs font-normal text-muted-foreground">
+                      {table.getFilteredRowModel().rows.length} / {tableData.length} items
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+
+                  {/* Buscador */}
+                  <div className="flex items-center gap-2 max-w-xs">
+                    <Search size={14} className="text-muted-foreground shrink-0" />
+                    <Input
+                      placeholder="Buscar medicamento..."
+                      value={globalFilter}
+                      onChange={e => setGlobalFilter(e.target.value)}
+                      className="h-8 text-sm"
+                    />
                   </div>
-                </div>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                      <th style={{ padding: '8px', textAlign: 'left', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MEDICAMENTO</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>STOCK</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>MÍNIMO</th>
-                      <th style={{ padding: '8px', textAlign: 'center', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>UNIDAD</th>
-                      <th style={{ padding: '8px', textAlign: 'right', fontSize: 11, color: C.textFaint, fontWeight: 700 }}>ACCIONES</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {insumosCajon(cajonAbierto).map(insumo => {
-                      const enEdicion = editando === insumo.id;
-                      const bajStock = insumo.stock <= insumo.minimo;
+                  {/* Tabla */}
+                  <div className="rounded-md border" style={{ borderColor: C.border }}>
+                    <Table>
+                      <TableHeader>
+                        {table.getHeaderGroups().map(hg => (
+                          <TableRow key={hg.id}>
+                            {hg.headers.map(h => (
+                              <TableHead key={h.id}>
+                                {flexRender(h.column.columnDef.header, h.getContext())}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableHeader>
+                      <TableBody>
+                        {table.getRowModel().rows.length ? (
+                          table.getRowModel().rows.map(row => (
+                            <TableRow
+                              key={row.id}
+                              className={cn(row.original.stock <= row.original.minimo && "bg-red-500/5")}
+                            >
+                              {row.getVisibleCells().map(cell => (
+                                <TableCell key={cell.id}>
+                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={columns.length} className="h-20 text-center text-sm text-muted-foreground">
+                              {globalFilter ? "Sin resultados para esa búsqueda." : "Sin medicamentos en este cajón."}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
 
-                      return (
-                        <tr key={insumo.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                          <td style={{ padding: '10px', fontSize: 13, fontWeight: 600 }}>{insumo.nombre_insumo || "Sin nombre"}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input type="number" value={formEdit.stock} onChange={e => setFormEdit({...formEdit, stock: e.target.value})}
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ color: bajStock ? C.red : C.text, fontWeight: bajStock ? 700 : 400 }}>{insumo.stock}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>
-                            {enEdicion ? (
-                              <input type="number" value={formEdit.minimo} onChange={e => setFormEdit({...formEdit, minimo: e.target.value})}
-                                     style={{ width: 60, padding: 4, textAlign: 'center', border: `1px solid ${C.border}`, borderRadius: 4 }} />
-                            ) : (
-                              <span style={{ fontSize: 12, color: C.textMuted }}>{insumo.minimo}</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px', textAlign: 'center', fontSize: 12, color: C.textMuted }}>{insumo.unidad}</td>
-                          <td style={{ padding: '10px', textAlign: 'right' }}>
-                            {enEdicion ? (
-                              <>
-                                <button onClick={() => guardarEdicion(insumo.id)} style={{ ...S.btn('primary'), fontSize: 11, padding: '4px 10px', marginRight: 5 }}>💾 Guardar</button>
-                                <button onClick={() => setEditando(null)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✖️</button>
-                              </>
-                            ) : (
-                              <button onClick={() => abrirEditar(insumo)} style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 10px' }}>✏️ Editar</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  {/* Paginación */}
+                  {table.getPageCount() > 1 && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
+                      </span>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                          ← Anterior
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                          Siguiente →
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
           </>
         )}

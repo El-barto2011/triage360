@@ -1,41 +1,56 @@
 import { useState, useEffect } from "react";
-import { C, S, Icon } from "../../config/theme";
+import { C } from "../../config/theme";
 import { sb } from "../../config/supabase";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { Badge } from "../ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Separator } from "../ui/separator";
+import { cn } from "../../lib/utils";
+import { Waves, Plus, TrendingDown, CheckCircle2 } from "lucide-react";
+import { toast } from "../ui/use-toast";
+
+const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
+
+const Field = ({ label, children, hint, required }) => (
+  <div className="space-y-1.5">
+    <Label>{label}{required && <span className="text-destructive ml-0.5">*</span>}</Label>
+    {children}
+    {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+  </div>
+);
+
+const ZONAS = [
+  "Cuello", "Hombros", "Espalda alta", "Espalda baja", "Brazos",
+  "Antebrazos", "Manos", "Glúteos", "Isquiotibiales", "Gemelos",
+  "Cuádriceps", "Aductores", "Pies", "Zona lumbar",
+];
 
 export function VistaMasoterapiaEspecifica({ usuario }) {
-  const [fichas, setFichas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
-  const [eventos, setEventos] = useState([]);
+  const [fichas,    setFichas]    = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [modal,     setModal]     = useState(null);
+  const [form,      setForm]      = useState({});
+  const [eventos,   setEventos]   = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
 
-  const zonasDisponibles = [
-    "Cuello", "Hombros", "Espalda alta", "Espalda baja", "Brazos",
-    "Antebrazos", "Manos", "Glúteos", "Isquiotibiales", "Gemelos",
-    "Cuádriceps", "Aductores", "Pies", "Zona lumbar"
-  ];
-
-  useEffect(() => {
-    cargarDatos();
-  }, [usuario]);
+  useEffect(() => { cargarDatos(); }, [usuario]);
 
   const cargarDatos = async () => {
     setLoading(true);
     const esAdmin = usuario?.rol === "admin";
-
     const [fs, evs] = await Promise.all([
-      // Admin ve todas las fichas, masoterapeutas solo las suyas
-      sb(
-        esAdmin
-          ? `fichas_masoterapia?order=created_at.desc&limit=100`
-          : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
-        {},
-        usuario?.token
-      ),
-      sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token)
+      sb(esAdmin
+        ? "fichas_masoterapia?order=created_at.desc&limit=100"
+        : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
+        {}, usuario?.token),
+      sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token),
     ]);
-    if (fs) setFichas(fs);
+    if (fs)  setFichas(fs);
     if (evs) setEventos(evs);
     setLoading(false);
   };
@@ -43,48 +58,28 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
   const abrirNuevaFicha = () => {
     const ahora = new Date();
     setForm({
-      fecha_atencion: ahora.toISOString().split('T')[0],
-      hora_atencion: ahora.toTimeString().slice(0,5),
-      paciente_nombre: "",
-      paciente_rut: "",
-      paciente_pasaporte: "",
-      tipo_identificacion: "rut",
-      paciente_edad: "",
+      fecha_atencion: ahora.toISOString().split("T")[0],
+      hora_atencion:  ahora.toTimeString().slice(0, 5),
+      paciente_nombre: "", paciente_rut: "", paciente_pasaporte: "",
+      tipo_identificacion: "rut", paciente_edad: "",
       categoria_paciente: "Jugador",
-      evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
+      evento:    eventos.length > 0 ? eventos[0].nombre_evento : "",
       evento_id: eventos.length > 0 ? eventos[0].id : null,
-      zonas_trabajadas: [],
-      dolor_inicial: 5,
-      dolor_posterior: 5,
-      duracion_minutos: 30,
-      observaciones: ""
+      zonas_trabajadas: [], dolor_inicial: 5, dolor_posterior: 5,
+      duracion_minutos: 30, observaciones: "",
     });
     setHistorialPaciente([]);
     setModal("nueva");
   };
 
   const buscarPacientePorRut = async (rut) => {
-    if (!rut || rut.length < 8) {
-      setHistorialPaciente([]);
-      return;
-    }
-
+    if (!rut || rut.length < 8) { setHistorialPaciente([]); return; }
     const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
-
-    const fichasPaciente = await sb(
-      `fichas_masoterapia?${campo}=eq.${rut}&order=created_at.desc&limit=10`,
-      {},
-      usuario?.token
-    );
-
-    if (fichasPaciente && fichasPaciente.length > 0) {
-      const ultima = fichasPaciente[0];
-      setForm(f => ({
-        ...f,
-        paciente_nombre: ultima.paciente_nombre,
-        paciente_edad: ultima.paciente_edad
-      }));
-      setHistorialPaciente(fichasPaciente);
+    const found = await sb(`fichas_masoterapia?${campo}=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
+    if (found?.length > 0) {
+      const u = found[0];
+      setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad }));
+      setHistorialPaciente(found);
     } else {
       setHistorialPaciente([]);
     }
@@ -92,512 +87,361 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
 
   const toggleZona = (zona) => {
     const zonas = form.zonas_trabajadas || [];
-    if (zonas.includes(zona)) {
-      setForm(f => ({ ...f, zonas_trabajadas: zonas.filter(z => z !== zona) }));
-    } else {
-      setForm(f => ({ ...f, zonas_trabajadas: [...zonas, zona] }));
-    }
+    setForm(f => ({
+      ...f,
+      zonas_trabajadas: zonas.includes(zona) ? zonas.filter(z => z !== zona) : [...zonas, zona],
+    }));
   };
 
   const guardarFicha = async () => {
     if (!form.paciente_nombre || !form.evento) {
-      alert("Por favor completa al menos el nombre del paciente y el evento");
+      toast({ title: "Campos requeridos", description: "Completa el nombre del paciente y el evento.", variant: "warning" });
       return;
     }
-
     if (!form.zonas_trabajadas || form.zonas_trabajadas.length === 0) {
-      alert("Selecciona al menos una zona trabajada");
+      toast({ title: "Zonas requeridas", description: "Selecciona al menos una zona trabajada.", variant: "warning" });
       return;
     }
-
-    // Crear timestamp personalizado
-    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || '00:00'}:00`;
+    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || "00:00"}:00`;
     const timestampPersonalizado = new Date(fechaHora).toISOString();
-
     const datos = {
-      evento: form.evento,
+      evento:    form.evento,
       evento_id: form.evento_id || null,
-      masoterapeuta_id: usuario.id,
+      masoterapeuta_id:     usuario.id,
       masoterapeuta_nombre: usuario.email,
-      paciente_nombre: form.paciente_nombre,
-      paciente_rut: form.tipo_identificacion === "rut" ? (form.paciente_rut || null) : null,
+      paciente_nombre:  form.paciente_nombre,
+      paciente_rut:     form.tipo_identificacion === "rut"       ? (form.paciente_rut      || null) : null,
       paciente_pasaporte: form.tipo_identificacion === "pasaporte" ? (form.paciente_pasaporte || null) : null,
       tipo_identificacion: form.tipo_identificacion || "rut",
-      paciente_edad: form.paciente_edad ? parseInt(form.paciente_edad) : null,
+      paciente_edad:    form.paciente_edad ? parseInt(form.paciente_edad) : null,
       categoria_paciente: form.categoria_paciente || "Jugador",
-      fecha_atencion: form.fecha_atencion,
+      fecha_atencion:   form.fecha_atencion,
       duracion_minutos: parseInt(form.duracion_minutos) || 30,
       zonas_trabajadas: form.zonas_trabajadas,
-      dolor_inicial: parseInt(form.dolor_inicial) || 5,
-      dolor_posterior: parseInt(form.dolor_posterior) || 5,
-      observaciones: form.observaciones || null,
-      created_at: timestampPersonalizado
+      dolor_inicial:    parseInt(form.dolor_inicial)    || 5,
+      dolor_posterior:  parseInt(form.dolor_posterior)  || 5,
+      observaciones:    form.observaciones || null,
+      created_at:       timestampPersonalizado,
     };
-
-    const res = await sb("fichas_masoterapia", {
-      method: "POST",
-      body: JSON.stringify(datos)
-    }, usuario?.token);
-
-    if (res) {
-      setFichas(prev => [res[0], ...prev]);
-      setModal(null);
-      alert("Ficha registrada exitosamente");
+    setGuardando(true);
+    try {
+      const res = await sb("fichas_masoterapia", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
+      if (res) {
+        setFichas(prev => [res[0], ...prev]);
+        setModal(null);
+        toast({ title: "Ficha registrada", description: `${form.paciente_nombre} — ${form.zonas_trabajadas?.length} zona(s) trabajada(s)`, variant: "success" });
+      } else {
+        toast({ title: "Error al guardar", description: "No se pudo registrar la ficha.", variant: "destructive" });
+      }
+    } finally {
+      setGuardando(false);
     }
   };
 
-  const verDetalleFicha = (ficha) => {
-    setForm(ficha);
-    setModal("detalle");
-  };
+  const verDetalleFicha = (f) => { setForm(f); setModal("detalle"); };
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando fichas...</div>;
+  if (loading) return <div className="p-10 text-center text-sm" style={{ color: C.textMuted }}>Cargando fichas...</div>;
 
   if (eventos.length === 0) {
     return (
-      <div style={{ ...S.card, padding: 40, textAlign: "center" }}>
-        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>No hay eventos específicos activos</div>
-        <div style={{ fontSize: 13, color: C.textMuted }}>
-          Los eventos deben estar configurados con tipo de masoterapia "Específico"
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-10 text-center">
+          <p className="font-bold text-base mb-2">No hay eventos específicos activos</p>
+          <p className="text-sm" style={{ color: C.textMuted }}>Los eventos deben estar configurados con tipo de masoterapia "Específico"</p>
+        </CardContent>
+      </Card>
     );
   }
 
-  const hoy = new Date().toISOString().split('T')[0];
-  const fichasHoy = fichas.filter(f => {
-    const fecha = new Date(f.created_at).toISOString().split('T')[0];
-    return fecha === hoy;
-  });
+  const hoy = new Date().toISOString().split("T")[0];
+  const fichasHoy        = fichas.filter(f => new Date(f.created_at).toISOString().split("T")[0] === hoy);
+  const fichasAnteriores = fichas.filter(f => new Date(f.created_at).toISOString().split("T")[0] !== hoy);
 
   return (
-    <div>
-      <div style={{ ...S.card, marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div className="space-y-4">
+
+      {/* ── Header ─────────────────────────────────────────── */}
+      <Card>
+        <CardContent className="p-5 flex items-center justify-between">
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.blue }}>Masoterapia Específica</div>
-            <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+            <h2 className="text-xl font-extrabold flex items-center gap-2" style={{ color: C.blue }}>
+              <Waves size={18} /> Masoterapia Específica
+            </h2>
+            <p className="text-xs mt-1" style={{ color: C.textMuted }}>
               {fichasHoy.length} fichas hoy · {fichas.length} fichas totales
-            </div>
+            </p>
           </div>
-          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={abrirNuevaFicha}>
-            + Nueva Ficha
-          </button>
-        </div>
-      </div>
+          <Button variant="teal" size="sm" onClick={abrirNuevaFicha}><Plus size={13} /> Nueva Ficha</Button>
+        </CardContent>
+      </Card>
 
+      {/* ── Fichas de hoy ─────────────────────────────────── */}
       {fichasHoy.length > 0 && (
-        <div style={S.card}>
-          <div style={{ fontWeight: 700, color: C.blue, marginBottom: 12 }}>Fichas de Hoy</div>
-          {fichasHoy.map(ficha => (
-            <div key={ficha.id} style={{
-              padding: 16,
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
-              marginBottom: 12,
-              background: C.surface,
-              cursor: "pointer"
-            }} onClick={() => verDetalleFicha(ficha)}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
-                {ficha.paciente_nombre}
-                {ficha.paciente_edad && <span style={{ color: C.textMuted, fontWeight: 400, marginLeft: 8 }}>({ficha.paciente_edad} años)</span>}
-              </div>
-              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>
-                {new Date(ficha.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} ·
-                {ficha.evento} · {ficha.duracion_minutos} min
-              </div>
-              <div style={{ fontSize: 13, marginBottom: 6 }}>
-                <strong>Zonas:</strong> {ficha.zonas_trabajadas?.join(", ") || "N/A"}
-              </div>
-              <div style={{ fontSize: 13 }}>
-                <strong>Dolor:</strong> {ficha.dolor_inicial}/10 → {ficha.dolor_posterior}/10
-                {ficha.dolor_posterior < ficha.dolor_inicial && (
-                  <span style={{ marginLeft: 8, color: C.green }}>✓ Mejoró</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {fichas.filter(f => {
-        const fecha = new Date(f.created_at).toISOString().split('T')[0];
-        return fecha !== hoy;
-      }).length > 0 && (
-        <div style={{ ...S.card, marginTop: 20 }}>
-          <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Fichas Anteriores por Evento</div>
-          {(() => {
-            // Agrupar fichas por evento
-            const fichasAnteriores = fichas.filter(f => {
-              const fecha = new Date(f.created_at).toISOString().split('T')[0];
-              return fecha !== hoy;
-            });
-
-            const porEvento = fichasAnteriores.reduce((acc, ficha) => {
-              const evento = ficha.evento || "Sin evento";
-              if (!acc[evento]) {
-                acc[evento] = [];
-              }
-              acc[evento].push(ficha);
-              return acc;
-            }, {});
-
-            return Object.entries(porEvento).map(([evento, fichasEvento]) => (
-              <div key={evento} style={{
-                marginBottom: 16,
-                padding: 16,
-                background: C.surface2,
-                borderRadius: 8,
-                border: `1px solid ${C.border}`
-              }}>
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 12
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: C.blue }}>
-                      {evento}
-                    </div>
-                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                      {fichasEvento.length} ficha{fichasEvento.length !== 1 ? 's' : ''} realizadas
-                    </div>
-                  </div>
-                  <div style={{
-                    fontSize: 24,
-                    fontWeight: 700,
-                    color: C.blue,
-                    background: C.surface,
-                    padding: "8px 16px",
-                    borderRadius: 6
-                  }}>
-                    {fichasEvento.length}
-                  </div>
-                </div>
-
-                <div style={{
-                  display: "grid",
-                  gap: 8,
-                  maxHeight: 200,
-                  overflowY: "auto"
-                }}>
-                  {fichasEvento.slice(0, 5).map(ficha => (
-                    <div key={ficha.id} style={{
-                      padding: 10,
-                      background: C.surface,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      fontSize: 12
-                    }} onClick={() => verDetalleFicha(ficha)}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 2 }}>{ficha.paciente_nombre}</div>
-                          <div style={{ color: C.textMuted, fontSize: 11 }}>
-                            {new Date(ficha.created_at).toLocaleDateString('es-CL')} ·
-                            {ficha.duracion_minutos} min ·
-                            Dolor: {ficha.dolor_inicial}→{ficha.dolor_posterior}
-                          </div>
-                        </div>
-                        <div style={{
-                          fontSize: 10,
-                          color: C.textMuted,
-                          background: C.surface2,
-                          padding: "4px 8px",
-                          borderRadius: 4,
-                          marginLeft: 8
-                        }}>
-                          {ficha.masoterapeuta_nombre?.split('@')[0] || 'N/A'}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {fichasEvento.length > 5 && (
-                    <div style={{
-                      fontSize: 11,
-                      color: C.textMuted,
-                      textAlign: "center",
-                      padding: 8
-                    }}>
-                      +{fichasEvento.length - 5} fichas más
-                    </div>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: C.blue }}>Fichas de Hoy</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {fichasHoy.map(ficha => (
+              <div
+                key={ficha.id}
+                className="rounded-lg border p-4 cursor-pointer transition-colors hover:bg-accent/10"
+                style={{ borderColor: C.border }}
+                onClick={() => verDetalleFicha(ficha)}
+              >
+                <p className="font-bold text-sm">
+                  {ficha.paciente_nombre}
+                  {ficha.paciente_edad && <span className="font-normal text-xs ml-2" style={{ color: C.textMuted }}>({ficha.paciente_edad} años)</span>}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: C.textMuted }}>
+                  {new Date(ficha.created_at).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })} · {ficha.evento} · {ficha.duracion_minutos} min
+                </p>
+                <p className="text-xs mt-1"><strong>Zonas:</strong> {ficha.zonas_trabajadas?.join(", ") || "N/A"}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs"><strong>Dolor:</strong> {ficha.dolor_inicial}/10 → {ficha.dolor_posterior}/10</span>
+                  {ficha.dolor_posterior < ficha.dolor_inicial && (
+                    <Badge variant="success" className="text-xs"><CheckCircle2 size={10} /> Mejoró</Badge>
                   )}
                 </div>
               </div>
-            ));
-          })()}
-        </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
-      {modal === "nueva" && (
-        <div style={S.modal} onClick={() => setModal(null)}>
-          <div style={{ ...S.modalBox, maxWidth: 700, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <div style={{ fontSize: 17, fontWeight: 700 }}>Nueva Ficha de Masoterapia</div>
-              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>×</button>
-            </div>
+      {/* ── Fichas anteriores por evento ─────────────────── */}
+      {fichasAnteriores.length > 0 && (() => {
+        const porEvento = fichasAnteriores.reduce((acc, f) => {
+          const ev = f.evento || "Sin evento";
+          if (!acc[ev]) acc[ev] = [];
+          acc[ev].push(f);
+          return acc;
+        }, {});
+        return (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: C.textMuted }}>Fichas Anteriores por Evento</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {Object.entries(porEvento).map(([evento, evFichas]) => (
+                <div key={evento} className="rounded-lg border p-4" style={{ background: C.surface2, borderColor: C.border }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-bold text-sm" style={{ color: C.blue }}>{evento}</p>
+                      <p className="text-xs" style={{ color: C.textMuted }}>{evFichas.length} ficha{evFichas.length !== 1 ? "s" : ""} realizadas</p>
+                    </div>
+                    <span className="text-2xl font-bold px-3 py-1 rounded" style={{ color: C.blue, background: C.surface }}>{evFichas.length}</span>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {evFichas.slice(0, 5).map(f => (
+                      <div key={f.id} className="rounded border p-2.5 cursor-pointer text-xs hover:bg-accent/10 transition-colors" style={{ background: C.surface, borderColor: C.border }} onClick={() => verDetalleFicha(f)}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold truncate">{f.paciente_nombre}</p>
+                            <p className="mt-0.5" style={{ color: C.textMuted }}>{new Date(f.created_at).toLocaleDateString("es-CL")} · {f.duracion_minutos} min · Dolor: {f.dolor_inicial}→{f.dolor_posterior}</p>
+                          </div>
+                          <span className="shrink-0 rounded px-1.5 py-0.5" style={{ background: C.surface2, color: C.textMuted }}>{f.masoterapeuta_nombre?.split("@")[0] || "N/A"}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {evFichas.length > 5 && <p className="text-center text-xs py-1" style={{ color: C.textMuted }}>+{evFichas.length - 5} fichas más</p>}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
-            {/* Toggle RUT/Pasaporte */}
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Tipo de Identificación</label>
-              <div style={{ display: "flex", gap: 8 }}>
+      {/* ══════════════════════════════════════════════════ */}
+      {/* Modal: Nueva Ficha                                 */}
+      {/* ══════════════════════════════════════════════════ */}
+      <Dialog open={modal === "nueva"} onOpenChange={(open) => { if (!open) setModal(null); }}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Waves size={16} style={{ color: C.blue }} /> Nueva Ficha de Masoterapia</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+
+            {/* Tipo identificación */}
+            <Field label="Tipo de Identificación">
+              <div className="flex gap-2">
                 {["rut", "pasaporte"].map(tipo => (
-                  <button
+                  <Button
                     key={tipo}
-                    style={{
-                      ...S.btn(form.tipo_identificacion === tipo ? "primary" : "ghost"),
-                      flex: 1
-                    }}
+                    variant={form.tipo_identificacion === tipo ? "teal" : "outline"}
+                    className="flex-1"
                     onClick={() => setForm(f => ({ ...f, tipo_identificacion: tipo, paciente_rut: "", paciente_pasaporte: "" }))}
                   >
                     {tipo === "rut" ? "RUT" : "Pasaporte"}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </div>
+            </Field>
 
-            {/* Campo RUT o Pasaporte */}
-            <div style={S.formRow}>
-              <label style={S.formLabel}>{form.tipo_identificacion === "rut" ? "RUT" : "Pasaporte"}</label>
+            <Field label={form.tipo_identificacion === "rut" ? "RUT" : "Pasaporte"}>
               {form.tipo_identificacion === "rut" ? (
-                <input
-                  style={S.input}
-                  value={form.paciente_rut || ""}
-                  onChange={e => {
-                    const v = e.target.value;
-                    setForm(f => ({ ...f, paciente_rut: v }));
-                    if (v.length >= 8) buscarPacientePorRut(v);
-                  }}
-                  placeholder="12345678-9"
-                />
+                <Input value={form.paciente_rut || ""} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_rut: v })); if (v.length >= 8) buscarPacientePorRut(v); }} placeholder="12345678-9" />
               ) : (
-                <input
-                  style={S.input}
-                  value={form.paciente_pasaporte || ""}
-                  onChange={e => {
-                    const v = e.target.value;
-                    setForm(f => ({ ...f, paciente_pasaporte: v }));
-                    if (v.length >= 8) buscarPacientePorRut(v);
-                  }}
-                  placeholder="AB123456"
-                />
+                <Input value={form.paciente_pasaporte || ""} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_pasaporte: v })); if (v.length >= 8) buscarPacientePorRut(v); }} placeholder="AB123456" />
               )}
-            </div>
+            </Field>
 
-            {/* Historial de paciente */}
+            {/* Historial */}
             {historialPaciente.length > 0 && (
-              <div style={{
-                background: C.surface2,
-                padding: 12,
-                borderRadius: 8,
-                marginBottom: 16,
-                border: `1px solid ${C.border}`
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: C.blue }}>
-                  ✓ {historialPaciente.length} atención{historialPaciente.length !== 1 ? 'es' : ''} previa{historialPaciente.length !== 1 ? 's' : ''}
-                </div>
-                <div style={{ fontSize: 12, color: C.textMuted, maxHeight: 150, overflowY: "auto" }}>
+              <div className="rounded-lg border p-3 space-y-2" style={{ background: C.surface2, borderColor: C.border }}>
+                <p className="text-xs font-semibold" style={{ color: C.blue }}>
+                  ✓ {historialPaciente.length} atención{historialPaciente.length !== 1 ? "es" : ""} previa{historialPaciente.length !== 1 ? "s" : ""}
+                </p>
+                <div className="max-h-36 overflow-y-auto space-y-1.5 text-xs" style={{ color: C.textMuted }}>
                   {historialPaciente.slice(0, 5).map((h, i) => (
-                    <div key={i} style={{ padding: "6px 0", borderBottom: i < 4 ? `1px solid ${C.border}` : "none" }}>
-                      <div style={{ fontWeight: 600 }}>{new Date(h.created_at).toLocaleDateString('es-CL')} - {h.evento}</div>
-                      <div>Zonas: {h.zonas_trabajadas?.join(", ") || "N/A"} · Dolor: {h.dolor_inicial}→{h.dolor_posterior}</div>
-                      <div style={{ fontSize: 11, color: C.textMuted }}>Por: {h.masoterapeuta_nombre?.split('@')[0]}</div>
+                    <div key={i} className="py-1 border-b last:border-0" style={{ borderColor: C.border }}>
+                      <p className="font-semibold">{new Date(h.created_at).toLocaleDateString("es-CL")} - {h.evento}</p>
+                      <p>Zonas: {h.zonas_trabajadas?.join(", ") || "N/A"} · Dolor: {h.dolor_inicial}→{h.dolor_posterior}</p>
+                      <p className="text-xs" style={{ color: C.textMuted }}>Por: {h.masoterapeuta_nombre?.split("@")[0]}</p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Nombre del Paciente *</label>
-                <input
-                  style={S.input}
-                  value={form.paciente_nombre || ""}
-                  onChange={e => setForm(f => ({ ...f, paciente_nombre: e.target.value }))}
-                  placeholder="Nombre del deportista"
-                />
+            <div className="grid grid-cols-4 gap-3">
+              <div className="col-span-2">
+                <Field label="Nombre del Paciente" required>
+                  <Input value={form.paciente_nombre || ""} onChange={e => setForm(f => ({ ...f, paciente_nombre: e.target.value }))} placeholder="Nombre del deportista" />
+                </Field>
               </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Edad</label>
-                <input
-                  style={S.input}
-                  type="number"
-                  value={form.paciente_edad || ""}
-                  onChange={e => setForm(f => ({ ...f, paciente_edad: e.target.value }))}
-                  placeholder="35"
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Evento *</label>
-                <select
-                  style={{ ...S.select, width: "100%" }}
-                  value={form.evento || ""}
-                  onChange={e => setForm(f => ({ ...f, evento: e.target.value }))}
-                >
-                  {eventos.map(ev => (
-                    <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
-                  ))}
+              <Field label="Edad">
+                <Input type="number" value={form.paciente_edad || ""} onChange={e => setForm(f => ({ ...f, paciente_edad: e.target.value }))} placeholder="35" />
+              </Field>
+              <Field label="Categoría">
+                <select className={selectCls} value={form.categoria_paciente || "Jugador"} onChange={e => setForm(f => ({ ...f, categoria_paciente: e.target.value }))}>
+                  <option>Jugador</option><option>Staff</option><option>Voluntario</option>
                 </select>
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <Field label="Evento" required>
+                  <select className={selectCls} value={form.evento || ""} onChange={e => setForm(f => ({ ...f, evento: e.target.value }))}>
+                    {eventos.map(ev => <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>)}
+                  </select>
+                </Field>
               </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Duración (min)</label>
-                <input
-                  style={S.input}
-                  type="number"
-                  value={form.duracion_minutos || 30}
-                  onChange={e => setForm(f => ({ ...f, duracion_minutos: e.target.value }))}
-                  placeholder="30"
-                />
+              <Field label="Duración (min)">
+                <Input type="number" value={form.duracion_minutos || 30} onChange={e => setForm(f => ({ ...f, duracion_minutos: e.target.value }))} placeholder="30" />
+              </Field>
+            </div>
+
+            <Separator />
+
+            {/* Zonas trabajadas */}
+            <div className="space-y-2">
+              <Label>Zonas Trabajadas <span className="text-destructive">*</span></Label>
+              <div className="grid grid-cols-3 gap-2">
+                {ZONAS.map(zona => {
+                  const activa = (form.zonas_trabajadas || []).includes(zona);
+                  return (
+                    <label
+                      key={zona}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-xs transition-colors",
+                        activa ? "border-blue-500/50" : "border-border hover:border-border/80"
+                      )}
+                      style={{ background: activa ? C.blueDim : "transparent" }}
+                    >
+                      <input type="checkbox" checked={activa} onChange={() => toggleZona(zona)} className="shrink-0" />
+                      <span>{zona}</span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ ...S.formLabel, marginBottom: 12, display: "block" }}>Zonas Trabajadas *</label>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                {zonasDisponibles.map(zona => (
-                  <label key={zona} style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "8px 12px",
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    background: (form.zonas_trabajadas || []).includes(zona) ? C.blueDim : "transparent",
-                    fontSize: 13
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={(form.zonas_trabajadas || []).includes(zona)}
-                      onChange={() => toggleZona(zona)}
-                    />
-                    <span>{zona}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <Separator />
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Dolor Inicial (1-10)</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <input
-                    style={{ ...S.input, flex: 1 }}
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={form.dolor_inicial || 5}
-                    onChange={e => setForm(f => ({ ...f, dolor_inicial: e.target.value }))}
-                  />
-                  <span style={{ fontSize: 20, fontWeight: 700, width: 40, textAlign: "center" }}>
-                    {form.dolor_inicial || 5}
-                  </span>
+            {/* Escala de dolor */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label>Dolor Inicial (1–10)</Label>
+                <div className="flex items-center gap-3">
+                  <input type="range" min="1" max="10" className="flex-1" value={form.dolor_inicial || 5} onChange={e => setForm(f => ({ ...f, dolor_inicial: e.target.value }))} />
+                  <span className="text-2xl font-extrabold w-10 text-center" style={{ color: C.orange }}>{form.dolor_inicial || 5}</span>
                 </div>
               </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Dolor Final (1-10)</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <input
-                    style={{ ...S.input, flex: 1 }}
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={form.dolor_posterior || 5}
-                    onChange={e => setForm(f => ({ ...f, dolor_posterior: e.target.value }))}
-                  />
-                  <span style={{ fontSize: 20, fontWeight: 700, width: 40, textAlign: "center" }}>
+              <div className="space-y-2">
+                <Label>Dolor Final (1–10)</Label>
+                <div className="flex items-center gap-3">
+                  <input type="range" min="1" max="10" className="flex-1" value={form.dolor_posterior || 5} onChange={e => setForm(f => ({ ...f, dolor_posterior: e.target.value }))} />
+                  <span className="text-2xl font-extrabold w-10 text-center" style={{ color: parseInt(form.dolor_posterior) < parseInt(form.dolor_inicial) ? C.green : C.orange }}>
                     {form.dolor_posterior || 5}
                   </span>
                 </div>
+                {parseInt(form.dolor_posterior) < parseInt(form.dolor_inicial) && (
+                  <p className="text-xs flex items-center gap-1" style={{ color: C.green }}>
+                    <TrendingDown size={11} /> Mejoría de {parseInt(form.dolor_inicial) - parseInt(form.dolor_posterior)} puntos
+                  </p>
+                )}
               </div>
             </div>
 
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Observaciones</label>
-              <textarea
-                style={{ ...S.input, minHeight: 80 }}
-                value={form.observaciones || ""}
-                onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
-                placeholder="Observaciones sobre la sesión, reacciones del paciente, etc."
-              />
-            </div>
+            <Field label="Observaciones">
+              <Textarea value={form.observaciones || ""} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="Observaciones sobre la sesión, reacciones del paciente, etc." className="min-h-[80px]" />
+            </Field>
 
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
-              <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
-              <button style={S.btn("primary")} onClick={guardarFicha}>Guardar Ficha</button>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setModal(null)} disabled={guardando}>Cancelar</Button>
+              <Button variant="teal" onClick={guardarFicha} loading={guardando}>
+                {guardando ? "Guardando..." : "Guardar Ficha"}
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {modal === "detalle" && form && (
-        <div style={S.modal} onClick={() => setModal(null)}>
-          <div style={{ ...S.modalBox, maxWidth: 700, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <div style={{ fontSize: 17, fontWeight: 700 }}>Detalle de Ficha</div>
-              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>×</button>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{form.paciente_nombre}</div>
-              {form.paciente_edad && <div style={{ fontSize: 13, color: C.textMuted }}>Edad: {form.paciente_edad} años</div>}
-              <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
-                Evento: {form.evento} · {new Date(form.created_at).toLocaleString('es-CL')}
+      {/* Modal: Detalle */}
+      <Dialog open={modal === "detalle"} onOpenChange={(open) => { if (!open) setModal(null); }}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Detalle de Ficha</DialogTitle></DialogHeader>
+          {form && (
+            <div className="space-y-4 py-2 text-sm">
+              <div>
+                <p className="font-bold text-base">{form.paciente_nombre}</p>
+                {form.paciente_edad && <p style={{ color: C.textMuted }}>Edad: {form.paciente_edad} años</p>}
+                <p className="mt-1" style={{ color: C.textMuted }}>Evento: {form.evento} · {new Date(form.created_at).toLocaleString("es-CL")}</p>
+                <p style={{ color: C.textMuted }}>Duración: {form.duracion_minutos} minutos</p>
               </div>
-              <div style={{ fontSize: 13, color: C.textMuted }}>
-                Duración: {form.duracion_minutos} minutos
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Zonas Trabajadas:</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {(form.zonas_trabajadas || []).map(zona => (
-                  <span key={zona} style={{
-                    ...S.badge(C.blue, C.blueDim),
-                    fontSize: 12
-                  }}>
-                    {zona}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Dolor:</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <div style={{ textAlign: "center", padding: 16, background: C.surface2, borderRadius: 6 }}>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Dolor Inicial</div>
-                  <div style={{ fontSize: 32, fontWeight: 700 }}>{form.dolor_inicial}/10</div>
-                </div>
-                <div style={{ textAlign: "center", padding: 16, background: C.surface2, borderRadius: 6 }}>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Dolor Final</div>
-                  <div style={{ fontSize: 32, fontWeight: 700 }}>{form.dolor_posterior}/10</div>
+              <Separator />
+              <div>
+                <p className="font-semibold mb-2">Zonas Trabajadas</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(form.zonas_trabajadas || []).map(z => (
+                    <Badge key={z} variant="teal" className="text-xs">{z}</Badge>
+                  ))}
                 </div>
               </div>
-              {form.dolor_posterior < form.dolor_inicial && (
-                <div style={{ marginTop: 12, padding: 12, background: C.greenDim, borderRadius: 6, textAlign: "center" }}>
-                  <span style={{ color: C.green, fontWeight: 600 }}>
-                    ✓ Mejoría de {form.dolor_inicial - form.dolor_posterior} puntos
-                  </span>
+              <div>
+                <p className="font-semibold mb-3">Escala de Dolor</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-4 rounded-lg" style={{ background: C.surface2 }}>
+                    <p className="text-xs uppercase tracking-wide mb-1" style={{ color: C.textMuted }}>Dolor Inicial</p>
+                    <p className="text-4xl font-extrabold">{form.dolor_inicial}/10</p>
+                  </div>
+                  <div className="text-center p-4 rounded-lg" style={{ background: C.surface2 }}>
+                    <p className="text-xs uppercase tracking-wide mb-1" style={{ color: C.textMuted }}>Dolor Final</p>
+                    <p className="text-4xl font-extrabold">{form.dolor_posterior}/10</p>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {form.observaciones && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>Observaciones:</div>
-                <div style={{ fontSize: 14 }}>{form.observaciones}</div>
+                {form.dolor_posterior < form.dolor_inicial && (
+                  <div className="mt-3 rounded-lg p-3 text-center" style={{ background: C.greenDim }}>
+                    <p className="font-semibold flex items-center justify-center gap-2" style={{ color: C.green }}>
+                      <CheckCircle2 size={15} /> Mejoría de {form.dolor_inicial - form.dolor_posterior} puntos
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
+              {form.observaciones && <div><p className="font-semibold mb-1">Observaciones</p><p>{form.observaciones}</p></div>}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

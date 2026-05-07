@@ -2,17 +2,17 @@ import { useState, useEffect } from "react";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
 import { CATEGORIAS_INSUMOS, calcularPorcentajeValorizado } from "../../config/constants";
+import { ModalAgregarInsumo } from "../common/ModalAgregarInsumo";
 
 const fmt = (n) => n != null ? `$${Number(n).toLocaleString("es-CL")}` : "—";
 
-// Excluir "Todos" del dropdown de edición
 const CATS_EDICION = CATEGORIAS_INSUMOS.filter(c => c !== "Todos");
 
-function Toast({ msg, onHide }) {
+function Toast({ msg, color, onHide }) {
   useEffect(() => { const t = setTimeout(onHide, 2500); return () => clearTimeout(t); }, [onHide]);
   return (
-    <div style={{ position: "fixed", bottom: 28, right: 28, background: C.green, color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: "0 4px 20px #0006" }}>
-      ✓ {msg}
+    <div style={{ position: "fixed", bottom: 28, right: 28, background: color || C.green, color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: "0 4px 20px #0006" }}>
+      {msg}
     </div>
   );
 }
@@ -26,6 +26,7 @@ export function GestionInsumosGenerales({ usuario }) {
   const [filtroCategoria, setFiltroCategoria] = useState("Todos");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [modalAgregar, setModalAgregar] = useState(false);
 
   useEffect(() => { cargar(); }, [usuario]);
 
@@ -63,18 +64,39 @@ export function GestionInsumosGenerales({ usuario }) {
     }, usuario?.token);
     if (res) {
       setInsumos(prev => prev.map(i => i.id === ins.id ? { ...i, ...patch } : i));
-      setToast(`Guardado: ${ins.nombre}`);
+      setToast({ msg: `✅ Guardado: ${ins.nombre}`, color: C.green });
     }
     setEditando(null);
     setFormEdit({});
     setGuardando(false);
   };
 
+  const agregarInsumo = async (form) => {
+    const res = await sb("catalogo_insumos", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre:          form.nombre.trim(),
+        categoria:       form.categoria       || "Otros",
+        unidad:          form.unidad          || null,
+        precio_unitario: form.precio_unitario || null,
+        proveedor:       form.proveedor       || null,
+        observaciones:   form.observaciones   || null,
+      }),
+    }, usuario?.token);
+    if (res) {
+      setToast({ msg: "✅ Insumo agregado al catálogo", color: C.green });
+      setModalAgregar(false);
+      cargar();
+    } else {
+      setToast({ msg: "❌ Error: Este insumo ya existe o hubo un problema", color: C.red });
+    }
+  };
+
   const limpiarFiltros = () => { setBusqueda(""); setFiltroCategoria("Todos"); };
 
   const insumosFiltrados = insumos.filter(i => {
-    const okCat  = filtroCategoria === "Todos" || i.categoria === filtroCategoria;
-    const okNom  = i.nombre?.toLowerCase().includes(busqueda.toLowerCase());
+    const okCat = filtroCategoria === "Todos" || i.categoria === filtroCategoria;
+    const okNom = i.nombre?.toLowerCase().includes(busqueda.toLowerCase());
     return okCat && okNom;
   });
 
@@ -87,7 +109,10 @@ export function GestionInsumosGenerales({ usuario }) {
 
   return (
     <div>
-      {toast && <Toast msg={toast} onHide={() => setToast(null)} />}
+      {toast && <Toast msg={toast.msg} color={toast.color} onHide={() => setToast(null)} />}
+      {modalAgregar && (
+        <ModalAgregarInsumo tipo="general" onClose={() => setModalAgregar(false)} onSave={agregarInsumo} />
+      )}
 
       {/* Cards resumen */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 24 }}>
@@ -116,7 +141,7 @@ export function GestionInsumosGenerales({ usuario }) {
         <div style={{ fontSize: 11, color: C.textFaint, marginTop: 6 }}>{conPrecio} de {insumos.length} insumos con precio asignado</div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros y botón agregar */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <input
           style={{ ...S.input, maxWidth: 280 }}
@@ -136,9 +161,12 @@ export function GestionInsumosGenerales({ usuario }) {
             Limpiar filtros
           </button>
         )}
-        <span style={{ fontSize: 12, color: C.textMuted, marginLeft: "auto" }}>
+        <span style={{ fontSize: 12, color: C.textMuted }}>
           {insumosFiltrados.length} de {insumos.length} insumos
         </span>
+        <button style={{ ...S.btn("primary"), marginLeft: "auto", fontSize: 13 }} onClick={() => setModalAgregar(true)}>
+          ➕ Agregar Insumo General
+        </button>
       </div>
 
       {/* Tabla */}
@@ -171,7 +199,6 @@ export function GestionInsumosGenerales({ usuario }) {
                     )}
                   </td>
 
-                  {/* Categoría */}
                   <td style={S.td}>
                     {editandoEste ? (
                       <select
@@ -190,7 +217,6 @@ export function GestionInsumosGenerales({ usuario }) {
 
                   <td style={{ ...S.td, color: C.textMuted }}>{ins.unidad ?? "—"}</td>
 
-                  {/* Precio */}
                   <td style={S.td}>
                     {editandoEste ? (
                       <input
@@ -211,7 +237,6 @@ export function GestionInsumosGenerales({ usuario }) {
                     )}
                   </td>
 
-                  {/* Proveedor */}
                   <td style={S.td}>
                     {editandoEste ? (
                       <input
@@ -225,7 +250,6 @@ export function GestionInsumosGenerales({ usuario }) {
                     )}
                   </td>
 
-                  {/* Acciones */}
                   <td style={S.td}>
                     {editandoEste ? (
                       <div style={{ display: "flex", gap: 6 }}>

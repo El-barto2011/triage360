@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
+import { ModalAgregarInsumo } from "../common/ModalAgregarInsumo";
 
 const fmt = (n) => n != null ? `$${Number(n).toLocaleString("es-CL")}` : "—";
 
@@ -10,6 +11,15 @@ const TIPO_COLOR = {
   aerosol:    { color: C.purple, bg: "#bc8cff18" },
 };
 
+function Toast({ msg, color, onHide }) {
+  useEffect(() => { const t = setTimeout(onHide, 2500); return () => clearTimeout(t); }, [onHide]);
+  return (
+    <div style={{ position: "fixed", bottom: 28, right: 28, background: color || C.green, color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: "0 4px 20px #0006" }}>
+      {msg}
+    </div>
+  );
+}
+
 export function GestionPreciosMedicamentos({ usuario }) {
   const [medicamentos, setMedicamentos] = useState([]);
   const [editando, setEditando] = useState(null);
@@ -18,6 +28,8 @@ export function GestionPreciosMedicamentos({ usuario }) {
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const [modalAgregar, setModalAgregar] = useState(false);
 
   useEffect(() => { cargar(); }, [usuario]);
 
@@ -45,10 +57,33 @@ export function GestionPreciosMedicamentos({ usuario }) {
     }, usuario?.token);
     if (res) {
       setMedicamentos(prev => prev.map(m => m.id === med.id ? { ...m, precio_unitario: precio } : m));
+      setToast({ msg: `✅ Precio actualizado: ${med.nombre}`, color: C.green });
     }
     setEditando(null);
     setPrecioEdit("");
     setGuardando(false);
+  };
+
+  const agregarMedicamento = async (form) => {
+    const res = await sb("medicamentos", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre:          form.nombre.trim(),
+        dosis:           form.dosis           || null,
+        tipo:            form.tipo            || "inyectable",
+        unidad:          form.unidad          || "amp.",
+        stock:           form.stock           ?? 0,
+        minimo:          form.minimo          ?? 1,
+        precio_unitario: form.precio_unitario || null,
+      }),
+    }, usuario?.token);
+    if (res) {
+      setToast({ msg: "✅ Medicamento agregado", color: C.green });
+      setModalAgregar(false);
+      cargar();
+    } else {
+      setToast({ msg: "❌ Error al agregar medicamento", color: C.red });
+    }
   };
 
   const tipos = ["todos", "inyectable", "oral", "aerosol"];
@@ -59,14 +94,19 @@ export function GestionPreciosMedicamentos({ usuario }) {
     return okTipo && okBusq;
   });
 
-  const conPrecio    = medicamentos.filter(m => m.precio_unitario != null).length;
-  const sinPrecio    = medicamentos.length - conPrecio;
-  const totalValor   = medicamentos.reduce((s, m) => s + (m.precio_unitario ?? 0) * (m.stock ?? 0), 0);
+  const conPrecio  = medicamentos.filter(m => m.precio_unitario != null).length;
+  const sinPrecio  = medicamentos.length - conPrecio;
+  const totalValor = medicamentos.reduce((s, m) => s + (m.precio_unitario ?? 0) * (m.stock ?? 0), 0);
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.textMuted }}>Cargando medicamentos...</div>;
 
   return (
     <div>
+      {toast && <Toast msg={toast.msg} color={toast.color} onHide={() => setToast(null)} />}
+      {modalAgregar && (
+        <ModalAgregarInsumo tipo="medicamento" onClose={() => setModalAgregar(false)} onSave={agregarMedicamento} />
+      )}
+
       {/* Resumen */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 24 }}>
         {[
@@ -82,7 +122,7 @@ export function GestionPreciosMedicamentos({ usuario }) {
         ))}
       </div>
 
-      {/* Filtros */}
+      {/* Filtros y botón agregar */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <input
           style={{ ...S.input, maxWidth: 260 }}
@@ -97,6 +137,9 @@ export function GestionPreciosMedicamentos({ usuario }) {
             </button>
           ))}
         </div>
+        <button style={{ ...S.btn("primary"), marginLeft: "auto", fontSize: 13 }} onClick={() => setModalAgregar(true)}>
+          ➕ Agregar Medicamento
+        </button>
       </div>
 
       {/* Tabla editable */}

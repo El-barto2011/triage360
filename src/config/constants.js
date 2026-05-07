@@ -1,3 +1,13 @@
+export const formatearNumero = (numero) => {
+  if (numero == null || numero === 0) return "0";
+  return new Intl.NumberFormat("es-CL").format(numero);
+};
+
+export const formatearPrecio = (precio) => {
+  if (precio == null || precio === 0) return "$0";
+  return "$" + formatearNumero(precio);
+};
+
 export const CATEGORIAS_INSUMOS = [
   "Todos",
   "Instrumental",

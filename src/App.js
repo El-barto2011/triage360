@@ -24,6 +24,7 @@ import { GestionPreciosKinesiologia } from "./components/reportes/GestionPrecios
 import { GestionInsumosGenerales } from "./components/reportes/GestionInsumosGenerales";
 import { GestionUsuarios } from "./components/admin/GestionUsuarios";
 import { Configuracion } from "./components/admin/Configuracion";
+import { Toaster } from "./components/ui/toaster";
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
@@ -75,7 +76,7 @@ export default function App() {
     ...(esAdmin ? [{ section: "Costos" }] : []),
     ...(esAdmin ? [{ id: "costos",         label: "Valorización",          icon: "report" }] : []),
     ...(esAdmin ? [{ id: "preciosMeds",    label: "Precios Medicamentos",  icon: "bolso"  }] : []),
-    ...(esAdmin ? [{ id: "preciosKine",    label: "Precios Kinesiología",  icon: "event"  }] : []),
+    ...(esAdmin ? [{ id: "preciosKine",    label: "Bolso Kines Maestro",   icon: "event"  }] : []),
     ...(esAdmin ? [{ id: "insumosGrales",  label: "Insumos Generales",     icon: "carro"  }] : []),
     { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
@@ -248,8 +249,8 @@ export default function App() {
         {tab === "preciosKine" && (
           <div>
             <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Precios Insumos Kinesiología 🏥</div>
-              <div style={S.subtitle}>270 insumos · Edita precio unitario</div>
+              <div style={S.title}>Bolso Kines Maestro 🎒</div>
+              <div style={S.subtitle}>Define el contenido y precios del bolso standard de kinesiología</div>
             </div>
             <GestionPreciosKinesiologia usuario={usuario} />
           </div>
@@ -264,6 +265,8 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <Toaster />
 
       {isMobile && (
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 200, paddingBottom: "env(safe-area-inset-bottom)" }}>

@@ -14,6 +14,7 @@ export function VistaGestionCostos({ usuario, onNavigate }) {
   const [costos, setCostos] = useState([]);
   const [inventario, setInventario] = useState([]);
   const [carrosValor, setCarrosValor] = useState([]);
+  const [bolsoKines, setBolsoKines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
@@ -22,13 +23,14 @@ export function VistaGestionCostos({ usuario, onNavigate }) {
 
   const cargarDatos = async () => {
     setLoading(true);
-    const [res, por, top, gest, inv, carr] = await Promise.all([
+    const [res, por, top, gest, inv, carr, bolso] = await Promise.all([
       sb("vista_resumen_costos_medicamentos", {}, usuario?.token),
       sb("vista_costos_medicamentos_por_evento?order=fecha_evento.desc&limit=30", {}, usuario?.token),
       sb("vista_top_medicamentos_costosos?limit=20", {}, usuario?.token),
       sb("costos_insumos?order=nombre_insumo", {}, usuario?.token),
-      sb("vista_valor_inventario_completo_v2", {}, usuario?.token),
+      sb("vista_valor_inventario_completo_v3", {}, usuario?.token),
       sb("vista_valor_completo_por_contenedor?order=valor_total.desc", {}, usuario?.token),
+      sb("vista_bolso_kines_maestro?order=nombre.asc", {}, usuario?.token),
     ]);
     if (res) setResumen(Array.isArray(res) ? res : [res]);
     if (por) setPorEvento(por);
@@ -36,6 +38,7 @@ export function VistaGestionCostos({ usuario, onNavigate }) {
     if (gest) setCostos(gest);
     if (inv) setInventario(Array.isArray(inv) ? inv : [inv]);
     if (carr) setCarrosValor(carr);
+    if (bolso) setBolsoKines(bolso);
     setLoading(false);
   };
 
@@ -71,6 +74,7 @@ export function VistaGestionCostos({ usuario, onNavigate }) {
     { id: "top",         label: "Top Medicamentos",     color: C.orange },
     { id: "inventario",  label: "Inventario Completo",  color: C.green },
     { id: "carros",      label: "Valor de Carros",      color: C.purple },
+    { id: "bolso-kines", label: "🎒 Bolso Kines",       color: C.accent },
     { id: "gestion",     label: "Gestión de Costos",    color: C.textMuted },
   ];
 
@@ -277,7 +281,7 @@ export function VistaGestionCostos({ usuario, onNavigate }) {
               <div style={S.card}>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Desglose por Categoría</div>
                 {inventario.length === 0 ? (
-                  <div style={{ textAlign: "center", color: C.textMuted, padding: 32 }}>Sin datos en vista_valor_inventario_completo_v2</div>
+                  <div style={{ textAlign: "center", color: C.textMuted, padding: 32 }}>Sin datos en vista_valor_inventario_completo_v3</div>
                 ) : (
                   <table style={S.table}>
                     <thead>
@@ -413,6 +417,94 @@ export function VistaGestionCostos({ usuario, onNavigate }) {
                     </table>
                   </div>
                 </>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB BOLSO KINES ── */}
+          {tab === "bolso-kines" && (
+            <div>
+              {/* Header con botón editar */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>🎒 Bolso Kines Maestro — Detalle Completo</div>
+                  <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>{bolsoKines.length} insumos · contenido del bolso standard de kinesiología</div>
+                </div>
+                {onNavigate && (
+                  <button style={{ ...S.btn("primary"), fontSize: 13 }} onClick={() => onNavigate("preciosKine")}>
+                    ✏️ Editar Bolso
+                  </button>
+                )}
+              </div>
+
+              {bolsoKines.length === 0 ? (
+                <div style={{ ...S.card, padding: 40, textAlign: "center", color: C.textMuted }}>
+                  Sin datos en vista_bolso_kines_maestro
+                </div>
+              ) : (
+                <div style={S.card}>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Nombre Insumo</th>
+                        <th style={S.th}>Unidad</th>
+                        <th style={{ ...S.th, textAlign: "right" }}>Cant. por Bolso</th>
+                        <th style={{ ...S.th, textAlign: "right" }}>Precio Unitario</th>
+                        <th style={{ ...S.th, textAlign: "right" }}>Valor Línea</th>
+                        <th style={S.th}>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bolsoKines.map((row, i) => {
+                        const nombre    = row.nombre ?? "—";
+                        const unidad    = row.unidad ?? "—";
+                        const cantidad  = row.cantidad_por_bolso ?? row.cantidad ?? 0;
+                        const precio    = row.precio_unitario ?? null;
+                        const valorLinea = precio != null ? precio * cantidad : null;
+                        const tienePrecio = precio != null && precio > 0;
+                        return (
+                          <tr key={i}>
+                            <td style={{ ...S.td, fontWeight: 600 }}>{nombre}</td>
+                            <td style={{ ...S.td, color: C.textMuted }}>{unidad}</td>
+                            <td style={{ ...S.td, textAlign: "right", fontWeight: 600 }}>{cantidad}</td>
+                            <td style={{ ...S.td, textAlign: "right", fontWeight: 700, color: tienePrecio ? C.accent : C.textFaint }}>
+                              {tienePrecio ? fmt(precio) : "Sin precio"}
+                            </td>
+                            <td style={{ ...S.td, textAlign: "right", fontWeight: 700, color: C.green }}>
+                              {valorLinea != null ? fmt(valorLinea) : "—"}
+                            </td>
+                            <td style={S.td}>
+                              <span style={{
+                                display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700,
+                                color: tienePrecio ? C.green : C.textMuted,
+                                background: tienePrecio ? "#3fb95018" : C.surface2,
+                              }}>
+                                {tienePrecio ? "✓ Valorizado" : "Sin precio"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: C.accentDim, fontWeight: 800 }}>
+                        <td colSpan={2} style={{ ...S.td, fontWeight: 800, color: C.textMuted }}>VALOR TOTAL DEL BOLSO</td>
+                        <td style={{ ...S.td, textAlign: "right", fontWeight: 800 }}>
+                          {bolsoKines.reduce((s, r) => s + (r.cantidad_por_bolso ?? r.cantidad ?? 0), 0)} unid.
+                        </td>
+                        <td style={S.td}></td>
+                        <td style={{ ...S.td, textAlign: "right", fontWeight: 900, color: C.accent, fontSize: 16 }}>
+                          {fmt(bolsoKines.reduce((s, r) => {
+                            const p = r.precio_unitario ?? 0;
+                            const c = r.cantidad_por_bolso ?? r.cantidad ?? 0;
+                            return s + p * c;
+                          }, 0))}
+                        </td>
+                        <td style={S.td}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               )}
             </div>
           )}

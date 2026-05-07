@@ -1,13 +1,53 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark theme — alineado con theme.js C.* colors */
+    --background: 216 28% 7%;       /* #0d1117 */
+    --foreground: 210 17% 88%;      /* #e6edf3 */
+
+    --card: 215 24% 11%;            /* #161b22 */
+    --card-foreground: 210 17% 88%;
+
+    --popover: 215 24% 11%;
+    --popover-foreground: 210 17% 88%;
+
+    --primary: 174 100% 38%;        /* #00c2a8 — teal accent */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 22% 15%;       /* #1c2330 */
+    --secondary-foreground: 210 17% 88%;
+
+    --muted: 215 22% 15%;
+    --muted-foreground: 215 9% 55%; /* #8b949e */
+
+    --accent: 215 22% 15%;
+    --accent-foreground: 210 17% 88%;
+
+    --destructive: 0 72% 63%;       /* #f85149 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 15% 19%;          /* #30363d */
+    --input: 215 15% 19%;
+    --ring: 174 100% 38%;
+
+    --radius: 0.5rem;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  }
 }
