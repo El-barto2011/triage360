@@ -170,76 +170,82 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
 
       {/* Tabla */}
       <div style={S.card}>
-        <table style={S.table}>
-          <thead>
-            <tr>
-              {[industria?.paciente || "Paciente", "Evento", "Profesional", "Tipo", "Horario", "Diagnóstico", "Derivación", ""].map(h => (
-                <th key={h} style={S.th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtradas.length === 0 ? (
-              <tr><td colSpan={8} style={{ ...S.td, textAlign: "center", color: C.textMuted, padding: 36 }}>Sin atenciones registradas</td></tr>
-            ) : filtradas.map(a => (
-              <tr key={a.id}>
-                <td style={S.td}>
-                  <div style={{ fontWeight: 600 }}>{a.paciente_nombre}</div>
-                  {a.paciente_edad && <div style={{ fontSize: 11, color: C.textFaint }}>{a.paciente_edad} años</div>}
-                </td>
-                <td style={S.td}>
-                  <div style={{ fontSize: 13 }}>{a.evento}</div>
-                  <div style={{ fontSize: 11, color: C.textFaint }}>{new Date(a.created_at).toLocaleDateString("es-CL")}</div>
-                </td>
-                <td style={S.td}>
-                  <div style={{ fontSize: 12 }}>
-                    {a.tipo_atencion === 'Médica'
-                      ? (a.medico_nombre || a.enfermero_nombre || a.paramedico_nombre || 'N/A').split('@')[0]
-                      : (a.kinesiologo_nombre || a.masoterapeuta_nombre || 'N/A')}
-                  </div>
-                  <div style={{ fontSize: 10, color: C.textMuted }}>{a.profesion_real}</div>
-                </td>
-                <td style={S.td}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {a.codigo_triaje && (
-                      <span style={{
-                        padding: "4px 8px",
-                        borderRadius: 4,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        background:
-                          a.codigo_triaje === "ROJO" ? "#ef4444" :
-                          a.codigo_triaje === "AMARILLO" ? "#f59e0b" :
-                          a.codigo_triaje === "NEGRO" ? "#1f2937" :
-                          "#10b981",
-                        color: "#fff"
-                      }}>
-                        {a.codigo_triaje === "VERDE" && "🟢"}
-                        {a.codigo_triaje === "AMARILLO" && "🟡"}
-                        {a.codigo_triaje === "ROJO" && "🔴"}
-                        {a.codigo_triaje === "NEGRO" && "⚫"}
-                        {" " + a.codigo_triaje}
-                      </span>
-                    )}
-
-                  </div>
-                </td>
-                <td style={S.td}>
-                  <div style={{ fontSize: 13 }}>{new Date(a.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</div>
-                </td>
-                <td style={S.td}>
-                  <span style={{ fontSize: 13, color: C.textMuted }}>
-                    {a.diagnostico ? (a.diagnostico.slice(0, 35) + (a.diagnostico.length > 35 ? "…" : "")) : "---"}
-                  </span>
-                </td>
-                <td style={S.td}>---</td>
-                <td style={S.td}>
-                  <button style={{ ...S.btn("ghost"), padding: "4px 8px", fontSize: 11 }} onClick={() => setFichaVer(a)}>Ver</button>
-                </td>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table style={{ ...S.table, minWidth: 640 }}>
+            <thead>
+              <tr>
+                {[industria?.paciente || "Paciente", "Evento", "Profesional", "Tipo", "Horario", "Diagnóstico", "Derivación", ""].map(h => (
+                  <th key={h} style={S.th}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtradas.length === 0 ? (
+                <tr><td colSpan={8} style={{ ...S.td, textAlign: "center", color: C.textMuted, padding: 36 }}>Sin atenciones registradas</td></tr>
+              ) : filtradas.map(a => (
+                <tr key={a.id}>
+                  <td style={S.td}>
+                    <div style={{ fontWeight: 600 }}>{a.paciente_nombre}</div>
+                    {a.paciente_edad && <div style={{ fontSize: 11, color: C.textFaint }}>{a.paciente_edad} años</div>}
+                  </td>
+                  <td style={S.td}>
+                    <div style={{ fontSize: 13 }}>{a.evento}</div>
+                    <div style={{ fontSize: 11, color: C.textFaint }}>{new Date(a.created_at).toLocaleDateString("es-CL")}</div>
+                  </td>
+                  <td style={S.td}>
+                    <div style={{ fontSize: 12 }}>
+                      {a.tipo_atencion === 'Médica'
+                        ? (a.medico_nombre || a.enfermero_nombre || a.paramedico_nombre || 'N/A').split('@')[0]
+                        : (a.kinesiologo_nombre || a.masoterapeuta_nombre || 'N/A')}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.textMuted }}>{a.profesion_real}</div>
+                  </td>
+                  <td style={S.td}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {a.codigo_triaje && (
+                        <span style={{
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          background:
+                            a.codigo_triaje === "ROJO" ? "#ef4444" :
+                            a.codigo_triaje === "AMARILLO" ? "#f59e0b" :
+                            a.codigo_triaje === "NEGRO" ? "#1f2937" :
+                            "#10b981",
+                          color: "#fff"
+                        }}>
+                          {a.codigo_triaje === "VERDE" && "🟢"}
+                          {a.codigo_triaje === "AMARILLO" && "🟡"}
+                          {a.codigo_triaje === "ROJO" && "🔴"}
+                          {a.codigo_triaje === "NEGRO" && "⚫"}
+                          {" " + a.codigo_triaje}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td style={S.td}>
+                    <div style={{ fontSize: 13 }}>{new Date(a.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</div>
+                  </td>
+                  <td style={S.td}>
+                    <span style={{ fontSize: 13, color: C.textMuted }}>
+                      {a.diagnostico ? (a.diagnostico.slice(0, 35) + (a.diagnostico.length > 35 ? "…" : "")) : "---"}
+                    </span>
+                  </td>
+                  <td style={S.td}>---</td>
+                  <td style={{ ...S.td, whiteSpace: "nowrap" }}>
+                    <button
+                      style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 12, minHeight: 44 }}
+                      onClick={() => setFichaVer(a)}
+                    >
+                      Ver
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Modal nueva/editar atención */}

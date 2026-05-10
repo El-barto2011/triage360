@@ -32,6 +32,7 @@ import { toast } from "./components/ui/use-toast";
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [usuario, setUsuario] = useState(null);
   const [industriaKey, setIndustriaKey] = useState("eventos");
@@ -54,6 +55,61 @@ export default function App() {
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
   const alertCarros = 0;
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
+
+  const getMobileNavConfig = () => {
+    const prof = usuario?.profesion;
+    const T = {
+      dashboard:         { id: "dashboard",         label: "Inicio",       icon: "dashboard" },
+      atenciones:        { id: "atenciones",         label: "Atenciones",   icon: "event" },
+      atencionMedica:    { id: "atencionMedica",     label: "Prescripción", icon: "med" },
+      colaTriaje:        { id: "colaTriaje",         label: "Triaje",       icon: "alert" },
+      adminMedicamentos: { id: "adminMedicamentos",  label: "Administrar",  icon: "bolso" },
+      atencionKine:      { id: "atencionKine",       label: "Kinesiología", icon: "event" },
+      masoterapia:       { id: "masoterapia",        label: "Masoterapia",  icon: "bolso" },
+      bolsoKine:         { id: "bolsoKine",          label: "Mi Bolso",     icon: "bolso" },
+      carros:            { id: "carros",             label: "Carros",       icon: "carro", badge: alertCarros },
+      bolsos:            { id: "bolsos",             label: "Medicamentos", icon: "bolso", badge: alertBolso },
+      reportes:          { id: "reportes",           label: "Reportes",     icon: "report" },
+      costos:            { id: "costos",             label: "Valorización", icon: "report" },
+      historialPaciente: { id: "historialPaciente",  label: "Historial",    icon: "med" },
+      configuracion:     { id: "configuracion",      label: "Config",       icon: "report" },
+      usuarios:          { id: "usuarios",           label: "Usuarios",     icon: "med" },
+      eventos:           { id: "eventos",            label: "Eventos",      icon: "event" },
+      preciosMeds:       { id: "preciosMeds",        label: "Precios Meds", icon: "bolso" },
+      preciosKine:       { id: "preciosKine",        label: "Kine Maestro", icon: "bolso" },
+      insumosGrales:     { id: "insumosGrales",      label: "Insumos",      icon: "carro" },
+    };
+    if (esAdmin) return {
+      primary: [T.dashboard, T.atenciones, T.carros, T.reportes],
+      more: [
+        T.costos, T.eventos, T.historialPaciente, T.usuarios,
+        T.configuracion, T.preciosMeds, T.preciosKine, T.insumosGrales,
+        T.bolsos, T.bolsoKine, T.atencionMedica, T.atencionKine,
+        T.masoterapia, T.adminMedicamentos, T.colaTriaje,
+      ],
+    };
+    if (prof === "Médico") return {
+      primary: [T.dashboard, T.atenciones, T.atencionMedica, T.colaTriaje],
+      more: [T.historialPaciente, T.configuracion],
+    };
+    if (prof === "Enfermero/a" || prof === "Paramédico") return {
+      primary: [T.dashboard, T.atenciones, T.atencionMedica, T.adminMedicamentos],
+      more: [T.historialPaciente, T.configuracion],
+    };
+    if (prof === "Kinesiólogo/a") return {
+      primary: [T.dashboard, T.atencionKine, T.bolsoKine, T.atenciones],
+      more: [T.historialPaciente, T.configuracion],
+    };
+    if (prof === "Masoterapeuta") return {
+      primary: [T.dashboard, T.masoterapia, T.atenciones, T.historialPaciente],
+      more: [T.configuracion],
+    };
+    return {
+      primary: [T.dashboard, T.atenciones, T.historialPaciente, T.configuracion],
+      more: [],
+    };
+  };
+  const { primary: primaryTabs, more: moreTabs } = getMobileNavConfig();
 
   const navItems = [
     { id: "dashboard", label: "Inicio", icon: "dashboard" },
@@ -131,9 +187,19 @@ export default function App() {
       )}
 
       {isMobile && (
-        <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
-          <div style={{ fontSize: 20, fontWeight: 900, color: C.accent }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
-          <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "6px 12px" }} onClick={handleLogout}>Salir</button>
+        <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100 }}>
+          <div style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.accent, letterSpacing: 0.5 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {usuario?.profesion && (
+                <span style={{ fontSize: 10, color: C.textFaint, maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {usuario.profesion}
+                </span>
+              )}
+              <button style={{ ...S.btn("ghost"), fontSize: 11, padding: "6px 12px" }} onClick={handleLogout}>Salir</button>
+            </div>
+          </div>
+          <SelectorEvento />
         </div>
       )}
 
@@ -303,16 +369,100 @@ export default function App() {
       <Toaster />
 
       {isMobile && (
+        <>
+          {/* ── Bottom nav bar ─────────────────────────────── */}
+          <div style={{
+            position: "fixed", bottom: 0, left: 0, right: 0,
+            background: C.surface, borderTop: `1px solid ${C.border}`,
+            display: "flex", zIndex: 200,
+            paddingBottom: "env(safe-area-inset-bottom)",
+          }}>
+            {primaryTabs.map(item => (
+              <div
+                key={item.id}
+                onClick={() => { setTab(item.id); setMoreOpen(false); }}
+                style={{
+                  flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+                  justifyContent: "center", padding: "10px 4px 8px", cursor: "pointer",
+                  position: "relative", minHeight: 56,
+                  color: tab === item.id ? C.accent : C.textFaint,
+                }}
+              >
+                {item.badge > 0 && (
+                  <span style={{ position: "absolute", top: 6, right: "18%", background: C.red, color: "#fff", fontSize: 8, fontWeight: 700, borderRadius: 6, padding: "0 3px", minWidth: 14, textAlign: "center" }}>
+                    {item.badge}
+                  </span>
+                )}
+                <Icon name={item.icon} size={22} color={tab === item.id ? C.accent : C.textFaint} />
+                <span style={{ fontSize: 10, fontWeight: tab === item.id ? 700 : 400, marginTop: 3, textAlign: "center", lineHeight: 1.2 }}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
+            {moreTabs.length > 0 && (
+              <div
+                onClick={() => setMoreOpen(prev => !prev)}
+                style={{
+                  flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+                  justifyContent: "center", padding: "10px 4px 8px", cursor: "pointer",
+                  minHeight: 56,
+                  color: moreOpen ? C.accent : C.textFaint,
+                }}
+              >
+                <Icon name="more" size={22} color={moreOpen ? C.accent : C.textFaint} />
+                <span style={{ fontSize: 10, fontWeight: moreOpen ? 700 : 400, marginTop: 3 }}>Más</span>
+              </div>
+            )}
+          </div>
 
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 200, paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {navItems.map(item => (
-            <div key={item.id} onClick={() => setTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 4px 8px", cursor: "pointer", position: "relative", color: tab === item.id ? C.accent : C.textFaint }}>
-              {item.badge > 0 && <span style={{ position: "absolute", top: 6, right: "18%", background: C.red, color: "#fff", fontSize: 8, fontWeight: 700, borderRadius: 6, padding: "0 3px", minWidth: 14, textAlign: "center" }}>{item.badge}</span>}
-              <Icon name={item.icon} size={22} color={tab === item.id ? C.accent : C.textFaint} />
-              <span style={{ fontSize: 9, fontWeight: tab === item.id ? 700 : 400, marginTop: 3, textAlign: "center", lineHeight: 1.2 }}>{item.label}</span>
+          {/* ── "Más" overlay ──────────────────────────────── */}
+          {moreOpen && (
+            <div
+              style={{ position: "fixed", inset: 0, background: "#00000070", zIndex: 190 }}
+              onClick={() => setMoreOpen(false)}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
+                  left: 0, right: 0,
+                  background: C.surface,
+                  borderRadius: "16px 16px 0 0",
+                  padding: "12px 16px 20px",
+                  borderTop: `1px solid ${C.border}`,
+                  boxShadow: "0 -4px 24px #00000050",
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ width: 36, height: 4, background: C.border, borderRadius: 2, margin: "0 auto 14px" }} />
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
+                  Más opciones
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  {moreTabs.map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => { setTab(item.id); setMoreOpen(false); }}
+                      style={{
+                        display: "flex", flexDirection: "column", alignItems: "center",
+                        padding: "12px 4px 10px", borderRadius: 10, cursor: "pointer",
+                        minHeight: 64, gap: 6,
+                        background: tab === item.id ? C.accentDim : C.surface2,
+                        border: `1px solid ${tab === item.id ? C.accent + "40" : C.border}`,
+                        color: tab === item.id ? C.accent : C.textMuted,
+                      }}
+                    >
+                      <Icon name={item.icon} size={20} color={tab === item.id ? C.accent : C.textMuted} />
+                      <span style={{ fontSize: 10, textAlign: "center", lineHeight: 1.3, fontWeight: tab === item.id ? 700 : 400 }}>
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
     </EventoProvider>
