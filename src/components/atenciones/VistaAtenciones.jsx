@@ -428,8 +428,8 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
               {/* Paciente */}
               <Block title="Paciente">
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10 }}>
-                  <Row label="Nombre" value={f.paciente_nombre} />
-                  <Row label="RUT / Pasaporte" value={f.paciente_rut || f.paciente_pasaporte} />
+                  <Row label="Nombre" value={f.paciente_nombre || f.paciente} />
+                  <Row label="RUT / Pasaporte" value={f.paciente_rut || f.rut || f.paciente_pasaporte} />
                   <Row label="Edad" value={f.paciente_edad ? `${f.paciente_edad} años` : null} />
                 </div>
                 {f.categoria_paciente && (
@@ -463,56 +463,64 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
 
               {/* Datos clínicos */}
               <Block title="Datos de la Atención">
-                {/* Motivo de consulta — médica y kine */}
+                {/* 1. Motivo de consulta */}
                 {(esMedica || esKine) && (
                   <div style={{ marginBottom: 10 }}>
-                    <Row label="Motivo de consulta" value={f.motivo_consulta || "—"} />
+                    <Row label="Motivo de consulta" value={f.motivo_consulta} />
                   </div>
                 )}
                 {/* Campos específicos de masoterapia */}
-                {esMaso && f.motivo_atencion && (
-                  <div style={{ marginBottom: 10 }}><Row label="Motivo de atención" value={f.motivo_atencion} /></div>
+                {esMaso && (
+                  <>
+                    {f.motivo_atencion && <div style={{ marginBottom: 10 }}><Row label="Motivo de atención" value={f.motivo_atencion} /></div>}
+                    {f.tipo_molestia && <div style={{ marginBottom: 10 }}><Row label="Tipo de molestia" value={f.tipo_molestia} /></div>}
+                    {f.zona_afectada && <div style={{ marginBottom: 10 }}><Row label="Zona afectada" value={f.zona_afectada} /></div>}
+                    {f.tipo_masaje && <div style={{ marginBottom: 10 }}><Row label="Tipo de masaje" value={f.tipo_masaje} /></div>}
+                  </>
                 )}
-                {esMaso && f.tipo_molestia && (
-                  <div style={{ marginBottom: 10 }}><Row label="Tipo de molestia" value={f.tipo_molestia} /></div>
-                )}
-                {esMaso && f.zona_afectada && (
-                  <div style={{ marginBottom: 10 }}><Row label="Zona afectada" value={f.zona_afectada} /></div>
-                )}
-                {esMaso && f.tipo_masaje && (
-                  <div style={{ marginBottom: 10 }}><Row label="Tipo de masaje" value={f.tipo_masaje} /></div>
-                )}
-                {/* Diagnóstico / Evaluación / Zonas */}
+                {/* 2. Diagnóstico / Evaluación / Zonas */}
                 <div style={{ marginBottom: 10 }}>
                   <Row label={esMedica ? "Diagnóstico" : esKine ? "Evaluación inicial" : "Zonas trabajadas"} value={diag} />
                 </div>
-                {/* Tratamiento */}
+                {/* 3. Tratamiento */}
                 <div style={{ marginBottom: 10 }}>
                   <Row label={esMedica ? "Tratamiento" : esKine ? "Tratamiento realizado" : "Tipo de atención"} value={trat} />
                 </div>
-                {/* Insumos utilizados */}
-                {(Array.isArray(insumosRaw) ? insumosRaw.length > 0 : !!insumosRaw) && (
-                  <div style={{ marginBottom: 10 }}><Row label="Insumos utilizados" value={insumos} /></div>
-                )}
-                {f.observaciones && (
-                  <div style={{ marginBottom: 10 }}><Row label="Observaciones" value={f.observaciones} /></div>
-                )}
+                {/* 4. Medicamentos prescritos — solo médica */}
+                {esMedica && (() => {
+                  const meds = f.medicamentos_prescritos;
+                  const medsTexto = f.medicamentos_recetados;
+                  if (Array.isArray(meds) && meds.length > 0) {
+                    return (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 6 }}>Medicamentos prescritos</div>
+                        {meds.map((m, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", background: C.surface, borderRadius: 6, marginBottom: 4, fontSize: 12 }}>
+                            <span style={{ fontWeight: 600 }}>{m.nombre}{m.dosis ? ` — ${m.dosis}` : ""}</span>
+                            <span style={{ color: C.textMuted }}>{m.via ? `${m.via} ·` : ""} cant. {m.cantidad}{m.urgente ? <span style={{ color: C.red, marginLeft: 6 }}>🚨</span> : null}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div style={{ marginBottom: 10 }}>
+                      <Row label="Medicamentos prescritos" value={typeof medsTexto === "string" && medsTexto ? medsTexto : null} />
+                    </div>
+                  );
+                })()}
+                {/* 5. Insumos utilizados */}
+                <div style={{ marginBottom: 10 }}>
+                  <Row label="Insumos utilizados" value={insumosRaw && insumos !== "—" ? insumos : null} />
+                </div>
+                {/* 6. Observaciones */}
+                <div style={{ marginBottom: 10 }}>
+                  <Row label="Observaciones" value={f.observaciones} />
+                </div>
                 {f.recomendaciones && (
                   <Row label="Recomendaciones" value={f.recomendaciones} />
                 )}
               </Block>
-
-              {/* Medicamentos prescritos — solo médica */}
-              {esMedica && f.medicamentos_prescritos?.length > 0 && (
-                <Block title="Medicamentos Prescritos">
-                  {f.medicamentos_prescritos.map((m, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
-                      <span style={{ fontWeight: 600 }}>{m.nombre} — {m.dosis}</span>
-                      <span style={{ color: C.textMuted }}>{m.via} · cant. {m.cantidad}{m.urgente ? <span style={{ color: C.red, marginLeft: 6 }}>🚨</span> : null}</span>
-                    </div>
-                  ))}
-                </Block>
-              )}
 
               {/* Masoterapia: dolor */}
               {esMaso && (f.dolor_inicial != null || f.dolor_posterior != null) && (
