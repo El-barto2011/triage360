@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Separator } from "../ui/separator";
 import { cn } from "../../lib/utils";
 import { Waves, Plus, TrendingDown, CheckCircle2 } from "lucide-react";
+import { useEvento } from "../common/SelectorEvento";
 import { toast } from "../ui/use-toast";
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
@@ -37,16 +38,18 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
   const [form,      setForm]      = useState({});
   const [eventos,   setEventos]   = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
+  const { eventoActual } = useEvento();
 
-  useEffect(() => { cargarDatos(); }, [usuario]);
+  useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
 
   const cargarDatos = async () => {
     setLoading(true);
     const esAdmin = usuario?.rol === "admin";
+    const filtroEvento = eventoActual ? `&evento_id=eq.${eventoActual}` : "";
     const [fs, evs] = await Promise.all([
       sb(esAdmin
-        ? "fichas_masoterapia?order=created_at.desc&limit=100"
-        : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
+        ? `fichas_masoterapia?order=created_at.desc&limit=100${filtroEvento}`
+        : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50${filtroEvento}`,
         {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token),
     ]);
@@ -65,6 +68,7 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
       categoria_paciente: "Jugador",
       evento:    eventos.length > 0 ? eventos[0].nombre_evento : "",
       evento_id: eventos.length > 0 ? eventos[0].id : null,
+      motivo_atencion: "", tipo_molestia: "", zona_afectada: "", tipo_masaje: "Relajante",
       zonas_trabajadas: [], dolor_inicial: 5, dolor_posterior: 5,
       duracion_minutos: 30, observaciones: "",
     });
@@ -117,6 +121,10 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
       categoria_paciente: form.categoria_paciente || "Jugador",
       fecha_atencion:   form.fecha_atencion,
       duracion_minutos: parseInt(form.duracion_minutos) || 30,
+      motivo_atencion:  form.motivo_atencion  || null,
+      tipo_molestia:    form.tipo_molestia    || null,
+      zona_afectada:    form.zona_afectada    || null,
+      tipo_masaje:      form.tipo_masaje      || null,
       zonas_trabajadas: form.zonas_trabajadas,
       dolor_inicial:    parseInt(form.dolor_inicial)    || 5,
       dolor_posterior:  parseInt(form.dolor_posterior)  || 5,
@@ -332,6 +340,46 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
 
             <Separator />
 
+            {/* Anamnesis */}
+            <Field label="Motivo de Atención" required>
+              <Textarea
+                value={form.motivo_atencion || ""}
+                onChange={e => setForm(f => ({ ...f, motivo_atencion: e.target.value }))}
+                placeholder="¿Por qué viene el paciente? Descripción del motivo..."
+              />
+            </Field>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Tipo de Molestia">
+                <Input
+                  value={form.tipo_molestia || ""}
+                  onChange={e => setForm(f => ({ ...f, tipo_molestia: e.target.value }))}
+                  placeholder="Ej: Contractura"
+                />
+              </Field>
+              <Field label="Zona Afectada">
+                <Input
+                  value={form.zona_afectada || ""}
+                  onChange={e => setForm(f => ({ ...f, zona_afectada: e.target.value }))}
+                  placeholder="Ej: Hombro derecho"
+                />
+              </Field>
+              <Field label="Tipo de Masaje">
+                <select
+                  className={selectCls}
+                  value={form.tipo_masaje || "Relajante"}
+                  onChange={e => setForm(f => ({ ...f, tipo_masaje: e.target.value }))}
+                >
+                  <option>Relajante</option>
+                  <option>Deportivo</option>
+                  <option>Terapéutico</option>
+                  <option>Descontracturante</option>
+                  <option>Drenaje linfático</option>
+                </select>
+              </Field>
+            </div>
+
+            <Separator />
+
             {/* Zonas trabajadas */}
             <div className="space-y-2">
               <Label>Zonas Trabajadas <span className="text-destructive">*</span></Label>
@@ -402,13 +450,45 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
           <DialogHeader><DialogTitle>Detalle de Ficha</DialogTitle></DialogHeader>
           {form && (
             <div className="space-y-4 py-2 text-sm">
+              {/* Datos del paciente */}
               <div>
                 <p className="font-bold text-base">{form.paciente_nombre}</p>
+                {form.paciente_rut && <p style={{ color: C.textMuted }}>RUT: {form.paciente_rut}</p>}
+                {form.paciente_pasaporte && <p style={{ color: C.textMuted }}>Pasaporte: {form.paciente_pasaporte}</p>}
                 {form.paciente_edad && <p style={{ color: C.textMuted }}>Edad: {form.paciente_edad} años</p>}
+                {form.categoria_paciente && <p style={{ color: C.textMuted }}>Categoría: {form.categoria_paciente}</p>}
                 <p className="mt-1" style={{ color: C.textMuted }}>Evento: {form.evento} · {new Date(form.created_at).toLocaleString("es-CL")}</p>
                 <p style={{ color: C.textMuted }}>Duración: {form.duracion_minutos} minutos</p>
               </div>
               <Separator />
+              {/* Anamnesis */}
+              {form.motivo_atencion && (
+                <div><p className="font-semibold mb-1">Motivo de Atención</p><p>{form.motivo_atencion}</p></div>
+              )}
+              {(form.tipo_molestia || form.zona_afectada || form.tipo_masaje) && (
+                <div className="grid grid-cols-3 gap-4">
+                  {form.tipo_molestia && (
+                    <div>
+                      <p className="text-xs font-semibold mb-1" style={{ color: C.textMuted }}>Tipo de molestia</p>
+                      <p>{form.tipo_molestia}</p>
+                    </div>
+                  )}
+                  {form.zona_afectada && (
+                    <div>
+                      <p className="text-xs font-semibold mb-1" style={{ color: C.textMuted }}>Zona afectada</p>
+                      <p>{form.zona_afectada}</p>
+                    </div>
+                  )}
+                  {form.tipo_masaje && (
+                    <div>
+                      <p className="text-xs font-semibold mb-1" style={{ color: C.textMuted }}>Tipo de masaje</p>
+                      <p>{form.tipo_masaje}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <Separator />
+              {/* Zonas trabajadas */}
               <div>
                 <p className="font-semibold mb-2">Zonas Trabajadas</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -417,6 +497,7 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
                   ))}
                 </div>
               </div>
+              {/* Escala de dolor */}
               <div>
                 <p className="font-semibold mb-3">Escala de Dolor</p>
                 <div className="grid grid-cols-2 gap-4">

@@ -12,6 +12,7 @@ import { Separator } from "../ui/separator";
 import { cn } from "../../lib/utils";
 import { Stethoscope, AlertTriangle, Plus, X, ClipboardList, Heart } from "lucide-react";
 import { toast } from "../ui/use-toast";
+import { useEvento } from "../common/SelectorEvento";
 
 /* native select styled to match shadcn Input */
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
@@ -40,13 +41,15 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
+  const { eventoActual } = useEvento();
 
-  useEffect(() => { cargarDatos(); }, [usuario]);
+  useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
 
   const cargarDatos = async () => {
     setLoading(true);
+    const filtro = eventoActual ? `&evento_id=eq.${eventoActual}` : "";
     const [ats, evs] = await Promise.all([
-      sb("atenciones_medicas?order=created_at.desc&limit=50", {}, usuario?.token),
+      sb(`atenciones_medicas?order=created_at.desc&limit=100${filtro}`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
     ]);
     if (ats) setAtenciones(ats);
@@ -69,13 +72,16 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
 
   const abrirNuevaAtencion = () => {
     const ahora = new Date();
+    const eventoPresel = eventoActual
+      ? eventos.find(e => e.id === eventoActual)
+      : eventos[0];
     setForm({
       fecha_atencion: ahora.toISOString().split("T")[0],
       hora_atencion: ahora.toTimeString().slice(0, 5),
       paciente_nombre: "", paciente_rut: "", paciente_edad: "",
       categoria_paciente: "Jugador",
-      evento: eventos.length > 0 ? eventos[0].nombre_evento : "",
-      evento_id: eventos.length > 0 ? eventos[0].id : null,
+      evento: eventoPresel?.nombre_evento || "",
+      evento_id: eventoPresel?.id || null,
       motivo_consulta: "", diagnostico: "", tratamiento: "", observaciones: "",
       medicamentos_prescritos: [], insumos_medico: [], requiere_administracion: false,
     });
@@ -155,8 +161,58 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
       const res = await sb("atenciones_medicas", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
       if (res) {
         setAtenciones(prev => [res[0], ...prev]);
+
+        // ── Descontar medicamentos prescritos del inventario ──
+        let medsDescontados = 0;
+        for (const med of form.medicamentos_prescritos || []) {
+          if (!med.nombre?.trim()) continue;
+          try {
+            const encontrados = await sb(
+              `contenedores_medicamentos?nombre=ilike.*${med.nombre.trim()}*&limit=1`,
+              {}, usuario?.token
+            );
+            if (encontrados?.length > 0) {
+              const item = encontrados[0];
+              const nuevo = Math.max(0, (item.stock || 0) - (parseInt(med.cantidad) || 1));
+              await sb(`contenedores_medicamentos?id=eq.${item.id}`, {
+                method: "PATCH", body: JSON.stringify({ stock: nuevo })
+              }, usuario?.token);
+              medsDescontados++;
+            }
+          } catch (e) {
+            console.error(`Error descuento med ${med.nombre}:`, e);
+          }
+        }
+
+        // ── Descontar insumos del carro ──
+        for (const ins of form.insumos_medico || []) {
+          if (!ins.nombre?.trim()) continue;
+          try {
+            const encontrados = await sb(
+              `contenedores_medicamentos?nombre=ilike.*${ins.nombre.trim()}*&limit=1`,
+              {}, usuario?.token
+            );
+            if (encontrados?.length > 0) {
+              const item = encontrados[0];
+              const nuevo = Math.max(0, (item.stock || 0) - (parseInt(ins.cantidad) || 1));
+              await sb(`contenedores_medicamentos?id=eq.${item.id}`, {
+                method: "PATCH", body: JSON.stringify({ stock: nuevo })
+              }, usuario?.token);
+            }
+          } catch (e) {
+            console.error(`Error descuento insumo ${ins.nombre}:`, e);
+          }
+        }
+
         setModal(null);
-        toast({ title: "Atención registrada", description: `${form.paciente_nombre} — ${form.evento}`, variant: "success" });
+        const totalMeds = (form.medicamentos_prescritos || []).filter(m => m.nombre).length;
+        toast({
+          title: "Atención registrada",
+          description: totalMeds > 0
+            ? `${form.paciente_nombre} · Stock actualizado: ${medsDescontados}/${totalMeds} med.`
+            : `${form.paciente_nombre} — ${form.evento}`,
+          variant: "success"
+        });
       } else {
         toast({ title: "Error al guardar", description: "No se pudo registrar la atención. Intenta nuevamente.", variant: "destructive" });
       }

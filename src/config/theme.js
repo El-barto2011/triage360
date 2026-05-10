@@ -7,7 +7,7 @@ export const C = {
   blue: "#58a6ff", blueDim: "#58a6ff18",
   orange: "#f0883e", orangeDim: "#f0883e18",
   purple: "#bc8cff", purpleDim: "#bc8cff18",
-  text: "#e6edf3", textMuted: "#8b949e", textFaint: "#484f58",
+  text: "#e6edf3", textMuted: "#8b949e", textFaint: "#6e7681",
 };
 
 export const S = {

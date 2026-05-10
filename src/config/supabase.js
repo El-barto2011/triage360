@@ -4,8 +4,23 @@ export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdX
 export const sb = async (endpoint, options = {}, token = null) => {
   const headers = { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Prefer": "return=representation" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, { ...options, headers: { ...headers, ...options.headers } });
-  if (!res.ok) { const e = await res.text(); console.error("Supabase error:", e); return null; }
-  const text = await res.text();
-  return text ? JSON.parse(text) : [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, { ...options, headers: { ...headers, ...options.headers } });
+    if (!res.ok) {
+      const e = await res.text();
+      console.error(`Supabase ${options.method || "GET"} error ${res.status}:`, e);
+      if (typeof window !== "undefined" && window.__toastError) {
+        window.__toastError(`Error ${res.status} al ${options.method === "POST" ? "guardar" : options.method === "PATCH" ? "actualizar" : "cargar"} datos`);
+      }
+      return null;
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : [];
+  } catch (networkError) {
+    console.error("Error de red Supabase:", networkError);
+    if (typeof window !== "undefined" && window.__toastError) {
+      window.__toastError("Sin conexión — verifica tu red e intenta nuevamente");
+    }
+    return null;
+  }
 };

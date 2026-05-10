@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, S, Icon } from "./config/theme";
 import { MEDICAMENTOS_INYECTABLES, MEDICAMENTOS_ORALES, MEDICAMENTOS_AEROSOLES, CARROS_INICIALES, estadoVenc, estadoStock } from "./config/constants";
 import { getIndustria, getPermisos } from "./config/permisos";
@@ -16,6 +16,7 @@ import { VistaAtenciones } from "./components/atenciones/VistaAtenciones";
 import { VistaAtencionesMedicas } from "./components/atenciones/VistaAtencionesMedicas";
 import { VistaAdministracionMedicamentos } from "./components/atenciones/VistaAdministracionMedicamentos";
 import { VistaAtencionesKinesiologia } from "./components/kinesiologia/VistaAtencionesKinesiologia";
+import ColaTriaje from "./components/atenciones/ColaTriaje";
 import { VistaMasoterapiaUnificada } from "./components/masoterapia/VistaMasoterapiaUnificada";
 import { VistaReportes } from "./components/reportes/VistaReportes";
 import { VistaGestionCostos } from "./components/reportes/VistaGestionCostos";
@@ -24,7 +25,10 @@ import { GestionPreciosKinesiologia } from "./components/reportes/GestionPrecios
 import { GestionInsumosGenerales } from "./components/reportes/GestionInsumosGenerales";
 import { GestionUsuarios } from "./components/admin/GestionUsuarios";
 import { Configuracion } from "./components/admin/Configuracion";
+import { EventoProvider, SelectorEvento } from "./components/common/SelectorEvento";
+import { HistorialPaciente } from "./components/pacientes/HistorialPaciente";
 import { Toaster } from "./components/ui/toaster";
+import { toast } from "./components/ui/use-toast";
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
@@ -36,6 +40,12 @@ export default function App() {
 
   const handleLogin = (user) => setUsuario(user);
   const handleLogout = () => setUsuario(null);
+
+  // Registrar handler global de errores de red para supabase.js
+  useEffect(() => {
+    window.__toastError = (msg) => toast({ title: "Error de conexión", description: msg, variant: "destructive" });
+    return () => { delete window.__toastError; };
+  }, []);
 
   if (!usuario) return <Login onLogin={handleLogin} />;
 
@@ -54,6 +64,7 @@ export default function App() {
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     ...(esAdmin ? [{ id: "costos", label: "Costos", icon: "report" }] : []),
     ...(esAdmin ? [{ id: "preciosMeds", label: "Precios", icon: "bolso" }] : []),
+    { id: "historialPaciente", label: "Historial", icon: "med" },
     { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
   ];
@@ -67,6 +78,7 @@ export default function App() {
     { section: "Operación" },
     { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
     ...(esAdmin || permisos.recetarMedicamentos || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
+    ...((esAdmin || usuario?.profesion === "Médico") ? [{ id: "colaTriaje", label: "🚨 Cola Triaje", icon: "alert" }] : []),
     ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
     ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
     ...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
@@ -78,11 +90,14 @@ export default function App() {
     ...(esAdmin ? [{ id: "preciosMeds",    label: "Precios Medicamentos",  icon: "bolso"  }] : []),
     ...(esAdmin ? [{ id: "preciosKine",    label: "Bolso Kines Maestro",   icon: "event"  }] : []),
     ...(esAdmin ? [{ id: "insumosGrales",  label: "Insumos Generales",     icon: "carro"  }] : []),
+    { section: "Pacientes" },
+    { id: "historialPaciente", label: "Historial Paciente", icon: "med" },
     { id: "configuracion", label: "Config", icon: "report" },
     ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
   ];
 
   return (
+    <EventoProvider usuario={usuario}>
     <div style={{ ...S.app, flexDirection: isMobile ? "column" : "row" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
@@ -92,6 +107,7 @@ export default function App() {
             <div style={{ fontSize: 20, fontWeight: 900, color: C.accent, letterSpacing: 1, lineHeight: 1 }}>TRIAGE<span style={{ color: C.text }}>360</span></div>
             <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Gestión clínica inteligente, donde la necesites</div>
           </div>
+          <SelectorEvento />
           <nav style={S.nav}>
             {nav.map((item, i) =>
               item.section ? (
@@ -186,6 +202,15 @@ export default function App() {
             <VistaAtencionesMedicas usuario={usuario} carros={carros} />
           </div>
         )}
+        {tab === "colaTriaje" && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={S.title}>🚨 Cola de Triaje</div>
+              <div style={S.subtitle}>Pacientes ordenados por urgencia · Se actualiza cada 30 segundos</div>
+            </div>
+            <ColaTriaje usuario={usuario} />
+          </div>
+        )}
         {tab === "adminMedicamentos" && (
           <div>
             <div style={{ marginBottom: 24 }}>
@@ -264,11 +289,21 @@ export default function App() {
             <GestionInsumosGenerales usuario={usuario} />
           </div>
         )}
+        {tab === "historialPaciente" && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={S.title}>Historial del Paciente</div>
+              <div style={S.subtitle}>Busca todas las atenciones de un paciente por RUT o Pasaporte</div>
+            </div>
+            <HistorialPaciente usuario={usuario} />
+          </div>
+        )}
       </main>
 
       <Toaster />
 
       {isMobile && (
+
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 200, paddingBottom: "env(safe-area-inset-bottom)" }}>
           {navItems.map(item => (
             <div key={item.id} onClick={() => setTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 4px 8px", cursor: "pointer", position: "relative", color: tab === item.id ? C.accent : C.textFaint }}>
@@ -280,5 +315,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </EventoProvider>
   );
 }

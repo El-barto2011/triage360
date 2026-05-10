@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { cn } from "../../lib/utils";
 import { ArrowUpDown, Search, Save, Pencil, X, Truck, AlertTriangle } from "lucide-react";
 
-const CARRO_COLORS = ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#ef4444","#06b6d4"];
+const CARRO_COLORS = [C.blue, C.purple, C.orange, C.yellow, C.green, C.red, C.accent];
 
 export function VistaCarrosClinicosDB({ usuario }) {
   const [carros,          setCarros]          = useState([]);

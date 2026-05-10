@@ -3,6 +3,8 @@ import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
 import { TIPOS_ATENCION } from "../../config/constants";
 import { PROFESIONES } from "../../config/permisos";
+import { useEvento } from "../common/SelectorEvento";
+import { toast } from "../ui/use-toast";
 
 export function VistaAtenciones({ carros, usuario, permisos, industria }) {
   const [atenciones, setAtenciones] = useState([]);
@@ -12,6 +14,7 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
   const [filtroEvento, setFiltroEvento] = useState("Todos");
   const [filtroProfesion, setFiltroProfesion] = useState("Todas");
   const [fichaVer, setFichaVer] = useState(null);
+  const { eventoActual, eventos: eventosGlobal } = useEvento();
 
   // Cargar TODAS las atenciones (médicas, kines, masoterapia)
   useEffect(() => {
@@ -50,6 +53,16 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
     cargar();
   }, [usuario]);
 
+  // Sincronizar filtro con evento global
+  useEffect(() => {
+    if (eventoActual) {
+      const ev = eventosGlobal.find(e => e.id === eventoActual);
+      if (ev) setFiltroEvento(ev.nombre_evento);
+    } else {
+      setFiltroEvento("Todos");
+    }
+  }, [eventoActual, eventosGlobal]);
+
   const eventos = ["Todos", ...new Set(atenciones.map(a => a.evento).filter(Boolean))];
 
   const filtradas = atenciones.filter(a => {
@@ -78,17 +91,38 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
   };
 
   const guardar = async () => {
-    if (!form.paciente || !form.profesional) return;
+    if (!form.paciente) {
+      toast({ title: "Error de validación", description: "Falta el nombre del paciente", variant: "destructive" });
+      return;
+    }
+    if (!form.profesional) {
+      toast({ title: "Error de validación", description: "Falta el nombre del profesional", variant: "destructive" });
+      return;
+    }
     const datos = { ...form, edad: +form.edad, usuario_email: usuario?.email };
     delete datos.id;
-    if (modal === "nueva") {
-      const res = await sb("atenciones", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
-      if (res) setAtenciones(prev => [res[0], ...prev]);
-    } else {
-      const res = await sb(`atenciones?id=eq.${form.id}`, { method: "PATCH", body: JSON.stringify(datos) }, usuario?.token);
-      if (res) setAtenciones(prev => prev.map(a => a.id === form.id ? res[0] : a));
+    try {
+      if (modal === "nueva") {
+        const res = await sb("atenciones", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
+        if (res) {
+          setAtenciones(prev => [res[0], ...prev]);
+          toast({ title: "Atención registrada", description: `Paciente: ${form.paciente}` });
+        } else {
+          throw new Error("Sin respuesta");
+        }
+      } else {
+        const res = await sb(`atenciones?id=eq.${form.id}`, { method: "PATCH", body: JSON.stringify(datos) }, usuario?.token);
+        if (res) {
+          setAtenciones(prev => prev.map(a => a.id === form.id ? res[0] : a));
+          toast({ title: "Atención actualizada" });
+        } else {
+          throw new Error("Sin respuesta");
+        }
+      }
+      setModal(null);
+    } catch {
+      toast({ title: "Error al guardar", description: "No se pudo registrar la atención", variant: "destructive" });
     }
-    setModal(null);
   };
 
   const eliminar = async (id) => {
@@ -214,7 +248,7 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
           <div style={{ ...S.modalBox, width: 620 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
               <div style={{ fontSize: 17, fontWeight: 700 }}>{modal === "nueva" ? "Nueva Atención" : "Editar Atención"}</div>
-              <button style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setModal(null)}><Icon name="close" size={20} color={C.textMuted} /></button>
+              <button aria-label="Cerrar modal" style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setModal(null)}><Icon name="close" size={20} color={C.textMuted} /></button>
             </div>
 
             {/* Evento */}
@@ -323,68 +357,196 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
       )}
 
       {/* Modal ficha completa */}
-      {fichaVer && (
-        <div style={S.modal} onClick={() => setFichaVer(null)}>
-          <div style={{ ...S.modalBox, width: 580 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ fontSize: 17, fontWeight: 700 }}>Ficha de Atención</div>
-              <button style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setFichaVer(null)}><Icon name="close" size={20} color={C.textMuted} /></button>
-            </div>
-            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 24 }}>{fichaVer.evento} · {new Date(fichaVer.fecha).toLocaleDateString("es-CL")}</div>
+      {fichaVer && (() => {
+        const f = fichaVer;
+        const esMedica  = f.tipo_atencion === 'Médica';
+        const esKine    = f.tipo_atencion === 'Kinesiología';
+        const esMaso    = f.tipo_atencion === 'Masoterapia';
+        const fechaStr  = new Date(f.created_at).toLocaleDateString("es-CL");
+        const horaStr   = new Date(f.created_at).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
 
-            <div style={{ background: C.surface2, borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Paciente</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                {[["Nombre", fichaVer.paciente], ["RUT", fichaVer.rut], ["Edad", fichaVer.paciente_edad ? fichaVer.paciente_edad + " años" : "---"]].map(([l, v]) => (
-                  <div key={l}><div style={{ fontSize: 11, color: C.textMuted }}>{l}</div><div style={{ fontWeight: 600, marginTop: 2 }}>{v}</div></div>
-                ))}
-              </div>
-            </div>
+        /* ── nombre profesional correcto según tipo ─── */
+        const profNombre = esMedica
+          ? (f.medico_nombre || f.enfermero_nombre || f.paramedico_nombre || "—").split("@")[0]
+          : esKine
+            ? (f.kinesiologo_nombre || "—").split("@")[0]
+            : (f.masoterapeuta_nombre || "—").split("@")[0];
 
-            <div style={{ background: C.surface2, borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Profesional</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                {[
-                  ["Profesión", fichaVer.profesion_real || "---"],
-                  ["Nombre", fichaVer.tipo_atencion === 'Médica'
-                    ? (fichaVer.medico_nombre || fichaVer.enfermero_nombre || fichaVer.paramedico_nombre || "---").split('@')[0]
-                    : (fichaVer.kinesiologo_nombre || fichaVer.masoterapeuta_nombre || "---")],
-                  ["Tipo atención", fichaVer.tipo_atencion || "---"]
-                ].map(([l, v]) => (
-                  <div key={l}><div style={{ fontSize: 11, color: C.textMuted }}>{l}</div><div style={{ fontWeight: 600, marginTop: 2 }}>{v || "---"}</div></div>
-                ))}
-              </div>
-            </div>
+        /* ── campos clínicos según tipo ─────────────── */
+        const diag      = esMedica ? (f.diagnostico || "—")
+                        : esKine   ? (f.evaluacion_inicial || "—")
+                        : (f.zonas_trabajadas?.join(", ") || "—");
+        const trat      = esMedica ? (f.tratamiento || "—")
+                        : esKine   ? (f.tratamiento_realizado || "—")
+                        : `Masoterapia ${f.duracion_minutos ? f.duracion_minutos + " min" : ""}`;
+        // médica usa insumos_medico; kine/maso usan insumos_usados
+        const insumosRaw = f.insumos_medico || f.insumos_usados;
+        const insumos   = Array.isArray(insumosRaw)
+          ? insumosRaw.map(i => typeof i === "object" ? `${i.nombre} (${i.cantidad})` : i).join(", ") || "—"
+          : (typeof insumosRaw === "string" ? insumosRaw : "—");
 
-            <div style={{ background: C.surface2, borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Atención</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                {[["Hora ingreso", fichaVer.hora_ingreso], ["Hora egreso", fichaVer.hora_egreso || "—"]].map(([l, v]) => (
-                  <div key={l}><div style={{ fontSize: 11, color: C.textMuted }}>{l}</div><div style={{ fontWeight: 600, marginTop: 2 }}>{v}</div></div>
-                ))}
+        /* ── badge triaje ────────────────────────────── */
+        const triajeColor = { ROJO: "#ef4444", AMARILLO: "#f59e0b", NEGRO: "#374151", VERDE: "#10b981" };
+        const triajeEmoji = { ROJO: "🔴", AMARILLO: "🟡", NEGRO: "⚫", VERDE: "🟢" };
+
+        /* ── Row helper ──────────────────────────────── */
+        const Row = ({ label, value }) => (
+          <div>
+            <div style={{ fontSize: 11, color: C.textMuted }}>{label}</div>
+            <div style={{ fontWeight: 600, marginTop: 2, fontSize: 13 }}>{value || "—"}</div>
+          </div>
+        );
+        const Block = ({ title, children }) => (
+          <div style={{ background: C.surface2, borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>{title}</div>
+            {children}
+          </div>
+        );
+
+        return (
+          <div style={S.modal} onClick={() => setFichaVer(null)}>
+            <div style={{ ...S.modalBox, width: 600, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <div style={{ fontSize: 17, fontWeight: 700 }}>Ficha de Atención</div>
+                <button aria-label="Cerrar ficha" style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setFichaVer(null)}><Icon name="close" size={20} color={C.textMuted} /></button>
               </div>
-              {[
-                ["Diagnóstico", fichaVer.diagnostico],
-                ["Tratamiento", Array.isArray(fichaVer.tratamiento_realizado) ? fichaVer.tratamiento_realizado.join(', ') : (fichaVer.tratamiento || fichaVer.tratamiento_realizado || "—")],
-                ["Insumos usados", Array.isArray(fichaVer.insumos_usados) ? fichaVer.insumos_usados.map(i => typeof i === 'object' ? `${i.nombre} (${i.cantidad})` : i).join(', ') : (fichaVer.insumos_usados || "—")]
-              ].map(([l, v]) => (
-                <div key={l} style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>{l}</div>
-                  <div style={{ marginTop: 2, fontSize: 14 }}>{v || "—"}</div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <span>{f.evento || "Sin evento"}</span>
+                <span>·</span>
+                <span>{fechaStr} {horaStr}</span>
+                <span>·</span>
+                <span style={{ color: coloresProfesion[f.profesion_real] || C.accent, fontWeight: 600 }}>{f.tipo_atencion}</span>
+                {f.codigo_triaje && (
+                  <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700, background: triajeColor[f.codigo_triaje] || "#10b981", color: "#fff" }}>
+                    {triajeEmoji[f.codigo_triaje]} {f.codigo_triaje}
+                  </span>
+                )}
+              </div>
+
+              {/* Paciente */}
+              <Block title="Paciente">
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10 }}>
+                  <Row label="Nombre" value={f.paciente_nombre} />
+                  <Row label="RUT / Pasaporte" value={f.paciente_rut || f.paciente_pasaporte} />
+                  <Row label="Edad" value={f.paciente_edad ? `${f.paciente_edad} años` : null} />
                 </div>
-              ))}
-            </div>
+                {f.categoria_paciente && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: C.textMuted }}>
+                    Categoría: <strong style={{ color: C.text }}>{f.categoria_paciente}</strong>
+                  </div>
+                )}
+              </Block>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <span style={{ fontSize: 13, color: C.textMuted }}>Derivación:</span>
-              {fichaVer.derivacion === "No"
-                ? <span style={S.badge(C.green, C.greenDim)}>Sin derivación</span>
-                : <span style={S.badge(C.red, C.redDim)}>Derivado → {fichaVer.derivacion}</span>}
-              {fichaVer.observaciones && <span style={{ fontSize: 12, color: C.textMuted, marginLeft: 8 }}>· {fichaVer.observaciones}</span>}
+              {/* Profesional */}
+              <Block title="Profesional">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  <Row label="Nombre" value={profNombre} />
+                  <Row label="Profesión" value={f.profesion_real} />
+                  <Row label="Tipo de atención" value={f.tipo_atencion} />
+                </div>
+              </Block>
+
+              {/* Signos vitales — solo atenciones médicas */}
+              {esMedica && (f.presion_sistolica || f.frecuencia_cardiaca || f.temperatura || f.saturacion_oxigeno) && (
+                <Block title="Signos Vitales">
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                    {f.presion_sistolica && <Row label="Presión arterial" value={`${f.presion_sistolica}/${f.presion_diastolica} mmHg`} />}
+                    {f.frecuencia_cardiaca && <Row label="Frec. cardíaca" value={`${f.frecuencia_cardiaca} lpm`} />}
+                    {f.temperatura && <Row label="Temperatura" value={`${f.temperatura} °C`} />}
+                    {f.saturacion_oxigeno && <Row label="SpO₂" value={`${f.saturacion_oxigeno}%`} />}
+                    {f.frecuencia_respiratoria && <Row label="Frec. respiratoria" value={`${f.frecuencia_respiratoria} rpm`} />}
+                  </div>
+                </Block>
+              )}
+
+              {/* Datos clínicos */}
+              <Block title="Datos de la Atención">
+                {/* Motivo de consulta — médica y kine */}
+                {(esMedica || esKine) && (
+                  <div style={{ marginBottom: 10 }}>
+                    <Row label="Motivo de consulta" value={f.motivo_consulta || "—"} />
+                  </div>
+                )}
+                {/* Campos específicos de masoterapia */}
+                {esMaso && f.motivo_atencion && (
+                  <div style={{ marginBottom: 10 }}><Row label="Motivo de atención" value={f.motivo_atencion} /></div>
+                )}
+                {esMaso && f.tipo_molestia && (
+                  <div style={{ marginBottom: 10 }}><Row label="Tipo de molestia" value={f.tipo_molestia} /></div>
+                )}
+                {esMaso && f.zona_afectada && (
+                  <div style={{ marginBottom: 10 }}><Row label="Zona afectada" value={f.zona_afectada} /></div>
+                )}
+                {esMaso && f.tipo_masaje && (
+                  <div style={{ marginBottom: 10 }}><Row label="Tipo de masaje" value={f.tipo_masaje} /></div>
+                )}
+                {/* Diagnóstico / Evaluación / Zonas */}
+                <div style={{ marginBottom: 10 }}>
+                  <Row label={esMedica ? "Diagnóstico" : esKine ? "Evaluación inicial" : "Zonas trabajadas"} value={diag} />
+                </div>
+                {/* Tratamiento */}
+                <div style={{ marginBottom: 10 }}>
+                  <Row label={esMedica ? "Tratamiento" : esKine ? "Tratamiento realizado" : "Tipo de atención"} value={trat} />
+                </div>
+                {/* Insumos utilizados */}
+                {(Array.isArray(insumosRaw) ? insumosRaw.length > 0 : !!insumosRaw) && (
+                  <div style={{ marginBottom: 10 }}><Row label="Insumos utilizados" value={insumos} /></div>
+                )}
+                {f.observaciones && (
+                  <div style={{ marginBottom: 10 }}><Row label="Observaciones" value={f.observaciones} /></div>
+                )}
+                {f.recomendaciones && (
+                  <Row label="Recomendaciones" value={f.recomendaciones} />
+                )}
+              </Block>
+
+              {/* Medicamentos prescritos — solo médica */}
+              {esMedica && f.medicamentos_prescritos?.length > 0 && (
+                <Block title="Medicamentos Prescritos">
+                  {f.medicamentos_prescritos.map((m, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
+                      <span style={{ fontWeight: 600 }}>{m.nombre} — {m.dosis}</span>
+                      <span style={{ color: C.textMuted }}>{m.via} · cant. {m.cantidad}{m.urgente ? <span style={{ color: C.red, marginLeft: 6 }}>🚨</span> : null}</span>
+                    </div>
+                  ))}
+                </Block>
+              )}
+
+              {/* Masoterapia: dolor */}
+              {esMaso && (f.dolor_inicial != null || f.dolor_posterior != null) && (
+                <Block title="Escala de Dolor">
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, textAlign: "center" }}>
+                    <div style={{ padding: 14, background: C.surface, borderRadius: 8 }}>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Dolor inicial</div>
+                      <div style={{ fontSize: 28, fontWeight: 800 }}>{f.dolor_inicial ?? "—"}<span style={{ fontSize: 14 }}>/10</span></div>
+                    </div>
+                    <div style={{ padding: 14, background: C.surface, borderRadius: 8 }}>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Dolor final</div>
+                      <div style={{ fontSize: 28, fontWeight: 800, color: f.dolor_posterior < f.dolor_inicial ? C.green : C.text }}>{f.dolor_posterior ?? "—"}<span style={{ fontSize: 14 }}>/10</span></div>
+                    </div>
+                  </div>
+                </Block>
+              )}
+
+              {/* Estado administración — solo médica */}
+              {esMedica && (
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13, color: C.textMuted }}>Administración:</span>
+                  {f.requiere_administracion
+                    ? f.administracion_completada
+                      ? <span style={S.badge(C.green, C.greenDim)}>✅ Administrado</span>
+                      : <span style={S.badge(C.orange, C.orangeDim)}>⏳ Pendiente</span>
+                    : <span style={{ fontSize: 12, color: C.textMuted }}>No requiere</span>
+                  }
+                </div>
+              )}
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

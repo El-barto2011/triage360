@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
+import { toast } from "../ui/use-toast";
 
 export function VistaGestionEventos({ usuario }) {
   const [eventos, setEventos] = useState([]);
   const [profesionales, setProfesionales] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [guardando, setGuardando] = useState(false);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
 
@@ -71,10 +73,16 @@ export function VistaGestionEventos({ usuario }) {
   };
 
   const guardarEvento = async () => {
-    if (!form.nombre_evento || !form.fecha_evento) {
-      alert("Por favor completa nombre y fecha del evento");
+    if (!form.nombre_evento?.trim()) {
+      toast({ title: "Campo requerido", description: "El nombre del evento es obligatorio", variant: "destructive" });
       return;
     }
+    if (!form.fecha_evento) {
+      toast({ title: "Campo requerido", description: "La fecha de inicio es obligatoria", variant: "destructive" });
+      return;
+    }
+    setGuardando(true);
+    try {
 
     const datos = {
       nombre_evento: form.nombre_evento,
@@ -153,7 +161,18 @@ export function VistaGestionEventos({ usuario }) {
       await enviarEmailsAsignacion(eventoGuardado, profesionalesANotificar);
     }
 
-    setModal(null);
+      toast({
+        title: modal === "nuevo" ? "Evento creado" : "Evento actualizado",
+        description: form.nombre_evento,
+        variant: "default",
+      });
+      setModal(null);
+    } catch (error) {
+      console.error("Error guardando evento:", error);
+      toast({ title: "Error al guardar", description: "No se pudo guardar el evento. Intenta nuevamente.", variant: "destructive" });
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const enviarEmailsAsignacion = async (evento, profesionalesIds) => {
@@ -335,7 +354,7 @@ export function VistaGestionEventos({ usuario }) {
               <div style={{ fontSize: 17, fontWeight: 700 }}>
                 {modal === "nuevo" ? "Nuevo Evento" : "Editar Evento"}
               </div>
-              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>
+              <button aria-label="Cerrar modal" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20 }} onClick={() => setModal(null)}>
                 ×
               </button>
             </div>
@@ -624,8 +643,12 @@ export function VistaGestionEventos({ usuario }) {
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
               <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
-              <button style={S.btn("primary")} onClick={guardarEvento}>
-                {modal === "nuevo" ? "Crear Evento" : "Guardar Cambios"}
+              <button
+                style={{ ...S.btn("primary"), opacity: guardando ? 0.6 : 1, cursor: guardando ? "not-allowed" : "pointer" }}
+                onClick={guardarEvento}
+                disabled={guardando}
+              >
+                {guardando ? "Guardando..." : modal === "nuevo" ? "Crear Evento" : "Guardar Cambios"}
               </button>
             </div>
           </div>

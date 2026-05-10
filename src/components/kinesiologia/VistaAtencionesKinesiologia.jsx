@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Separator } from "../ui/separator";
 import { cn } from "../../lib/utils";
 import { Activity, Plus, X, ClipboardList, Backpack, AlertTriangle } from "lucide-react";
+import { useEvento } from "../common/SelectorEvento";
 import { toast } from "../ui/use-toast";
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
@@ -32,16 +33,18 @@ export function VistaAtencionesKinesiologia({ usuario }) {
   const [form,       setForm]       = useState({});
   const [eventos,    setEventos]    = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
+  const { eventoActual } = useEvento();
 
-  useEffect(() => { cargarDatos(); }, [usuario]);
+  useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
 
   const cargarDatos = async () => {
     setLoading(true);
     const esAdmin = usuario?.rol === "admin";
+    const filtroEvento = eventoActual ? `&evento_id=eq.${eventoActual}` : "";
     const [ats, ins, evs] = await Promise.all([
       sb(esAdmin
-        ? "atenciones_kinesiologia?order=created_at.desc&limit=100"
-        : `atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50`,
+        ? `atenciones_kinesiologia?order=created_at.desc&limit=100${filtroEvento}`
+        : `atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50${filtroEvento}`,
         {}, usuario?.token),
       sb(`insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),

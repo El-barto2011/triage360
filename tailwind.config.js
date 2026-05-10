@@ -43,7 +43,7 @@ module.exports = {
           foreground: "hsl(var(--card-foreground))",
         },
         /* Colores marca TRIAGE360 */
-        teal: { DEFAULT: "#148C8C", light: "#1aa8a8", dim: "#148C8C20" },
+        teal: { DEFAULT: "#00c2a8", light: "#1ad4bc", dim: "#00c2a820" },
         navy: { DEFAULT: "#002850", light: "#003a73", dim: "#00285020" },
       },
       borderRadius: {

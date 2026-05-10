@@ -23,8 +23,8 @@
     --muted: 215 22% 15%;
     --muted-foreground: 215 9% 55%; /* #8b949e */
 
-    --accent: 215 22% 15%;
-    --accent-foreground: 210 17% 88%;
+    --accent: 174 40% 18%;           /* teal-dim: hover sutil alineado con la marca */
+    --accent-foreground: 174 100% 75%;
 
     --destructive: 0 72% 63%;       /* #f85149 */
     --destructive-foreground: 0 0% 100%;
@@ -50,4 +50,32 @@
   code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
   }
+}
+
+/* ── Quick Win #3: Focus ring en inputs (WCAG 2.4.7) ───────── */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.15) !important;
+  outline: none;
+}
+
+/* ── Quick Win #4: Hover/active en botones legacy ───────────── */
+button:hover:not(:disabled) {
+  opacity: 0.88;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── Quick Win #5: Hover en filas de tabla ──────────────────── */
+tbody tr {
+  transition: background 0.1s ease;
+}
+
+tbody tr:hover {
+  background: rgba(0, 194, 168, 0.04) !important;
 }
