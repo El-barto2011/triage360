@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { C, S, Icon } from "./config/theme";
 import { MEDICAMENTOS_INYECTABLES, MEDICAMENTOS_ORALES, MEDICAMENTOS_AEROSOLES, CARROS_INICIALES, estadoVenc, estadoStock } from "./config/constants";
 import { getIndustria, getPermisos } from "./config/permisos";
+import { sb } from "./config/supabase";
 import { useIsMobile } from "./hooks/useIsMobile";
 
 import { Login } from "./components/auth/Login";
@@ -36,6 +37,7 @@ export default function App() {
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [usuario, setUsuario] = useState(null);
   const [industriaKey, setIndustriaKey] = useState("eventos");
+  const [alertCarros, setAlertCarros] = useState(0);
   const industria = getIndustria(industriaKey);
   const isMobile = useIsMobile();
 
@@ -48,12 +50,29 @@ export default function App() {
     return () => { delete window.__toastError; };
   }, []);
 
+  useEffect(() => {
+    if (!usuario) return;
+    sb("contenedores_medicamentos?tipo=eq.carro&select=nombre,stock,minimo,fecha_vencimiento", {}, usuario.token)
+      .then(data => {
+        if (!data) return;
+        const carrosConAlerta = new Set(
+          data
+            .filter(i => {
+              const stockMal = estadoStock({ stock: Number(i.stock), minimo: Number(i.minimo) }) !== "ok";
+              const vencMal = i.fecha_vencimiento && estadoVenc(i.fecha_vencimiento) !== "ok";
+              return stockMal || vencMal;
+            })
+            .map(i => i.nombre)
+        );
+        setAlertCarros(carrosConAlerta.size);
+      });
+  }, [usuario]);
+
   if (!usuario) return <Login onLogin={handleLogin} />;
 
   const esAdmin = usuario?.rol === "admin";
   const permisos = getPermisos(usuario);
   const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
-  const alertCarros = 0;
   const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
   const getMobileNavConfig = () => {
