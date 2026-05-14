@@ -7,11 +7,12 @@ import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
 import { Skeleton } from "../ui/skeleton";
 import { cn } from "../../lib/utils";
+import { useEvento } from "../common/SelectorEvento";
 import {
   Truck, Package, Pill, AlertTriangle, TrendingDown,
   DollarSign, TrendingUp, TrendingDown as TrendDown, Minus,
   Backpack, CheckCircle2, XCircle, ChevronRight, Activity,
-  ShieldAlert,
+  ShieldAlert, CalendarDays, Zap,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip,
@@ -44,16 +45,16 @@ function StatCard({ label, value, icon: Icon, accent, onClick }) {
     >
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
               {label}
             </p>
-            <p className="text-3xl font-extrabold leading-none" style={{ color: accent }}>
+            <p className="text-3xl font-extrabold leading-none truncate" style={{ color: accent }}>
               {value}
             </p>
           </div>
           {Icon && (
-            <div className="rounded-lg p-2 opacity-20" style={{ background: accent }}>
+            <div className="rounded-lg p-2 opacity-20 shrink-0" style={{ background: accent }}>
               <Icon size={20} color={accent} style={{ opacity: 5 }} />
             </div>
           )}
@@ -98,17 +99,36 @@ function AlertRow({ type, item }) {
 
 /* ══════════════════════════════════════════════════════════ */
 export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
-  const todosInsumos  = carros.flatMap(c => c.insumos);
-  const todosMeds     = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
-  const todo          = [...todosInsumos, ...todosMeds];
-  const alertasVenc   = todo.filter(i => estadoVenc(i.vencimiento) !== "ok");
-  const stockBajo     = todo.filter(i => estadoStock(i) !== "ok");
+  const { eventoActual, eventos } = useEvento();
+  const eventoObj = eventos.find(e => e.id === eventoActual);
 
-  const [costoMes,    setCostoMes]    = useState(null);
-  const [costoMesAnt, setCostoMesAnt] = useState(null);
-  const [invData,     setInvData]     = useState(null);
-  const [loading,     setLoading]     = useState(true);
+  const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
 
+  const [carrosDB,      setCarrosDB]      = useState([]);
+  const [atencionesHoy, setAtencionesHoy] = useState(null);
+  const [atencionesMes, setAtencionesMes] = useState(null);
+  const [costoMes,      setCostoMes]      = useState(null);
+  const [costoMesAnt,   setCostoMesAnt]   = useState(null);
+  const [invData,       setInvData]       = useState(null);
+  const [loading,       setLoading]       = useState(true);
+
+  // Datos en tiempo real para todos los usuarios
+  useEffect(() => {
+    if (!usuario?.token) return;
+    const hoyISO    = new Date().toISOString().split("T")[0];
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+    Promise.all([
+      sb("contenedores_medicamentos?tipo=eq.carro&select=nombre,stock,minimo,fecha_vencimiento,nombre_insumo,cajon,unidad", {}, usuario.token),
+      sb(`atenciones_medicas?created_at=gte.${hoyISO}&select=id`, {}, usuario.token),
+      sb(`atenciones_medicas?created_at=gte.${inicioMes}&select=id`, {}, usuario.token),
+    ]).then(([data, hoy, mes]) => {
+      if (data) setCarrosDB(data);
+      setAtencionesHoy(hoy?.length ?? 0);
+      setAtencionesMes(mes?.length ?? 0);
+    });
+  }, [usuario?.token]);
+
+  // Costos e inventario valorizado — solo admin
   useEffect(() => {
     if (!esAdmin || !usuario?.token) { setLoading(false); return; }
     const cargar = async () => {
@@ -147,6 +167,42 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
     };
     cargar();
   }, [esAdmin, usuario?.token]);
+
+  // Métricas calculadas desde DB de carros
+  const totalInsumosDB  = carrosDB.length;
+  const alertasVencDB   = carrosDB.filter(i => i.fecha_vencimiento && estadoVenc(i.fecha_vencimiento) !== "ok");
+  const stockBajoDB     = carrosDB.filter(i => estadoStock({ stock: Number(i.stock), minimo: Number(i.minimo) }) !== "ok");
+
+  // Alertas del bolso (aún desde constantes estáticas)
+  const alertasVencMeds = todosMeds.filter(i => estadoVenc(i.vencimiento) !== "ok");
+  const stockBajoMeds   = todosMeds.filter(i => estadoStock(i) !== "ok");
+
+  const totalAlertasVenc = alertasVencDB.length + alertasVencMeds.length;
+  const totalStockBajo   = stockBajoDB.length + stockBajoMeds.length;
+
+  // Agrupar filas DB por nombre de carro para la sección Estado de Carros
+  const carrosAgrupados = Object.entries(
+    carrosDB.reduce((acc, item) => {
+      acc[item.nombre] = acc[item.nombre] || [];
+      acc[item.nombre].push(item);
+      return acc;
+    }, {})
+  ).map(([nombre, items]) => ({
+    nombre,
+    items,
+    color: carros.find(c => c.nombre === nombre)?.color ?? C.accent,
+  }));
+
+  // Normalizar filas DB para AlertRow (unificar nombres de campo con los estáticos)
+  const carrosDBNorm = carrosDB.map((i, idx) => ({
+    ...i,
+    id: `db-${idx}`,
+    nombre: i.nombre_insumo,
+    vencimiento: i.fecha_vencimiento,
+    stock: Number(i.stock),
+    minimo: Number(i.minimo),
+  }));
+  const todoAlertas = [...carrosDBNorm, ...todosMeds];
 
   const diffPct = costoMes != null && costoMesAnt != null && costoMesAnt > 0
     ? Math.round(((costoMes - costoMesAnt) / costoMesAnt) * 100)
@@ -211,22 +267,62 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
         </Card>
       )}
 
-      {/* ── KPI grid ───────────────────────────────────────── */}
+      {/* ── KPI inventario ─────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Carros activos"       value={carros.length}         icon={Truck}          accent={C.accent} />
-        <StatCard label="Insumos en carros"    value={todosInsumos.length}   icon={Package}        accent={C.blue} />
-        <StatCard label="Medicamentos bolso"   value={todosMeds.length}      icon={Pill}           accent={C.orange} />
+        <StatCard
+          label="Carros activos"
+          value={carrosAgrupados.length || carros.length}
+          icon={Truck}
+          accent={C.accent}
+        />
+        <StatCard
+          label="Insumos en carros"
+          value={totalInsumosDB}
+          icon={Package}
+          accent={C.blue}
+        />
+        <StatCard
+          label="Medicamentos bolso"
+          value={todosMeds.length}
+          icon={Pill}
+          accent={C.orange}
+        />
         <StatCard
           label="Alertas vencimiento"
-          value={alertasVenc.length}
+          value={totalAlertasVenc}
           icon={AlertTriangle}
-          accent={alertasVenc.length > 0 ? C.red : C.green}
+          accent={totalAlertasVenc > 0 ? C.red : C.green}
         />
         <StatCard
           label="Stock bajo mínimo"
-          value={stockBajo.length}
+          value={totalStockBajo}
           icon={TrendingDown}
-          accent={stockBajo.length > 0 ? C.yellow : C.green}
+          accent={totalStockBajo > 0 ? C.yellow : C.green}
+        />
+      </div>
+
+      {/* ── KPI operacional — todos los usuarios ───────────── */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Atenciones hoy"
+          value={atencionesHoy ?? "—"}
+          icon={CalendarDays}
+          accent={C.green}
+          onClick={() => onNavigate?.("atenciones")}
+        />
+        <StatCard
+          label="Atenciones este mes"
+          value={atencionesMes ?? "—"}
+          icon={CalendarDays}
+          accent={C.blue}
+          onClick={() => onNavigate?.("atenciones")}
+        />
+        <StatCard
+          label="Evento activo"
+          value={eventoObj?.nombre_evento ?? "Sin evento"}
+          icon={Zap}
+          accent={eventoObj ? C.accent : C.textMuted}
+          onClick={esAdmin ? () => onNavigate?.("eventos") : undefined}
         />
       </div>
 
@@ -413,7 +509,7 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
         );
       })()}
 
-      {/* ── Estado de carros ────────────────────────────────── */}
+      {/* ── Estado de Carros ────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -423,13 +519,14 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {carros.map(c => {
-              const alertas = c.insumos.filter(i =>
-                estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok"
+            {carrosAgrupados.map(c => {
+              const alertas = c.items.filter(i =>
+                (i.fecha_vencimiento && estadoVenc(i.fecha_vencimiento) !== "ok") ||
+                estadoStock({ stock: Number(i.stock), minimo: Number(i.minimo) }) !== "ok"
               ).length;
               return (
                 <div
-                  key={c.id}
+                  key={c.nombre}
                   className="rounded-lg border p-3 transition-colors hover:bg-accent/10"
                   style={{ borderLeft: `3px solid ${c.color}`, borderColor: C.border, borderLeftColor: c.color }}
                 >
@@ -441,38 +538,40 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs" style={{ color: C.textMuted }}>{c.insumos.length} insumos</p>
-                  <p className="text-xs mt-0.5" style={{ color: c.evento_asignado === "Sin asignar" ? C.textFaint : C.text }}>
-                    {c.evento_asignado === "Sin asignar" ? "Sin evento asignado" : `📍 ${c.evento_asignado}`}
-                  </p>
+                  <p className="text-xs" style={{ color: C.textMuted }}>{c.items.length} insumos</p>
                 </div>
               );
             })}
+            {carrosAgrupados.length === 0 && (
+              <p className="text-xs col-span-full text-center py-4" style={{ color: C.textFaint }}>
+                Cargando datos de carros...
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* ── Alertas críticas ────────────────────────────────── */}
-      {(alertasVenc.length > 0 || stockBajo.length > 0) && (
+      {(totalAlertasVenc > 0 || totalStockBajo > 0) && (
         <Card style={{ borderLeft: `3px solid ${C.red}` }}>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <ShieldAlert size={15} className="text-red-400" />
               Alertas Críticas
               <Badge variant="danger" className="ml-auto">
-                {alertasVenc.length + stockBajo.length}
+                {totalAlertasVenc + totalStockBajo}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {todo.filter(i => estadoVenc(i.vencimiento) === "vencido").map(i => (
+            {todoAlertas.filter(i => estadoVenc(i.vencimiento) === "vencido").map(i => (
               <AlertRow key={`v-${i.id}`} type="vencido" item={i} />
             ))}
-            {todo.filter(i => estadoVenc(i.vencimiento) === "proximo").map(i => (
+            {todoAlertas.filter(i => estadoVenc(i.vencimiento) === "proximo").map(i => (
               <AlertRow key={`p-${i.id}`} type="proximo" item={i} />
             ))}
-            {todo.filter(i => estadoStock(i) !== "ok").map(i => (
-              <AlertRow key={`s-${i.id}`} type="stock"  item={i} />
+            {todoAlertas.filter(i => estadoStock(i) !== "ok").map(i => (
+              <AlertRow key={`s-${i.id}`} type="stock" item={i} />
             ))}
           </CardContent>
         </Card>
