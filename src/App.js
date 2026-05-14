@@ -26,6 +26,7 @@ import { GestionPreciosKinesiologia } from "./components/reportes/GestionPrecios
 import { GestionInsumosGenerales } from "./components/reportes/GestionInsumosGenerales";
 import { GestionUsuarios } from "./components/admin/GestionUsuarios";
 import { Configuracion } from "./components/admin/Configuracion";
+import { LogsAuditoria } from "./components/admin/LogsAuditoria";
 import { EventoProvider, SelectorEvento } from "./components/common/SelectorEvento";
 import { HistorialPaciente } from "./components/pacientes/HistorialPaciente";
 import { HistorialMedicamentos } from "./components/atenciones/HistorialMedicamentos";
@@ -42,6 +43,7 @@ const PERMISOS_TAB = {
   insumosGrales:     (_u, admin) => admin,
   configuracion:     (_u, admin) => admin,
   historialMeds:     (_u, admin) => admin,
+  logsAuditoria:     (_u, admin) => admin,
   // Médico + admin
   atencionMedica:    (u, admin) => admin || u?.profesion === "Médico",
   colaTriaje:        (u, admin) => admin || u?.profesion === "Médico",
@@ -126,11 +128,12 @@ export default function App() {
       preciosKine:       { id: "preciosKine",        label: "Kine Maestro", icon: "bolso" },
       insumosGrales:     { id: "insumosGrales",      label: "Insumos",      icon: "carro" },
       historialMeds:     { id: "historialMeds",      label: "Historial Meds", icon: "report" },
+      logsAuditoria:     { id: "logsAuditoria",      label: "Logs Auditoría", icon: "report" },
     };
     if (esAdmin) return {
       primary: [T.dashboard, T.atenciones, T.carros, T.reportes],
       more: [
-        T.costos, T.eventos, T.historialPaciente, T.historialMeds, T.usuarios,
+        T.costos, T.eventos, T.historialPaciente, T.historialMeds, T.logsAuditoria, T.usuarios,
         T.configuracion, T.preciosMeds, T.preciosKine, T.insumosGrales,
         T.bolsos, T.bolsoKine, T.atencionMedica, T.atencionKine,
         T.masoterapia, T.adminMedicamentos, T.colaTriaje,
@@ -194,7 +197,8 @@ export default function App() {
     ...(esAdmin ? [{ id: "preciosMeds",    label: "Precios Medicamentos",  icon: "bolso"  }] : []),
     ...(esAdmin ? [{ id: "preciosKine",    label: "Bolso Kines Maestro",   icon: "event"  }] : []),
     ...(esAdmin ? [{ id: "insumosGrales",  label: "Insumos Generales",     icon: "carro"  }] : []),
-    ...(esAdmin ? [{ id: "historialMeds", label: "Historial Medicamentos", icon: "report" }] : []),
+    ...(esAdmin ? [{ id: "historialMeds",  label: "Historial Medicamentos", icon: "report" }] : []),
+    ...(esAdmin ? [{ id: "logsAuditoria", label: "Logs de Auditoría",      icon: "report" }] : []),
     { section: "Pacientes" },
     { id: "historialPaciente", label: "Historial Paciente", icon: "med" },
     { id: "configuracion", label: "Config", icon: "report" },
@@ -402,6 +406,15 @@ export default function App() {
               <div style={S.subtitle}>123 insumos · Edita precio, categoría y proveedor</div>
             </div>
             <GestionInsumosGenerales usuario={usuario} />
+          </div>
+        )}
+        {tab === "logsAuditoria" && tienePermiso("logsAuditoria", usuario, esAdmin) && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={S.title}>Logs de Auditoría</div>
+              <div style={S.subtitle}>Trazabilidad completa · eventos, atenciones, stock y usuarios</div>
+            </div>
+            <LogsAuditoria usuario={usuario} />
           </div>
         )}
         {tab === "historialMeds" && tienePermiso("historialMeds", usuario, esAdmin) && (
