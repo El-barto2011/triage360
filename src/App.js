@@ -28,6 +28,7 @@ import { GestionUsuarios } from "./components/admin/GestionUsuarios";
 import { Configuracion } from "./components/admin/Configuracion";
 import { EventoProvider, SelectorEvento } from "./components/common/SelectorEvento";
 import { HistorialPaciente } from "./components/pacientes/HistorialPaciente";
+import { HistorialMedicamentos } from "./components/atenciones/HistorialMedicamentos";
 import { Toaster } from "./components/ui/toaster";
 import { toast } from "./components/ui/use-toast";
 
@@ -40,6 +41,7 @@ const PERMISOS_TAB = {
   preciosKine:       (_u, admin) => admin,
   insumosGrales:     (_u, admin) => admin,
   configuracion:     (_u, admin) => admin,
+  historialMeds:     (_u, admin) => admin,
   // Médico + admin
   atencionMedica:    (u, admin) => admin || u?.profesion === "Médico",
   colaTriaje:        (u, admin) => admin || u?.profesion === "Médico",
@@ -123,11 +125,12 @@ export default function App() {
       preciosMeds:       { id: "preciosMeds",        label: "Precios Meds", icon: "bolso" },
       preciosKine:       { id: "preciosKine",        label: "Kine Maestro", icon: "bolso" },
       insumosGrales:     { id: "insumosGrales",      label: "Insumos",      icon: "carro" },
+      historialMeds:     { id: "historialMeds",      label: "Historial Meds", icon: "report" },
     };
     if (esAdmin) return {
       primary: [T.dashboard, T.atenciones, T.carros, T.reportes],
       more: [
-        T.costos, T.eventos, T.historialPaciente, T.usuarios,
+        T.costos, T.eventos, T.historialPaciente, T.historialMeds, T.usuarios,
         T.configuracion, T.preciosMeds, T.preciosKine, T.insumosGrales,
         T.bolsos, T.bolsoKine, T.atencionMedica, T.atencionKine,
         T.masoterapia, T.adminMedicamentos, T.colaTriaje,
@@ -191,6 +194,7 @@ export default function App() {
     ...(esAdmin ? [{ id: "preciosMeds",    label: "Precios Medicamentos",  icon: "bolso"  }] : []),
     ...(esAdmin ? [{ id: "preciosKine",    label: "Bolso Kines Maestro",   icon: "event"  }] : []),
     ...(esAdmin ? [{ id: "insumosGrales",  label: "Insumos Generales",     icon: "carro"  }] : []),
+    ...(esAdmin ? [{ id: "historialMeds", label: "Historial Medicamentos", icon: "report" }] : []),
     { section: "Pacientes" },
     { id: "historialPaciente", label: "Historial Paciente", icon: "med" },
     { id: "configuracion", label: "Config", icon: "report" },
@@ -398,6 +402,15 @@ export default function App() {
               <div style={S.subtitle}>123 insumos · Edita precio, categoría y proveedor</div>
             </div>
             <GestionInsumosGenerales usuario={usuario} />
+          </div>
+        )}
+        {tab === "historialMeds" && tienePermiso("historialMeds", usuario, esAdmin) && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={S.title}>Historial de Medicamentos</div>
+              <div style={S.subtitle}>Auditoría completa de cambios · INSERT, UPDATE y DELETE con datos anteriores y nuevos</div>
+            </div>
+            <HistorialMedicamentos usuario={usuario} />
           </div>
         )}
         {tab === "historialPaciente" && (
