@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import { C } from "../../config/theme";
 import { sb } from "../../config/supabase";
 import {
@@ -15,6 +18,7 @@ import { cn } from "../../lib/utils";
 import {
   BarChart2, Download, Lock, Search, ArrowUpDown,
   Pill, Package, Stethoscope, Activity, Waves,
+  FileSpreadsheet, FileText,
 } from "lucide-react";
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
@@ -141,7 +145,7 @@ export function VistaReportes({ usuario, esAdmin }) {
     const [atencionesKine, atencionesMed, adminMed, masoterapiaMasiva, fichasMasoterapia] = await Promise.all([
       sb(`atenciones_kinesiologia?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
       sb(`atenciones_medicas?evento=eq.${eventoSeleccionado}`,      {}, usuario?.token),
-      sb(`administracion_medicamentos?order=created_at.desc`,       {}, usuario?.token),
+      sb(`administracion_medicamentos?evento=eq.${eventoSeleccionado}&order=created_at.desc`, {}, usuario?.token),
       sb(`atenciones_masoterapia_masiva?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
       sb(`fichas_masoterapia?evento=eq.${eventoSeleccionado}`,      {}, usuario?.token),
     ]);
@@ -189,8 +193,8 @@ export function VistaReportes({ usuario, esAdmin }) {
     setLoading(false);
   };
 
-  /* ── Export (unchanged) ─────────────────────────────── */
-  const exportarExcel = () => {
+  /* ── Export CSV ─────────────────────────────────────── */
+  const exportarCSV = () => {
     if (!datosReporte) return;
     let csv = "REPORTE DE EVENTO - " + datosReporte.evento + "\n\n";
     csv += "RESUMEN GENERAL\n";
@@ -211,6 +215,249 @@ export function VistaReportes({ usuario, esAdmin }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  /* ── Export Excel (.xlsx) ───────────────────────────── */
+  const exportarExcel = () => {
+    if (!datosReporte) return;
+    const wb   = XLSX.utils.book_new();
+    const slug = datosReporte.evento.replace(/\s/g, "_");
+    const hoy  = new Date().toLocaleDateString("es-CL");
+
+    // Hoja Resumen
+    const resumenRows = [
+      ["REPORTE DE EVENTO", datosReporte.evento],
+      ["Fecha de generación", hoy],
+      [],
+      ["RESUMEN GENERAL", ""],
+      ["Atenciones Kinesiología", datosReporte.totalKine],
+      ["Atenciones Médicas",      datosReporte.totalMedicas],
+      ["Masajes Masivos",         datosReporte.totalMasajes],
+      ["Fichas Masoterapia",      datosReporte.totalFichasMasoterapia],
+    ];
+    if (esAdmin && datosReporte.costoTotal !== null)
+      resumenRows.push([], ["Costo Total (CLP)", datosReporte.costoTotal]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumenRows), "Resumen");
+
+    // Hoja Atenciones Médicas
+    if (datosReporte.atencionesMed?.length > 0) {
+      const ws = XLSX.utils.json_to_sheet(
+        datosReporte.atencionesMed.map(a => ({
+          Paciente:         a.paciente_nombre  || "",
+          Edad:             a.paciente_edad    || "",
+          Triaje:           a.codigo_triaje    || "",
+          Motivo:           a.motivo_consulta  || "",
+          "Médico/Enfermero": (a.medico_nombre || a.enfermero_nombre || "").split("@")[0],
+          Diagnóstico:      a.diagnostico      || "",
+          Fecha:            a.created_at ? new Date(a.created_at).toLocaleString("es-CL") : "",
+        }))
+      );
+      XLSX.utils.book_append_sheet(wb, ws, "Atenciones Médicas");
+    }
+
+    // Hoja Kinesiología
+    if (datosReporte.atencionesKine?.length > 0) {
+      const ws = XLSX.utils.json_to_sheet(
+        datosReporte.atencionesKine.map(a => ({
+          Paciente:      a.paciente_nombre || "",
+          Edad:          a.paciente_edad   || "",
+          "Kinesiólogo/a": (a.kinesiologo_nombre || "").split("@")[0],
+          Motivo:        a.motivo_consulta || "",
+          Fecha:         a.created_at ? new Date(a.created_at).toLocaleString("es-CL") : "",
+        }))
+      );
+      XLSX.utils.book_append_sheet(wb, ws, "Kinesiología");
+    }
+
+    // Hoja Masoterapia
+    const masoRows = [];
+    if (datosReporte.masoterapiaMasiva?.length > 0) {
+      masoRows.push(["MASOTERAPIA MASIVA"], ["Masajes realizados", "Fecha"]);
+      datosReporte.masoterapiaMasiva.forEach(m =>
+        masoRows.push([m.masajes_realizados || 0, m.created_at ? new Date(m.created_at).toLocaleString("es-CL") : ""])
+      );
+      masoRows.push([]);
+    }
+    if (datosReporte.fichasMasoterapia?.length > 0) {
+      masoRows.push(["FICHAS INDIVIDUALES"], ["Paciente", "Terapeuta", "Fecha"]);
+      datosReporte.fichasMasoterapia.forEach(f =>
+        masoRows.push([
+          f.paciente_nombre || "",
+          (f.terapeuta_nombre || f.kinesiologo_nombre || "").split("@")[0],
+          f.created_at ? new Date(f.created_at).toLocaleString("es-CL") : "",
+        ])
+      );
+    }
+    if (masoRows.length > 0)
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(masoRows), "Masoterapia");
+
+    // Hoja Medicamentos e Insumos
+    const medRows = [
+      ["MEDICAMENTOS PRESCRITOS"], ["Nombre", "Cantidad", "Vía"],
+      ...datosReporte.medicamentosUsados.map(m => [m.nombre, m.cantidad, m.via || ""]),
+      [],
+      ["INSUMOS UTILIZADOS"], ["Nombre", "Cantidad", "Unidad"],
+      ...datosReporte.insumosUsados.map(i => [i.nombre, i.cantidad, i.unidad || ""]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(medRows), "Medicamentos");
+
+    // Hoja Costos (admin)
+    if (esAdmin && datosReporte.costoTotal !== null) {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["VALORIZACIÓN DEL EVENTO"],
+        ["Evento",          datosReporte.evento],
+        ["Fecha",           hoy],
+        ["Costo Total (CLP)", datosReporte.costoTotal],
+        [],
+        ["* Insumos sin costo registrado no se incluyen en el total."],
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Costos");
+    }
+
+    XLSX.writeFile(wb, `reporte_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
+  };
+
+  /* ── Export PDF ─────────────────────────────────────── */
+  const exportarPDF = () => {
+    if (!datosReporte) return;
+    const doc  = new jsPDF();
+    const pageW = doc.internal.pageSize.getWidth();
+    let y = 16;
+
+    // Encabezado
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 194, 168);
+    doc.text("TRIAGE360", pageW / 2, y, { align: "center" });
+    y += 8;
+    doc.setFontSize(12);
+    doc.setTextColor(30, 30, 30);
+    doc.text(datosReporte.evento, pageW / 2, y, { align: "center" });
+    y += 6;
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`Generado el ${new Date().toLocaleDateString("es-CL")}`, pageW / 2, y, { align: "center" });
+    doc.setTextColor(0);
+    y += 10;
+
+    // KPIs
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("Resumen General", 14, y);
+    y += 4;
+    doc.autoTable({
+      startY: y,
+      head: [["Tipo de Atención", "Total"]],
+      body: [
+        ["Kinesiología",      datosReporte.totalKine],
+        ["Atenciones Médicas", datosReporte.totalMedicas],
+        ["Masajes Masivos",    datosReporte.totalMasajes],
+        ["Fichas Masoterapia", datosReporte.totalFichasMasoterapia],
+      ],
+      theme: "striped",
+      headStyles: { fillColor: [0, 194, 168] },
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 9 },
+    });
+    y = doc.lastAutoTable.finalY + 10;
+
+    // Atenciones Médicas
+    if (datosReporte.atencionesMed?.length > 0) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Atenciones Médicas", 14, y);
+      y += 4;
+      doc.autoTable({
+        startY: y,
+        head: [["Paciente", "Triaje", "Motivo", "Médico", "Fecha"]],
+        body: datosReporte.atencionesMed.map(a => [
+          a.paciente_nombre || "",
+          a.codigo_triaje   || "",
+          (a.motivo_consulta || "").substring(0, 35),
+          (a.medico_nombre || a.enfermero_nombre || "").split("@")[0],
+          a.created_at ? new Date(a.created_at).toLocaleDateString("es-CL") : "",
+        ]),
+        theme: "striped",
+        headStyles: { fillColor: [88, 166, 255] },
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 8 },
+      });
+      y = doc.lastAutoTable.finalY + 10;
+    }
+
+    // Kinesiología
+    if (datosReporte.atencionesKine?.length > 0) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Atenciones de Kinesiología", 14, y);
+      y += 4;
+      doc.autoTable({
+        startY: y,
+        head: [["Paciente", "Kinesiólogo/a", "Motivo", "Fecha"]],
+        body: datosReporte.atencionesKine.map(a => [
+          a.paciente_nombre || "",
+          (a.kinesiologo_nombre || "").split("@")[0],
+          (a.motivo_consulta || "").substring(0, 45),
+          a.created_at ? new Date(a.created_at).toLocaleDateString("es-CL") : "",
+        ]),
+        theme: "striped",
+        headStyles: { fillColor: [0, 194, 168] },
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 8 },
+      });
+      y = doc.lastAutoTable.finalY + 10;
+    }
+
+    // Medicamentos
+    if (datosReporte.medicamentosUsados.length > 0) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Medicamentos Prescritos", 14, y);
+      y += 4;
+      doc.autoTable({
+        startY: y,
+        head: [["Medicamento", "Vía", "Cantidad"]],
+        body: datosReporte.medicamentosUsados.map(m => [m.nombre, m.via || "", m.cantidad]),
+        theme: "striped",
+        headStyles: { fillColor: [188, 140, 255] },
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 8 },
+      });
+      y = doc.lastAutoTable.finalY + 10;
+    }
+
+    // Insumos
+    if (datosReporte.insumosUsados.length > 0) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Insumos Utilizados", 14, y);
+      y += 4;
+      doc.autoTable({
+        startY: y,
+        head: [["Insumo", "Cantidad", "Unidad"]],
+        body: datosReporte.insumosUsados.map(i => [i.nombre, i.cantidad, i.unidad || ""]),
+        theme: "striped",
+        headStyles: { fillColor: [240, 136, 62] },
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 8 },
+      });
+      y = doc.lastAutoTable.finalY + 12;
+    }
+
+    // Costo total (admin)
+    if (esAdmin && datosReporte.costoTotal !== null) {
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 100, 200);
+      doc.text(
+        `Costo Total del Evento: $${datosReporte.costoTotal.toLocaleString("es-CL")} CLP`,
+        14, y
+      );
+      doc.setTextColor(0);
+    }
+
+    const slug = datosReporte.evento.replace(/\s/g, "_");
+    doc.save(`reporte_${slug}_${new Date().toISOString().split("T")[0]}.pdf`);
   };
 
   /* ── Cerrar evento (unchanged) ───────────────────────── */
@@ -378,9 +625,15 @@ export function VistaReportes({ usuario, esAdmin }) {
               <p className="text-xs mt-1" style={{ color: C.textMuted }}>Resumen detallado de atenciones y costos</p>
             </div>
             {datosReporte && (
-              <div className="flex gap-2 shrink-0">
+              <div className="flex gap-2 shrink-0 flex-wrap">
+                <Button variant="outline" size="sm" onClick={exportarCSV}>
+                  <Download size={13} /> CSV
+                </Button>
                 <Button variant="outline" size="sm" onClick={exportarExcel}>
-                  <Download size={13} /> Exportar CSV
+                  <FileSpreadsheet size={13} /> Excel
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportarPDF}>
+                  <FileText size={13} /> PDF
                 </Button>
                 {esAdmin && eventoActivo && (
                   <Button variant="destructive" size="sm" onClick={cerrarEvento}>
