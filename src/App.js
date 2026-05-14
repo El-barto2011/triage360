@@ -31,6 +31,32 @@ import { HistorialPaciente } from "./components/pacientes/HistorialPaciente";
 import { Toaster } from "./components/ui/toaster";
 import { toast } from "./components/ui/use-toast";
 
+const PERMISOS_TAB = {
+  // Solo admin
+  usuarios:          (_u, admin) => admin,
+  reportes:          (_u, admin) => admin,
+  costos:            (_u, admin) => admin,
+  preciosMeds:       (_u, admin) => admin,
+  preciosKine:       (_u, admin) => admin,
+  insumosGrales:     (_u, admin) => admin,
+  configuracion:     (_u, admin) => admin,
+  // Médico + admin
+  atencionMedica:    (u, admin) => admin || u?.profesion === "Médico",
+  colaTriaje:        (u, admin) => admin || u?.profesion === "Médico",
+  // Enfermero/Paramédico + admin
+  adminMedicamentos: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
+  // Kinesiólogo + admin
+  atencionKine:      (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
+  bolsoKine:         (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
+  // Masoterapeuta + admin
+  masoterapia:       (u, admin) => admin || u?.profesion === "Masoterapeuta",
+};
+
+function tienePermiso(tab, usuario, esAdmin) {
+  const check = PERMISOS_TAB[tab];
+  return check ? check(usuario, esAdmin) : true;
+}
+
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [moreOpen, setMoreOpen] = useState(false);
@@ -260,7 +286,7 @@ export default function App() {
             <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} />
           </div>
         )}
-        {tab === "bolsoKine" && (
+        {tab === "bolsoKine" && tienePermiso("bolsoKine", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Bolso de Kinesiólogo/a 🏥</div>
@@ -278,7 +304,7 @@ export default function App() {
             <VistaGestionEventos usuario={usuario} />
           </div>
         )}
-        {tab === "atencionMedica" && (
+        {tab === "atencionMedica" && tienePermiso("atencionMedica", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Atenciones Médicas</div>
@@ -287,7 +313,7 @@ export default function App() {
             <VistaAtencionesMedicas usuario={usuario} carros={carros} />
           </div>
         )}
-        {tab === "colaTriaje" && (
+        {tab === "colaTriaje" && tienePermiso("colaTriaje", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>🚨 Cola de Triaje</div>
@@ -296,7 +322,7 @@ export default function App() {
             <ColaTriaje usuario={usuario} />
           </div>
         )}
-        {tab === "adminMedicamentos" && (
+        {tab === "adminMedicamentos" && tienePermiso("adminMedicamentos", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Administración de Medicamentos</div>
@@ -305,7 +331,7 @@ export default function App() {
             <VistaAdministracionMedicamentos usuario={usuario} />
           </div>
         )}
-        {tab === "atencionKine" && (
+        {tab === "atencionKine" && tienePermiso("atencionKine", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Atenciones de Kinesiología</div>
@@ -314,7 +340,7 @@ export default function App() {
             <VistaAtencionesKinesiologia usuario={usuario} />
           </div>
         )}
-        {tab === "masoterapia" && (
+        {tab === "masoterapia" && tienePermiso("masoterapia", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Masoterapia</div>
@@ -323,13 +349,13 @@ export default function App() {
             <VistaMasoterapiaUnificada usuario={usuario} />
           </div>
         )}
-        {tab === "configuracion" && (
+        {tab === "configuracion" && tienePermiso("configuracion", usuario, esAdmin) && (
           <Configuracion industriaKey={industriaKey} setIndustriaKey={setIndustriaKey} usuario={usuario} />
         )}
-        {tab === "usuarios" && esAdmin && (
+        {tab === "usuarios" && tienePermiso("usuarios", usuario, esAdmin) && (
           <GestionUsuarios usuario={usuario} carros={carros} />
         )}
-        {tab === "reportes" && (
+        {tab === "reportes" && tienePermiso("reportes", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Reportes</div>
@@ -338,7 +364,7 @@ export default function App() {
             <VistaReportes usuario={usuario} esAdmin={esAdmin} />
           </div>
         )}
-        {tab === "costos" && (
+        {tab === "costos" && tienePermiso("costos", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Valorización de Medicamentos</div>
@@ -347,7 +373,7 @@ export default function App() {
             <VistaGestionCostos usuario={usuario} />
           </div>
         )}
-        {tab === "preciosMeds" && (
+        {tab === "preciosMeds" && tienePermiso("preciosMeds", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Precios de Medicamentos 💊</div>
@@ -356,7 +382,7 @@ export default function App() {
             <GestionPreciosMedicamentos usuario={usuario} />
           </div>
         )}
-        {tab === "preciosKine" && (
+        {tab === "preciosKine" && tienePermiso("preciosKine", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Bolso Kines Maestro 🎒</div>
@@ -365,7 +391,7 @@ export default function App() {
             <GestionPreciosKinesiologia usuario={usuario} />
           </div>
         )}
-        {tab === "insumosGrales" && (
+        {tab === "insumosGrales" && tienePermiso("insumosGrales", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Insumos Generales 🔧</div>
@@ -382,6 +408,9 @@ export default function App() {
             </div>
             <HistorialPaciente usuario={usuario} />
           </div>
+        )}
+        {!tienePermiso(tab, usuario, esAdmin) && (
+          <Dashboard carros={carros} usuario={usuario} esAdmin={esAdmin} permisos={permisos} onNavigate={setTab} />
         )}
       </main>
 
