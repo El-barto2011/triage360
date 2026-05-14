@@ -90,7 +90,7 @@ export function VistaGestionEventos({ usuario }) {
       fecha_fin: form.fecha_fin || null,
       hora_inicio: form.hora_inicio || null,
       hora_fin: form.hora_fin || null,
-      ubicacion: form.ubicacion || "",
+      ubicacion: form.ubicacion || null,
       tipo_evento: form.tipo_evento,
       tipo_masoterapia: form.tipo_masoterapia,
       observaciones: form.observaciones || null,
@@ -101,7 +101,7 @@ export function VistaGestionEventos({ usuario }) {
       masoterapeutas: form.masoterapeutas || [],
       carros_asignados: form.carros_asignados || [],
       bolsos_asignados: form.bolsos_asignados || [],
-      estado: "activo"
+      estado: modal === "nuevo" ? "activo" : form.estado
     };
 
     let eventoGuardado = null;
