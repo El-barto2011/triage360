@@ -9,7 +9,6 @@ import { Login } from "./components/auth/Login";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import { VistaCarros } from "./components/inventario/VistaCarros";
 import { VistaCarrosClinicosDB } from "./components/inventario/VistaCarrosClinicosDB";
-import { VistaBolsoNaranja } from "./components/inventario/VistaBolsoNaranja";
 import { VistaBolsosMedicamentos } from "./components/inventario/VistaBolsosMedicamentos";
 import { VistaBolsoKinesiologia } from "./components/inventario/VistaBolsoKinesiologia";
 import { VistaGestionEventos } from "./components/eventos/VistaGestionEventos";
@@ -162,20 +161,6 @@ export default function App() {
   };
   const { primary: primaryTabs, more: moreTabs } = getMobileNavConfig();
 
-  const navItems = [
-    { id: "dashboard", label: "Inicio", icon: "dashboard" },
-    ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros", icon: "carro", badge: alertCarros }] : []),
-    ...(esAdmin || permisos.verBolso ? [{ id: "bolso", label: "Medicamentos", icon: "bolso", badge: alertBolso }] : []),
-    { id: "atenciones", label: "Atenciones", icon: "event" },
-    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
-    ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
-    ...(esAdmin ? [{ id: "costos", label: "Costos", icon: "report" }] : []),
-    ...(esAdmin ? [{ id: "preciosMeds", label: "Precios", icon: "bolso" }] : []),
-    { id: "historialPaciente", label: "Historial", icon: "med" },
-    { id: "configuracion", label: "Config", icon: "report" },
-    ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
-  ];
-
   const nav = [
     { section: "General" },
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
@@ -276,16 +261,7 @@ export default function App() {
             <VistaBolsosMedicamentos usuario={usuario} />
           </div>
         )}
-        {tab === "bolso" && (
-          <div>
-            <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Bolso Naranja 🟠</div>
-              <div style={S.subtitle}>Medicamentos separados del carro · 3 cajas internas</div>
-            </div>
-            <VistaBolsoNaranja usuario={usuario} />
-          </div>
-        )}
-        {tab === "atenciones" && (
+        {tab === "atenciones" && tienePermiso("atenciones", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Atenciones Mensuales 🏥</div>
@@ -303,7 +279,7 @@ export default function App() {
             <VistaBolsoKinesiologia usuario={usuario} />
           </div>
         )}
-        {tab === "eventos" && (
+        {tab === "eventos" && tienePermiso("eventos", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Gestión de Eventos</div>
@@ -426,7 +402,7 @@ export default function App() {
             <HistorialMedicamentos usuario={usuario} />
           </div>
         )}
-        {tab === "historialPaciente" && (
+        {tab === "historialPaciente" && tienePermiso("historialPaciente", usuario, esAdmin) && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Historial del Paciente</div>
