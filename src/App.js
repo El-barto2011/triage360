@@ -65,13 +65,15 @@ export default function App() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [usuario, setUsuario] = useState(null);
-  const [industriaKey, setIndustriaKey] = useState("eventos");
+  const [industriaKey, setIndustriaKey] = useState(() => localStorage.getItem("industriaKey") || "eventos");
   const [alertCarros, setAlertCarros] = useState(0);
   const industria = getIndustria(industriaKey);
   const isMobile = useIsMobile();
 
   const handleLogin = (user) => setUsuario(user);
   const handleLogout = () => setUsuario(null);
+
+  useEffect(() => { localStorage.setItem("industriaKey", industriaKey); }, [industriaKey]);
 
   // Registrar handler global de errores de red para supabase.js
   useEffect(() => {
