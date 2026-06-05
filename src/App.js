@@ -6,6 +6,7 @@ import { sb } from "./config/supabase";
 import { useIsMobile } from "./hooks/useIsMobile";
 
 import { Login } from "./components/auth/Login";
+import { SinPermiso } from "./components/common/SinPermiso";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import { VistaCarros } from "./components/inventario/VistaCarros";
 import { VistaCarrosClinicosDB } from "./components/inventario/VistaCarrosClinicosDB";
@@ -412,9 +413,7 @@ export default function App() {
             <HistorialPaciente usuario={usuario} />
           </div>
         )}
-        {!tienePermiso(tab, usuario, esAdmin) && (
-          <Dashboard carros={carros} usuario={usuario} esAdmin={esAdmin} permisos={permisos} onNavigate={setTab} />
-        )}
+        {!tienePermiso(tab, usuario, esAdmin) && <SinPermiso />}
       </main>
 
       <Toaster />
