@@ -109,7 +109,6 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
     const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || "00:00"}:00`;
     const timestampPersonalizado = new Date(fechaHora).toISOString();
     const datos = {
-      evento:    form.evento,
       evento_id: form.evento_id || null,
       masoterapeuta_id:     usuario.id,
       masoterapeuta_nombre: usuario.email,

@@ -7,7 +7,7 @@ export function VistaMasoterapiaMasiva({ usuario }) {
   const [historial, setHistorial] = useState([]);
   const [loading, setLoading] = useState(true);
   const [eventos, setEventos] = useState([]);
-  const [eventoSeleccionado, setEventoSeleccionado] = useState("");
+  const [eventoSeleccionado, setEventoSeleccionado] = useState(null);
 
   useEffect(() => {
     cargarDatos();
@@ -32,17 +32,17 @@ export function VistaMasoterapiaMasiva({ usuario }) {
     if (evs) {
       setEventos(evs);
       if (evs.length > 0 && !eventoSeleccionado) {
-        setEventoSeleccionado(evs[0].nombre_evento);
+        setEventoSeleccionado(evs[0].id);
       }
     }
 
     if (hist) {
       setHistorial(hist);
-      // Buscar registro de hoy
       const hoy = new Date().toISOString().split('T')[0];
+      const idActivo = eventoSeleccionado ?? evs?.[0]?.id;
       const regHoy = hist.find(h => {
         const fechaReg = new Date(h.created_at).toISOString().split('T')[0];
-        return fechaReg === hoy && h.evento === (eventoSeleccionado || evs?.[0]?.nombre_evento);
+        return fechaReg === hoy && h.evento_id === idActivo;
       });
       setRegistroHoy(regHoy || null);
     }
@@ -59,7 +59,7 @@ export function VistaMasoterapiaMasiva({ usuario }) {
     const datos = {
       masoterapeuta_id: usuario.id,
       masoterapeuta_nombre: usuario.email,
-      evento: eventoSeleccionado,
+      evento_id: eventoSeleccionado,
       masajes_realizados: 0,
       fecha: new Date().toISOString().split('T')[0]
     };
@@ -108,16 +108,13 @@ export function VistaMasoterapiaMasiva({ usuario }) {
     }
   };
 
-  const cambiarEvento = async (nuevoEvento) => {
-    setEventoSeleccionado(nuevoEvento);
-
-    // Buscar si ya existe registro de hoy para este evento
+  const cambiarEvento = (nuevoEventoId) => {
+    setEventoSeleccionado(nuevoEventoId);
     const hoy = new Date().toISOString().split('T')[0];
     const regHoy = historial.find(h => {
       const fechaReg = new Date(h.created_at).toISOString().split('T')[0];
-      return fechaReg === hoy && h.evento === nuevoEvento;
+      return fechaReg === hoy && h.evento_id === nuevoEventoId;
     });
-
     setRegistroHoy(regHoy || null);
   };
 
@@ -146,16 +143,16 @@ export function VistaMasoterapiaMasiva({ usuario }) {
           Masoterapia Masiva - Contador
         </div>
         <div style={{ fontSize: 13, color: C.textMuted }}>
-          Evento: {eventoSeleccionado}
+          Evento: {eventos.find(e => e.id === eventoSeleccionado)?.nombre_evento || ""}
         </div>
         {eventos.length > 1 && (
           <select
             style={{ ...S.select, width: "100%", marginTop: 12 }}
-            value={eventoSeleccionado}
-            onChange={e => cambiarEvento(e.target.value)}
+            value={eventoSeleccionado ?? ""}
+            onChange={e => cambiarEvento(Number(e.target.value))}
           >
             {eventos.map(ev => (
-              <option key={ev.id} value={ev.nombre_evento}>{ev.nombre_evento}</option>
+              <option key={ev.id} value={ev.id}>{ev.nombre_evento}</option>
             ))}
           </select>
         )}
@@ -234,7 +231,9 @@ export function VistaMasoterapiaMasiva({ usuario }) {
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{reg.evento}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>
+                      {eventos.find(e => e.id === reg.evento_id)?.nombre_evento || reg.evento}
+                    </div>
                     <div style={{ fontSize: 12, color: C.textMuted }}>
                       {new Date(reg.created_at).toLocaleDateString('es-CL')}
                       {esHoy && <span style={{ marginLeft: 8, color: C.green }}>• Hoy</span>}

@@ -144,7 +144,6 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
       paciente_rut:       form.paciente_rut || null,
       paciente_edad:      form.paciente_edad ? parseInt(form.paciente_edad) : null,
       categoria_paciente: form.categoria_paciente || "Jugador",
-      evento:    form.evento,
       evento_id: form.evento_id || null,
       motivo_consulta:   form.motivo_consulta,
       diagnostico:       form.diagnostico  || null,
