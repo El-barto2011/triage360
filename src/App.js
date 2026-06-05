@@ -193,7 +193,6 @@ export default function App() {
   return (
     <EventoProvider usuario={usuario}>
     <div style={{ ...S.app, flexDirection: isMobile ? "column" : "row" }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
       {!isMobile && (
         <div style={S.sidebar}>
