@@ -33,7 +33,7 @@ export function Login({ onLogin }) {
         email: data.user?.email,
         nombre: perfil.nombre || data.user?.email,
         rol: perfil.rol || 'profesional',
-        evento_asignado: perfil.evento_asignado || null,
+        evento_id: perfil.evento_id || null,
         profesion: perfil.profesion || '',
       });
     } catch (e) { setError("Error de conexión"); }

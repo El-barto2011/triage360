@@ -231,8 +231,8 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
         <p className="mt-1 text-sm" style={{ color: C.textMuted }}>
           {esAdmin
             ? `TRIAGE360 · ${today}`
-            : usuario?.evento_asignado
-              ? `📍 Evento asignado: ${usuario.evento_asignado}`
+            : usuario?.evento_id
+              ? `📍 Evento asignado: ${eventos.find(e => e.id === usuario.evento_id)?.nombre_evento ?? "Sin evento asignado"}`
               : "Sin evento asignado hoy"}
         </p>
       </div>
