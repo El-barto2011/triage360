@@ -14,6 +14,32 @@ export default async function handler(req, res) {
   try {
     console.log('Iniciando verificacion de stock y vencimientos...');
 
+    // ── GUARDIA: Solo enviar alertas si hay un evento en curso ──
+    const resEventos = await fetch(
+      `${SUPABASE_URL}/rest/v1/eventos?estado=eq.en_curso&select=id,nombre&limit=1`,
+      {
+        headers: {
+          'apikey': SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const eventosActivos = resEventos.ok ? await resEventos.json() : [];
+
+    if (eventosActivos.length === 0) {
+      console.log('Sin eventos en curso. Alertas de stock desactivadas.');
+      return res.status(200).json({
+        success: true,
+        message: 'Sin eventos en curso. No se enviaron alertas.',
+        emailEnviado: false
+      });
+    }
+
+    console.log(`Evento en curso: ${eventosActivos[0].nombre}. Verificando stock...`);
+    // ── FIN GUARDIA ──────────────────────────────────────────────
+
     const hoy = new Date();
     const en30dias = new Date(hoy.getTime() + 30 * 24 * 60 * 60 * 1000);
     const hoyStr = hoy.toISOString().split('T')[0];
