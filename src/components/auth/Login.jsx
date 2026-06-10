@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { C, S } from "../../config/theme";
-import { SUPABASE_URL, SUPABASE_KEY } from "../../config/supabase";
+import { SUPABASE_URL, SUPABASE_KEY, saveSession } from "../../config/supabase";
 
 export function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -19,6 +19,7 @@ export function Login({ onLogin }) {
       });
       const data = await res.json();
       if (!res.ok) { setError("Email o contraseña incorrectos"); setLoading(false); return; }
+      saveSession(data); // guarda access+refresh token y agenda renovación automática
       const token = data.access_token;
       const userId = data.user?.id;
       // Obtener perfil con rol

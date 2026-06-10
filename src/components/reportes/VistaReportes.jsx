@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { C } from "../../config/theme";
-import { sb } from "../../config/supabase";
+import { sb, getToken } from "../../config/supabase";
 import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   getFilteredRowModel, getPaginationRowModel, flexRender,
@@ -481,7 +481,7 @@ export function VistaReportes({ usuario, esAdmin }) {
         };
         await fetch("/api/send-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
           body: JSON.stringify({ type: "reporte_evento", data: { evento: eventoSeleccionado, fecha_cierre: new Date().toISOString(), stats } }),
         });
       } catch (err) { console.error("Error al enviar email:", err); }

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { C, S, Icon } from "./config/theme";
 import { MEDICAMENTOS_INYECTABLES, MEDICAMENTOS_ORALES, MEDICAMENTOS_AEROSOLES, CARROS_INICIALES, estadoVenc, estadoStock } from "./config/constants";
 import { getIndustria, getPermisos } from "./config/permisos";
-import { sb } from "./config/supabase";
+import { sb, restoreSession, clearSession } from "./config/supabase";
 import { useIsMobile } from "./hooks/useIsMobile";
 
 import { Login } from "./components/auth/Login";
@@ -66,13 +66,42 @@ export default function App() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [carros, setCarros] = useState(CARROS_INICIALES);
   const [usuario, setUsuario] = useState(null);
+  const [restaurando, setRestaurando] = useState(true);
   const [industriaKey, setIndustriaKey] = useState(() => localStorage.getItem("industriaKey") || "eventos");
   const [alertCarros, setAlertCarros] = useState(0);
   const industria = getIndustria(industriaKey);
   const isMobile = useIsMobile();
 
-  const handleLogin = (user) => setUsuario(user);
-  const handleLogout = () => setUsuario(null);
+  const handleLogin = (user) => {
+    try { localStorage.setItem("triage360_user", JSON.stringify({ ...user, token: undefined })); } catch (_) {}
+    setUsuario(user);
+  };
+  const handleLogout = () => {
+    clearSession();
+    try { localStorage.removeItem("triage360_user"); } catch (_) {}
+    setUsuario(null);
+  };
+
+  // Restaurar sesión al cargar (sobrevive recargas y pestañas cerradas)
+  useEffect(() => {
+    (async () => {
+      const session = await restoreSession();
+      if (session) {
+        try {
+          const saved = JSON.parse(localStorage.getItem("triage360_user") || "null");
+          if (saved) setUsuario({ ...saved, token: session.access_token });
+        } catch (_) {}
+      }
+      setRestaurando(false);
+    })();
+    // Si el refresh token deja de ser válido, volver al login
+    window.__onSessionExpired = () => {
+      try { localStorage.removeItem("triage360_user"); } catch (_) {}
+      setUsuario(null);
+      toast({ title: "Sesión expirada", description: "Vuelve a iniciar sesión", variant: "destructive" });
+    };
+    return () => { delete window.__onSessionExpired; };
+  }, []);
 
   useEffect(() => { localStorage.setItem("industriaKey", industriaKey); }, [industriaKey]);
 
@@ -100,6 +129,7 @@ export default function App() {
       });
   }, [usuario]);
 
+  if (restaurando) return null; // evita parpadeo del login mientras se restaura la sesión
   if (!usuario) return <Login onLogin={handleLogin} />;
 
   const esAdmin = usuario?.rol === "admin";

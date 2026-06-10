@@ -8,6 +8,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
+  // ── Autenticación: solo usuarios logueados en TRIAGE360 pueden enviar ──
+  const authHeader = req.headers.authorization || '';
+  const userToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!userToken) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  try {
+    const userRes = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        'apikey': process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': `Bearer ${userToken}`,
+      },
+    });
+    if (!userRes.ok) {
+      return res.status(401).json({ error: 'Sesión inválida' });
+    }
+  } catch (e) {
+    return res.status(401).json({ error: 'No se pudo validar la sesión' });
+  }
+
   const { tipo, destinatario, nombreProfesional, rol, evento, equipo } = req.body;
 
   if (tipo === 'asignacion_evento') {

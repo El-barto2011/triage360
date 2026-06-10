@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, S, Icon } from "../../config/theme";
-import { sb } from "../../config/supabase";
+import { sb, getToken } from "../../config/supabase";
 import { toast } from "../ui/use-toast";
 
 export function VistaGestionEventos({ usuario }) {
@@ -201,7 +201,7 @@ export function VistaGestionEventos({ usuario }) {
 
         await fetch("/api/send-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
           body: JSON.stringify({
             tipo: "asignacion_evento",
             destinatario: prof.email,
