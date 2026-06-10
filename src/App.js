@@ -21,6 +21,7 @@ import ColaTriaje from "./components/atenciones/ColaTriaje";
 import { VistaMasoterapiaUnificada } from "./components/masoterapia/VistaMasoterapiaUnificada";
 import { VistaReportes } from "./components/reportes/VistaReportes";
 import { VistaGestionCostos } from "./components/reportes/VistaGestionCostos";
+import { VistaRentabilidad } from "./components/reportes/VistaRentabilidad";
 import { GestionPreciosMedicamentos } from "./components/reportes/GestionPreciosMedicamentos";
 import { GestionPreciosKinesiologia } from "./components/reportes/GestionPreciosKinesiologia";
 import { GestionInsumosGenerales } from "./components/reportes/GestionInsumosGenerales";
@@ -38,6 +39,7 @@ const PERMISOS_TAB = {
   usuarios:          (_u, admin) => admin,
   reportes:          (_u, admin) => admin,
   costos:            (_u, admin) => admin,
+  rentabilidad:      (_u, admin) => admin,
   preciosMeds:       (_u, admin) => admin,
   preciosKine:       (_u, admin) => admin,
   insumosGrales:     (_u, admin) => admin,
@@ -152,6 +154,7 @@ export default function App() {
       bolsos:            { id: "bolsos",             label: "Medicamentos", icon: "bolso", badge: alertBolso },
       reportes:          { id: "reportes",           label: "Reportes",     icon: "report" },
       costos:            { id: "costos",             label: "Valorización", icon: "report" },
+      rentabilidad:      { id: "rentabilidad",       label: "Rentabilidad", icon: "report" },
       historialPaciente: { id: "historialPaciente",  label: "Historial",    icon: "med" },
       configuracion:     { id: "configuracion",      label: "Config",       icon: "report" },
       usuarios:          { id: "usuarios",           label: "Usuarios",     icon: "med" },
@@ -165,7 +168,7 @@ export default function App() {
     if (esAdmin) return {
       primary: [T.dashboard, T.atenciones, T.carros, T.reportes],
       more: [
-        T.costos, T.eventos, T.historialPaciente, T.historialMeds, T.logsAuditoria, T.usuarios,
+        T.costos, T.rentabilidad, T.eventos, T.historialPaciente, T.historialMeds, T.logsAuditoria, T.usuarios,
         T.configuracion, T.preciosMeds, T.preciosKine, T.insumosGrales,
         T.bolsos, T.bolsoKine, T.atencionMedica, T.atencionKine,
         T.masoterapia, T.adminMedicamentos, T.colaTriaje,
@@ -212,6 +215,7 @@ export default function App() {
     ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
     ...(esAdmin ? [{ section: "Costos" }] : []),
     ...(esAdmin ? [{ id: "costos",         label: "Valorización",          icon: "report" }] : []),
+    ...(esAdmin ? [{ id: "rentabilidad",   label: "Rentabilidad",          icon: "report" }] : []),
     ...(esAdmin ? [{ id: "preciosMeds",    label: "Precios Medicamentos",  icon: "bolso"  }] : []),
     ...(esAdmin ? [{ id: "preciosKine",    label: "Bolso Kines Maestro",   icon: "event"  }] : []),
     ...(esAdmin ? [{ id: "insumosGrales",  label: "Insumos Generales",     icon: "carro"  }] : []),
@@ -387,6 +391,15 @@ export default function App() {
               <div style={S.subtitle}>Costos por evento · Top medicamentos · Resumen global</div>
             </div>
             <VistaGestionCostos usuario={usuario} />
+          </div>
+        )}
+        {tab === "rentabilidad" && tienePermiso("rentabilidad", usuario, esAdmin) && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={S.title}>Rentabilidad por Evento 💰</div>
+              <div style={S.subtitle}>Ingresos − insumos reales − honorarios − gastos = margen</div>
+            </div>
+            <VistaRentabilidad usuario={usuario} />
           </div>
         )}
         {tab === "preciosMeds" && tienePermiso("preciosMeds", usuario, esAdmin) && (

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm start *)",
+      "Bash(pkill -f \"react-scripts start\")",
+      "Bash(npx react-scripts *)",
+      "Bash(node *)",
+      "Skill(supabase:supabase)",
+      "mcp__plugin_supabase_supabase__list_projects",
+      "mcp__plugin_supabase_supabase__execute_sql",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(supabase --version)",
+      "Bash(npx supabase *)",
+      "Bash(gh auth *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

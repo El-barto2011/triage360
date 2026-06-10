@@ -21,3 +21,9 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# backups locales (git ya es el historial)
+src/_backups/
+src/*.backup
+src/*.backup_email
+src/*.bak*

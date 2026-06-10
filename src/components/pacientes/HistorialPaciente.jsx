@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { C, S } from '../../config/theme'
 import { sb } from '../../config/supabase'
+import { toast } from '../ui/use-toast'
+
+/* ── Normaliza RUT/pasaporte igual que fn_norm_ident en la BD ── */
+const normIdent = (v) => (v || '').toUpperCase().replace(/[^0-9A-Z]/g, '')
 
 /* ── RUT: genera variantes con y sin puntos ───────────────── */
 function rutVariants(raw) {
@@ -111,6 +115,25 @@ export function HistorialPaciente({ usuario }) {
   const [pacienteInfo, setPacienteInfo] = useState(null)
   const [filtroTipo,   setFiltroTipo]   = useState('Todos')
   const [adminMeds,    setAdminMeds]    = useState({})
+  const [pacienteDB,   setPacienteDB]   = useState(null)   // ficha en tabla pacientes
+  const [editFicha,    setEditFicha]    = useState(false)
+  const [fichaForm,    setFichaForm]    = useState({ alergias: '', antecedentes: '' })
+  const [guardando,    setGuardando]    = useState(false)
+
+  const guardarFicha = async () => {
+    if (!pacienteDB) return
+    setGuardando(true)
+    const res = await sb(`pacientes?id=eq.${pacienteDB.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ alergias: fichaForm.alergias || null, antecedentes: fichaForm.antecedentes || null }),
+    }, usuario?.token)
+    setGuardando(false)
+    if (res) {
+      setPacienteDB({ ...pacienteDB, alergias: fichaForm.alergias, antecedentes: fichaForm.antecedentes })
+      setEditFicha(false)
+      toast({ title: 'Ficha actualizada', description: 'Alergias y antecedentes guardados' })
+    }
+  }
 
   const buscar = async () => {
     const rut = query.trim()
@@ -121,14 +144,27 @@ export function HistorialPaciente({ usuario }) {
     setPacienteInfo(null)
     setAdminMeds({})
     setFiltroTipo('Todos')
+    setPacienteDB(null)
+    setEditFicha(false)
 
     const campo = /^[a-zA-Z]/.test(rut) ? 'paciente_pasaporte' : 'paciente_rut'
 
     try {
+      // 1° intento: entidad paciente unificada (vínculo por paciente_id)
+      const pacientes = await sb(`pacientes?identificacion=eq.${normIdent(rut)}&select=id,nombre,edad,tipo_identificacion,identificacion,alergias,antecedentes`, {}, usuario?.token)
+      const pdb = pacientes?.[0] || null
+      if (pdb) {
+        setPacienteDB(pdb)
+        setFichaForm({ alergias: pdb.alergias || '', antecedentes: pdb.antecedentes || '' })
+      }
+
+      const porPid = (tabla, select) =>
+        `${tabla}?paciente_id=eq.${pdb?.id}&deleted_at=is.null&order=created_at.desc&select=${select}&limit=100`
+
       const [medicas, kines, maso] = await Promise.all([
-        sb(endpoint('atenciones_medicas',    campo, rut, SEL_MEDICA), {}, usuario?.token),
-        sb(endpoint('atenciones_kinesiologia', campo, rut, SEL_KINE), {}, usuario?.token),
-        sb(endpoint('fichas_masoterapia',    campo, rut, SEL_MASO),   {}, usuario?.token),
+        sb(pdb ? porPid('atenciones_medicas', SEL_MEDICA)   : endpoint('atenciones_medicas',     campo, rut, SEL_MEDICA), {}, usuario?.token),
+        sb(pdb ? porPid('atenciones_kinesiologia', SEL_KINE): endpoint('atenciones_kinesiologia', campo, rut, SEL_KINE),  {}, usuario?.token),
+        sb(pdb ? porPid('fichas_masoterapia', SEL_MASO)     : endpoint('fichas_masoterapia',      campo, rut, SEL_MASO),  {}, usuario?.token),
       ])
 
       // Medicamentos administrados: segundo fetch por IDs de atenciones médicas
@@ -222,6 +258,56 @@ export function HistorialPaciente({ usuario }) {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Ficha clínica persistente: alergias y antecedentes ── */}
+      {pacienteDB && (
+        <div style={{
+          ...S.card, marginBottom: 20,
+          borderLeft: `3px solid ${pacienteDB.alergias ? C.red : C.border}`,
+          background: pacienteDB.alergias ? C.redDim : undefined,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editFicha ? 12 : 0, gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 800 }}>
+                {pacienteDB.alergias ? '⚠️ ALERGIAS: ' : 'Sin alergias registradas'}
+                {pacienteDB.alergias && <span style={{ color: C.red }}>{pacienteDB.alergias}</span>}
+              </span>
+              {!editFicha && pacienteDB.antecedentes && (
+                <span style={{ fontSize: 12, color: C.textMuted }}>
+                  Antecedentes: <span style={{ color: C.text }}>{pacienteDB.antecedentes}</span>
+                </span>
+              )}
+            </div>
+            {!editFicha && (
+              <button style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 12px' }} onClick={() => setEditFicha(true)}>
+                Editar ficha
+              </button>
+            )}
+          </div>
+          {editFicha && (
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>Alergias</label>
+                <input style={{ ...S.input, width: '100%', marginTop: 4 }} value={fichaForm.alergias}
+                  placeholder="Ej: Penicilina, AINEs, látex..."
+                  onChange={e => setFichaForm(f => ({ ...f, alergias: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>Antecedentes</label>
+                <textarea style={{ ...S.input, width: '100%', marginTop: 4, minHeight: 60, resize: 'vertical' }} value={fichaForm.antecedentes}
+                  placeholder="Ej: Asma, diabetes tipo 1, cirugías previas..."
+                  onChange={e => setFichaForm(f => ({ ...f, antecedentes: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ ...S.btn('primary'), fontSize: 12 }} onClick={guardarFicha} disabled={guardando}>
+                  {guardando ? 'Guardando...' : 'Guardar ficha'}
+                </button>
+                <button style={{ ...S.btn('ghost'), fontSize: 12 }} onClick={() => setEditFicha(false)}>Cancelar</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
