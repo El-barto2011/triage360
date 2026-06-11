@@ -33,6 +33,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
   const [form,       setForm]       = useState({});
   const [eventos,    setEventos]    = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
+  const [pacienteFicha, setPacienteFicha] = useState(null);
   const { eventoActual } = useEvento();
 
   useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
@@ -56,12 +57,16 @@ export function VistaAtencionesKinesiologia({ usuario }) {
   };
 
   const buscarPacientePorRut = async (rut) => {
-    if (!rut || rut.length < 8) { setHistorialPaciente([]); return; }
+    if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
+    const ident = (rut || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+    const pacientes = await sb(`pacientes?identificacion=eq.${ident}&select=id,nombre,edad,alergias,antecedentes`, {}, usuario?.token);
+    const p = pacientes?.[0] || null;
+    setPacienteFicha(p);
+    if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
     const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
     const found = await sb(`atenciones_kinesiologia?${campo}=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
     if (found?.length > 0) {
-      const u = found[0];
-      setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad }));
+      if (!p) { const u = found[0]; setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad })); }
       setHistorialPaciente(found);
     } else {
       setHistorialPaciente([]);
@@ -304,6 +309,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
               </Field>
               <Field label="RUT">
                 <Input value={form.paciente_rut || ""} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_rut: v })); buscarPacientePorRut(v); }} placeholder="12.345.678-9" />
+                {pacienteFicha?.alergias && <p style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: C.red }}>⚠️ ALERGIAS: {pacienteFicha.alergias}</p>}
                 {historialPaciente.length > 0 && <p className="text-xs text-green-400 mt-1">✓ {historialPaciente.length} atención{historialPaciente.length > 1 ? "es" : ""} previa{historialPaciente.length > 1 ? "s" : ""}</p>}
               </Field>
             </div>

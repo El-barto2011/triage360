@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "../ui/use-toast";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
 
@@ -99,7 +100,7 @@ export function VistaAdministracionMedicamentos({ usuario }) {
     const administrados = form.medicamentos_administrados.filter(m => m.administrado);
 
     if (administrados.length === 0) {
-      alert("Debes marcar al menos un medicamento como administrado");
+      toast({ title: "Marca al menos un medicamento como administrado", variant: "destructive" });
       return;
     }
 
@@ -129,7 +130,7 @@ export function VistaAdministracionMedicamentos({ usuario }) {
       );
 
       if (resAtencion) {
-        alert("Administración registrada exitosamente");
+        toast({ title: "Administración registrada ✓" });
         setModal(null);
         cargarDatos(); // Recargar datos
       }

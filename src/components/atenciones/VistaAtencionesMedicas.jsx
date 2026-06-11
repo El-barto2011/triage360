@@ -41,6 +41,13 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
   const [form, setForm] = useState({});
   const [eventos, setEventos] = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
+  const [pacienteFicha, setPacienteFicha] = useState(null);          // ficha con alergias
+  const [catalogoMeds, setCatalogoMeds] = useState([]);              // autocomplete medicamentos
+  useEffect(() => {
+    sb("medicamentos?select=nombre,dosis&order=nombre", {}, usuario?.token)
+      .then(d => { if (d) setCatalogoMeds(d.map(m => `${m.nombre}${m.dosis ? " " + m.dosis : ""}`)); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { eventoActual } = useEvento();
 
   useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
@@ -58,12 +65,18 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
   };
 
   const buscarPacientePorRut = async (rut) => {
-    if (!rut || rut.length < 8) { setHistorialPaciente([]); return; }
+    if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
+    // 1° la entidad paciente unificada: autocompleta y trae alergias/antecedentes
+    const ident = (rut || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+    const pacientes = await sb(`pacientes?identificacion=eq.${ident}&select=id,nombre,edad,alergias,antecedentes`, {}, usuario?.token);
+    const p = pacientes?.[0] || null;
+    setPacienteFicha(p);
+    if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
+    // 2° historial de atenciones previas (respaldo del autofill)
     const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
     const found = await sb(`atenciones_medicas?${campo}=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
     if (found?.length > 0) {
-      const u = found[0];
-      setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad }));
+      if (!p) { const u = found[0]; setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad })); }
       setHistorialPaciente(found);
     } else {
       setHistorialPaciente([]);
@@ -460,6 +473,29 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
               </Field>
             </div>
 
+            {/* Autocomplete de medicamentos desde el catálogo (adiós tipeos) */}
+            <datalist id="dl-catalogo-meds">
+              {catalogoMeds.map(n => <option key={n} value={n} />)}
+            </datalist>
+
+            {/* ⚠️ Ficha clínica del paciente: alergias visibles ANTES de atender */}
+            {pacienteFicha && (pacienteFicha.alergias || pacienteFicha.antecedentes) && (
+              <div style={{
+                borderRadius: 8, padding: "10px 14px",
+                background: pacienteFicha.alergias ? C.redDim : C.surface2,
+                border: `1px solid ${pacienteFicha.alergias ? C.red : C.border}`,
+              }}>
+                {pacienteFicha.alergias && (
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.red }}>⚠️ ALERGIAS: {pacienteFicha.alergias}</div>
+                )}
+                {pacienteFicha.antecedentes && (
+                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: pacienteFicha.alergias ? 4 : 0 }}>
+                    Antecedentes: <span style={{ color: C.text }}>{pacienteFicha.antecedentes}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-4">
               <Field label="Edad">
                 <Input type="number" value={form.paciente_edad || ""} onChange={e => setForm(f => ({ ...f, paciente_edad: e.target.value }))} placeholder="35" />
@@ -536,7 +572,7 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
               {(form.medicamentos_prescritos || []).map((med, i) => (
                 <div key={i} className="rounded-lg border p-3 space-y-2" style={{ borderColor: C.border, background: med.urgente ? C.redDim : C.surface }}>
                   <div className="grid grid-cols-3 gap-2">
-                    <Input placeholder="Medicamento" value={med.nombre} onChange={e => actualizarMedicamento(i, "nombre", e.target.value)} />
+                    <Input placeholder="Medicamento" list="dl-catalogo-meds" value={med.nombre} onChange={e => actualizarMedicamento(i, "nombre", e.target.value)} />
                     <Input placeholder="Dosis" value={med.dosis} onChange={e => actualizarMedicamento(i, "dosis", e.target.value)} />
                     <select className={selectCls} value={med.via} onChange={e => actualizarMedicamento(i, "via", e.target.value)}>
                       <option>Oral</option><option>Intravenosa</option><option>Intramuscular</option><option>Subcutánea</option><option>Tópica</option>

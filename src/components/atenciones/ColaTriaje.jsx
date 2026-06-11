@@ -137,7 +137,7 @@ export default function ColaTriaje({ usuario }) {
           <CardContent className="p-12 text-center">
             <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
             <div className="font-semibold" style={{ color: C.text }}>Cola vacía</div>
-            <div className="text-sm mt-1" style={{ color: C.textMuted }}>No hay pacientes registrados hoy{eventoActual ? " para este evento" : ""}</div>
+            <div className="text-sm mt-1" style={{ color: C.textMuted }}>No hay pacientes registrados hoy{eventoActual ? " para este evento" : ""}. Las atenciones nuevas se crean en la pestaña <strong>Prescripción</strong> y aparecen aquí ordenadas por urgencia.</div>
           </CardContent>
         </Card>
       ) : (

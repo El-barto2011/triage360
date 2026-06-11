@@ -38,6 +38,7 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
   const [form,      setForm]      = useState({});
   const [eventos,   setEventos]   = useState([]);
   const [historialPaciente, setHistorialPaciente] = useState([]);
+  const [pacienteFicha, setPacienteFicha] = useState(null);
   const { eventoActual } = useEvento();
 
   useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
@@ -77,12 +78,16 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
   };
 
   const buscarPacientePorRut = async (rut) => {
-    if (!rut || rut.length < 8) { setHistorialPaciente([]); return; }
+    if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
+    const ident = (rut || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+    const pacientes = await sb(`pacientes?identificacion=eq.${ident}&select=id,nombre,edad,alergias,antecedentes`, {}, usuario?.token);
+    const p = pacientes?.[0] || null;
+    setPacienteFicha(p);
+    if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
     const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
     const found = await sb(`fichas_masoterapia?${campo}=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
     if (found?.length > 0) {
-      const u = found[0];
-      setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad }));
+      if (!p) { const u = found[0]; setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad })); }
       setHistorialPaciente(found);
     } else {
       setHistorialPaciente([]);
@@ -284,7 +289,10 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
 
             <Field label={form.tipo_identificacion === "rut" ? "RUT" : "Pasaporte"}>
               {form.tipo_identificacion === "rut" ? (
-                <Input value={form.paciente_rut || ""} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_rut: v })); if (v.length >= 8) buscarPacientePorRut(v); }} placeholder="12345678-9" />
+                <>
+                  <Input value={form.paciente_rut || ""} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_rut: v })); if (v.length >= 8) buscarPacientePorRut(v); }} placeholder="12345678-9" />
+                  {pacienteFicha?.alergias && <p style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: C.red }}>⚠️ ALERGIAS: {pacienteFicha.alergias}</p>}
+                </>
               ) : (
                 <Input value={form.paciente_pasaporte || ""} onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_pasaporte: v })); if (v.length >= 8) buscarPacientePorRut(v); }} placeholder="AB123456" />
               )}

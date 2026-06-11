@@ -53,12 +53,23 @@ export function EventoProvider({ children, usuario }) {
 
 export function SelectorEvento() {
   const { eventoActual, eventos, cambiarEvento } = useContext(EventoContext)
+  const [verCerrados, setVerCerrados] = useState(false)
   const eventoSel = eventos.find(e => e.id === eventoActual)
+  const activos  = eventos.filter(e => e.estado === 'activo')
+  const cerrados = eventos.filter(e => e.estado !== 'activo')
+  // si el evento seleccionado está cerrado, mostrar cerrados para que no "desaparezca"
+  const mostrarCerrados = verCerrados || (eventoSel && eventoSel.estado !== 'activo')
 
   return (
     <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, background: C.surface2 }}>
-      <div style={{ fontSize: 10, color: C.textFaint, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-        Evento activo
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 10, color: C.textFaint, textTransform: 'uppercase', letterSpacing: 1 }}>Evento activo</span>
+        {cerrados.length > 0 && (
+          <span onClick={() => setVerCerrados(v => !v)}
+            style={{ fontSize: 10, color: C.textFaint, cursor: 'pointer', textDecoration: 'underline' }}>
+            {mostrarCerrados ? 'ocultar cerrados' : `+${cerrados.length} cerrados`}
+          </span>
+        )}
       </div>
       <select
         value={eventoActual || ''}
@@ -70,10 +81,11 @@ export function SelectorEvento() {
         }}
       >
         <option value="">— Sin filtro —</option>
-        {eventos.map(evento => (
-          <option key={evento.id} value={evento.id}>
-            {evento.estado === 'activo' ? '🟢' : '⚪'} {evento.nombre_evento}
-          </option>
+        {activos.map(evento => (
+          <option key={evento.id} value={evento.id}>🟢 {evento.nombre_evento}</option>
+        ))}
+        {mostrarCerrados && cerrados.map(evento => (
+          <option key={evento.id} value={evento.id}>⚪ {evento.nombre_evento}</option>
         ))}
       </select>
       {eventoSel && (

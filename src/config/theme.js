@@ -1,4 +1,5 @@
-export const C = {
+/* ── Paletas: oscuro (oficina) y claro "modo terreno" (legible al sol) ── */
+const DARK = {
   bg: "#0d1117", surface: "#161b22", surface2: "#1c2330", border: "#30363d",
   accent: "#00c2a8", accentDim: "#00c2a820",
   red: "#f85149", redDim: "#f8514918",
@@ -9,6 +10,23 @@ export const C = {
   purple: "#bc8cff", purpleDim: "#bc8cff18",
   text: "#e6edf3", textMuted: "#8b949e", textFaint: "#6e7681",
 };
+
+const CLARO = {
+  bg: "#eef2f6", surface: "#ffffff", surface2: "#f1f5f9", border: "#cbd5e1",
+  accent: "#00917e", accentDim: "#00917e1c",
+  red: "#d22d20", redDim: "#d22d2016",
+  yellow: "#9a6700", yellowDim: "#9a670016",
+  green: "#1a7f37", greenDim: "#1a7f3716",
+  blue: "#0969da", blueDim: "#0969da16",
+  orange: "#bc4c00", orangeDim: "#bc4c0016",
+  purple: "#8250df", purpleDim: "#8250df16",
+  text: "#0f2330", textMuted: "#49606e", textFaint: "#6b8090",
+};
+
+export const TEMA_ACTUAL = (typeof localStorage !== "undefined" && localStorage.getItem("t360_tema")) || "oscuro";
+export const cambiarTema = (t) => { try { localStorage.setItem("t360_tema", t); } catch (_) {} window.location.reload(); };
+
+export const C = TEMA_ACTUAL === "claro" ? CLARO : DARK;
 
 export const S = {
   app: { fontFamily: "'DM Sans', sans-serif", background: C.bg, color: C.text, minHeight: "100vh", display: "flex" },

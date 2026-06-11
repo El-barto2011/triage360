@@ -70,6 +70,14 @@ export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [restaurando, setRestaurando] = useState(true);
   const [industriaKey, setIndustriaKey] = useState(() => localStorage.getItem("industriaKey") || "eventos");
+  const [gruposCerrados, setGruposCerrados] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("t360_nav_cerrados") || "{}"); } catch (_) { return {}; }
+  });
+  const toggleGrupo = (id) => setGruposCerrados(prev => {
+    const next = { ...prev, [id]: !prev[id] };
+    try { localStorage.setItem("t360_nav_cerrados", JSON.stringify(next)); } catch (_) {}
+    return next;
+  });
   const [alertCarros, setAlertCarros] = useState(0);
   const industria = getIndustria(industriaKey);
   const isMobile = useIsMobile();
@@ -197,35 +205,43 @@ export default function App() {
   };
   const { primary: primaryTabs, more: moreTabs } = getMobileNavConfig();
 
-  const nav = [
-    { section: "General" },
-    { id: "dashboard", label: "Dashboard", icon: "dashboard" },
-    ...(esAdmin ? [{ section: "Inventario" }] : []),
-    ...(esAdmin || permisos.verInventario ? [{ id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros }] : []),
-    ...(esAdmin || permisos.verBolso ? [{ id: "bolsos", label: "Bolso de Medicamentos", icon: "bolso" }] : []),
-    { section: "Operación" },
-    { id: "atenciones", label: "Atenciones 🏥", icon: "event" },
-    ...(esAdmin || permisos.recetarMedicamentos || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" ? [{ id: "atencionMedica", label: "Prescripción", icon: "med" }] : []),
-    ...((esAdmin || usuario?.profesion === "Médico") ? [{ id: "colaTriaje", label: "🚨 Cola Triaje", icon: "alert" }] : []),
-    ...((esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") ? [{ id: "adminMedicamentos", label: "Administración", icon: "bolso" }] : []),
-    ...((esAdmin || usuario?.profesion === "Kinesiólogo/a") ? [{ id: "atencionKine", label: "Kinesiología", icon: "event" }] : []),
-    ...((esAdmin || usuario?.profesion === "Masoterapeuta") ? [{ id: "masoterapia", label: "Masoterapia", icon: "bolso" }] : []),
-    ...(esAdmin || permisos.verBolsoKine ? [{ id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" }] : []),
-    ...(esAdmin ? [{ id: "eventos", label: "Eventos", icon: "event" }] : []),
-    ...(esAdmin ? [{ id: "reportes", label: "Reportes", icon: "report" }] : []),
-    ...(esAdmin ? [{ section: "Costos" }] : []),
-    ...(esAdmin ? [{ id: "costos",         label: "Valorización",          icon: "report" }] : []),
-    ...(esAdmin ? [{ id: "rentabilidad",   label: "Rentabilidad",          icon: "report" }] : []),
-    ...(esAdmin ? [{ id: "preciosMeds",    label: "Precios Medicamentos",  icon: "bolso"  }] : []),
-    ...(esAdmin ? [{ id: "preciosKine",    label: "Bolso Kines Maestro",   icon: "event"  }] : []),
-    ...(esAdmin ? [{ id: "insumosGrales",  label: "Insumos Generales",     icon: "carro"  }] : []),
-    ...(esAdmin ? [{ id: "historialMeds",  label: "Historial Medicamentos", icon: "report" }] : []),
-    ...(esAdmin ? [{ id: "logsAuditoria", label: "Logs de Auditoría",      icon: "report" }] : []),
-    { section: "Pacientes" },
-    { id: "historialPaciente", label: "Historial Paciente", icon: "med" },
-    { id: "configuracion", label: "Config", icon: "report" },
-    ...(esAdmin ? [{ id: "usuarios", label: "Usuarios", icon: "med" }] : []),
-  ];
+  /* ── Navegación agrupada: 5-6 secciones colapsables en vez de 22 ítems planos ── */
+  const grupos = [
+    { id: "g-general", label: "General", items: [
+      { id: "dashboard", label: "Dashboard", icon: "dashboard" },
+    ]},
+    { id: "g-operacion", label: "Operación", items: [
+      { id: "atenciones", label: "Atenciones", icon: "event" },
+      (esAdmin || permisos.recetarMedicamentos || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "atencionMedica", label: "Prescripción", icon: "med" },
+      (esAdmin || usuario?.profesion === "Médico") && { id: "colaTriaje", label: "Cola Triaje 🚨", icon: "alert" },
+      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "adminMedicamentos", label: "Administración", icon: "bolso" },
+      (esAdmin || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionKine", label: "Kinesiología", icon: "event" },
+      (esAdmin || usuario?.profesion === "Masoterapeuta") && { id: "masoterapia", label: "Masoterapia", icon: "bolso" },
+    ]},
+    { id: "g-inventario", label: "Inventario", items: [
+      (esAdmin || permisos.verInventario) && { id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros },
+      (esAdmin || permisos.verBolso) && { id: "bolsos", label: "Bolso Medicamentos", icon: "bolso" },
+      (esAdmin || permisos.verBolsoKine) && { id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" },
+    ]},
+    { id: "g-finanzas", label: "Finanzas", items: [
+      esAdmin && { id: "reportes", label: "Reportes", icon: "report" },
+      esAdmin && { id: "rentabilidad", label: "Rentabilidad", icon: "report" },
+      esAdmin && { id: "costos", label: "Valorización", icon: "report" },
+      esAdmin && { id: "preciosMeds", label: "Precios Medicamentos", icon: "bolso" },
+      esAdmin && { id: "preciosKine", label: "Bolso Kines Maestro", icon: "event" },
+      esAdmin && { id: "insumosGrales", label: "Insumos Generales", icon: "carro" },
+    ]},
+    { id: "g-pacientes", label: "Pacientes", items: [
+      { id: "historialPaciente", label: "Historial Paciente", icon: "med" },
+    ]},
+    { id: "g-admin", label: "Administración", items: [
+      esAdmin && { id: "eventos", label: "Eventos", icon: "event" },
+      esAdmin && { id: "usuarios", label: "Usuarios", icon: "med" },
+      esAdmin && { id: "historialMeds", label: "Historial Medicamentos", icon: "report" },
+      esAdmin && { id: "logsAuditoria", label: "Logs de Auditoría", icon: "report" },
+      { id: "configuracion", label: "Configuración", icon: "report" },
+    ]},
+  ].map(g => ({ ...g, items: g.items.filter(Boolean) })).filter(g => g.items.length > 0);
 
   return (
     <EventoProvider usuario={usuario}>
@@ -239,17 +255,28 @@ export default function App() {
           </div>
           <SelectorEvento />
           <nav style={S.nav}>
-            {nav.map((item, i) =>
-              item.section ? (
-                <div key={i} style={S.navSection}>{item.section}</div>
-              ) : (
-                <div key={item.id} style={S.navItem(tab === item.id)} onClick={() => setTab(item.id)}>
-                  <Icon name={item.icon} size={15} color={tab === item.id ? C.accent : C.textMuted} />
-                  <span style={{ flex: 1 }}>{item.label}</span>
-                  {item.badge > 0 && <span style={{ background: C.red, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 8, padding: "1px 5px" }}>{item.badge}</span>}
+            {grupos.map(g => {
+              const abierto = !gruposCerrados[g.id];
+              const contieneActivo = g.items.some(it => it.id === tab);
+              return (
+                <div key={g.id}>
+                  <div
+                    onClick={() => toggleGrupo(g.id)}
+                    style={{ ...S.navSection, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", color: contieneActivo ? C.accent : C.textFaint }}
+                  >
+                    <span>{g.label}</span>
+                    <span style={{ fontSize: 9, transform: abierto ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▶</span>
+                  </div>
+                  {(abierto || contieneActivo) && g.items.map(item => (
+                    <div key={item.id} style={S.navItem(tab === item.id)} onClick={() => setTab(item.id)}>
+                      <Icon name={item.icon} size={15} color={tab === item.id ? C.accent : C.textMuted} />
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {item.badge > 0 && <span style={{ background: C.red, color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 8, padding: "1px 5px" }}>{item.badge}</span>}
+                    </div>
+                  ))}
                 </div>
-              )
-            )}
+              );
+            })}
           </nav>
           <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 10, color: C.textFaint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Powered by</div>

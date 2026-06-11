@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "../ui/use-toast";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
 
@@ -52,7 +53,7 @@ export function VistaMasoterapiaMasiva({ usuario }) {
 
   const iniciarContador = async () => {
     if (!eventoSeleccionado) {
-      alert("Selecciona un evento primero");
+      toast({ title: "Selecciona un evento primero", variant: "destructive" });
       return;
     }
 

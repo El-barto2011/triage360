@@ -1,4 +1,4 @@
-import { C, S } from "../../config/theme";
+import { C, S, TEMA_ACTUAL, cambiarTema } from "../../config/theme";
 import { INDUSTRIAS, getIndustria } from "../../config/permisos";
 
 export function Configuracion({ industriaKey, setIndustriaKey, usuario }) {
@@ -9,6 +9,34 @@ export function Configuracion({ industriaKey, setIndustriaKey, usuario }) {
       <div style={{ marginBottom: 24 }}>
         <div style={S.title}>Configuración ⚙️</div>
         <div style={S.subtitle}>Personaliza TRIAGE360 para tu organización</div>
+      </div>
+
+      {/* Apariencia: modo oscuro / modo terreno */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>🎨 Apariencia</div>
+        <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>
+          El <strong>modo terreno</strong> (claro, alto contraste) es más legible bajo el sol durante eventos al aire libre.
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { key: "oscuro", emoji: "🌙", nombre: "Modo Oscuro", desc: "Ideal en oficina e interiores" },
+            { key: "claro",  emoji: "☀️", nombre: "Modo Terreno", desc: "Alto contraste para exteriores" },
+          ].map(t => (
+            <div key={t.key}
+              onClick={() => { if (TEMA_ACTUAL !== t.key) cambiarTema(t.key); }}
+              style={{
+                cursor: "pointer", flex: "1 1 200px",
+                background: TEMA_ACTUAL === t.key ? C.accentDim : C.surface2,
+                border: `2px solid ${TEMA_ACTUAL === t.key ? C.accent : C.border}`,
+                borderRadius: 12, padding: "16px 20px",
+              }}>
+              <div style={{ fontSize: 24, marginBottom: 6 }}>{t.emoji}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: TEMA_ACTUAL === t.key ? C.accent : C.text }}>{t.nombre}</div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{t.desc}</div>
+              {TEMA_ACTUAL === t.key && <div style={{ marginTop: 6, fontSize: 11, color: C.accent, fontWeight: 700 }}>✓ Activo</div>}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Selección de industria */}
