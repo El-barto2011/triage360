@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, S } from "../../config/theme";
 import { SUPABASE_URL, SUPABASE_KEY, saveSession } from "../../config/supabase";
 
@@ -7,6 +7,15 @@ export function Login({ onLogin }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [anima, setAnima] = useState(false);
+
+  // La animación del logo parte SOLO si el navegador está renderizando frames
+  // de verdad (2 rAF seguidos). Si no, el logo queda visible estático.
+  useEffect(() => {
+    let vivo = true;
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (vivo) setAnima(true); }));
+    return () => { vivo = false; };
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Ingresa tu email y contraseña"); return; }
@@ -47,21 +56,23 @@ export function Login({ onLogin }) {
       <div style={{ width: 420, padding: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           {/* Logo animado: el anillo de triaje se dibuja verde→amarillo→rojo, late la cruz y aparece el nombre */}
-          <svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: 300, margin: "0 auto 8px", display: "block" }}>
+          <svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" className={anima ? "t360-anima" : ""} style={{ width: "100%", maxWidth: 300, margin: "0 auto 8px", display: "block" }}>
             <style>{`
               @keyframes t360dibujar { from { stroke-dashoffset: 62.2; } to { stroke-dashoffset: 0; } }
               @keyframes t360pop { from { opacity: 0; transform: scale(.5); } to { opacity: 1; transform: scale(1); } }
               @keyframes t360texto { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
-              /* Estado base = visible; la animación oculta solo al inicio (fill backwards).
-                 Si el navegador no anima (iOS antiguos), el logo igual se ve completo. */
-              .t360-arco { stroke-dasharray: 62.2; stroke-dashoffset: 0; animation: t360dibujar .5s ease-out backwards; }
-              .t360-a2 { animation-delay: .4s; }
-              .t360-a3 { animation-delay: .8s; }
-              .t360-cruz { transform-box: fill-box; transform-origin: center; animation: t360pop .35s cubic-bezier(.34,1.56,.64,1) 1.2s backwards; }
-              .t360-nombre { animation: t360texto .5s ease-out 1.5s backwards; }
-              .t360-tag { animation: t360texto .5s ease-out 1.75s backwards; }
+              /* Estado base = logo visible y estático. La animación solo se activa
+                 (clase t360-anima) cuando React confirma que hay frames renderizándose. */
+              .t360-arco { stroke-dasharray: 62.2; stroke-dashoffset: 0; }
+              .t360-cruz { transform-box: fill-box; transform-origin: center; }
+              .t360-anima .t360-arco { animation: t360dibujar .5s ease-out backwards; }
+              .t360-anima .t360-a2 { animation-delay: .4s; }
+              .t360-anima .t360-a3 { animation-delay: .8s; }
+              .t360-anima .t360-cruz { animation: t360pop .35s cubic-bezier(.34,1.56,.64,1) 1.2s backwards; }
+              .t360-anima .t360-nombre { animation: t360texto .5s ease-out 1.5s backwards; }
+              .t360-anima .t360-tag { animation: t360texto .5s ease-out 1.75s backwards; }
               @media (prefers-reduced-motion: reduce) {
-                .t360-arco, .t360-cruz, .t360-nombre, .t360-tag { animation: none; }
+                .t360-anima .t360-arco, .t360-anima .t360-cruz, .t360-anima .t360-nombre, .t360-anima .t360-tag { animation: none; }
               }
             `}</style>
             <g>
