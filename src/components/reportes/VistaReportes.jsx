@@ -482,7 +482,7 @@ export function VistaReportes({ usuario, esAdmin }) {
         await fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-          body: JSON.stringify({ type: "reporte_evento", data: { evento: eventoSeleccionado, fecha_cierre: new Date().toISOString(), stats } }),
+          body: JSON.stringify({ tipo: "reporte_evento", data: { evento_id: eventoObj.id, evento_nombre: eventoObj.nombre_evento || eventoSeleccionado, fecha_cierre: new Date().toISOString(), stats } }),
         });
       } catch (err) { console.error("Error al enviar email:", err); }
       alert("Evento cerrado exitosamente. Se ha enviado el reporte por email.");

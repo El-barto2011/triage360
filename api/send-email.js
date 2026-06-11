@@ -28,7 +28,83 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No se pudo validar la sesión' });
   }
 
-  const { tipo, destinatario, nombreProfesional, rol, evento, equipo } = req.body;
+  const { destinatario, nombreProfesional, rol, evento, equipo } = req.body;
+  const tipo = req.body.tipo || req.body.type; // acepta ambas claves
+
+  /* ══════════ REPORTE DE CIERRE DE EVENTO (con CSV adjunto) ══════════ */
+  if (tipo === 'reporte_evento') {
+    try {
+      const { evento_id, evento_nombre, fecha_cierre } = req.body.data || req.body;
+      const SB = process.env.SUPABASE_URL;
+      const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const hdrs = { apikey: KEY, Authorization: `Bearer ${KEY}` };
+      const get = async (q) => {
+        const r = await fetch(`${SB}/rest/v1/${q}`, { headers: hdrs });
+        return r.ok ? r.json() : [];
+      };
+
+      const [medicas, kines, fichas, masivas, consumos] = await Promise.all([
+        get(`atenciones_medicas?evento_id=eq.${evento_id}&deleted_at=is.null&select=created_at,paciente_nombre,paciente_rut,paciente_edad,codigo_triaje,motivo_consulta,diagnostico,tratamiento,medico_nombre,es_emergencia&order=created_at`),
+        get(`atenciones_kinesiologia?evento_id=eq.${evento_id}&deleted_at=is.null&select=created_at,paciente_nombre,paciente_rut,motivo_consulta,evaluacion_inicial,tratamiento_realizado,kinesiologo_nombre&order=created_at`),
+        get(`fichas_masoterapia?evento_id=eq.${evento_id}&deleted_at=is.null&select=created_at,paciente_nombre,zona_afectada,dolor_inicial,dolor_posterior,duracion_minutos,masoterapeuta_nombre&order=created_at`),
+        get(`atenciones_masoterapia_masiva?evento_id=eq.${evento_id}&select=fecha,masajes_realizados,masoterapeuta_nombre`),
+        get(`consumos_evento?evento_id=eq.${evento_id}&origen=neq.prescripcion&select=item_nombre,cantidad,precio_unitario`),
+      ]);
+
+      const masajesTotal = masivas.reduce((a, m) => a + (Number(m.masajes_realizados) || 0), 0);
+      const costoInsumos = consumos.reduce((a, c) => a + Number(c.cantidad || 0) * Number(c.precio_unitario || 0), 0);
+      const clp = (n) => '$' + Math.round(n).toLocaleString('es-CL');
+      const fmtF = (d) => d ? new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+      // ── CSV adjunto ──
+      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      let csv = '﻿REPORTE DE EVENTO;' + esc(evento_nombre) + '\nCerrado;' + esc(fmtF(fecha_cierre)) + '\n\n';
+      csv += 'ATENCIONES MEDICAS (' + medicas.length + ')\nFecha;Paciente;RUT;Edad;Triaje;Emergencia;Motivo;Diagnostico;Tratamiento;Profesional\n';
+      medicas.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.paciente_rut, a.paciente_edad, a.codigo_triaje, a.es_emergencia ? 'SI' : 'NO', a.motivo_consulta, a.diagnostico, a.tratamiento, a.medico_nombre].map(esc).join(';') + '\n'; });
+      csv += '\nKINESIOLOGIA (' + kines.length + ')\nFecha;Paciente;RUT;Motivo;Evaluacion;Tratamiento;Profesional\n';
+      kines.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.paciente_rut, a.motivo_consulta, a.evaluacion_inicial, a.tratamiento_realizado, a.kinesiologo_nombre].map(esc).join(';') + '\n'; });
+      csv += '\nMASOTERAPIA FICHAS (' + fichas.length + ')\nFecha;Paciente;Zona;Dolor inicial;Dolor final;Duracion (min);Profesional\n';
+      fichas.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.zona_afectada, a.dolor_inicial, a.dolor_posterior, a.duracion_minutos, a.masoterapeuta_nombre].map(esc).join(';') + '\n'; });
+      csv += '\nMASAJES MASIVOS;' + masajesTotal + '\n';
+      csv += '\nINSUMOS CONSUMIDOS (' + consumos.length + ')\nItem;Cantidad;Precio unitario;Total\n';
+      consumos.forEach(c => { csv += [c.item_nombre, c.cantidad, c.precio_unitario ?? 'sin precio', c.precio_unitario ? Number(c.cantidad) * Number(c.precio_unitario) : ''].map(esc).join(';') + '\n'; });
+      csv += '\nCOSTO TOTAL INSUMOS;' + clp(costoInsumos) + '\n';
+
+      const totalAt = medicas.length + kines.length + fichas.length;
+      const htmlContent = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0d1b24;color:#e8f0f8;border-radius:12px;overflow:hidden">
+          <div style="background:#00c2a8;padding:22px 26px"><h2 style="margin:0;color:#0d1b24">📊 Reporte de cierre — ${evento_nombre}</h2></div>
+          <div style="padding:26px">
+            <p style="color:#9fb3c8">Evento cerrado el ${fmtF(fecha_cierre)}. Resumen de la operación:</p>
+            <table style="width:100%;border-collapse:collapse;margin:14px 0">
+              <tr><td style="padding:9px 0;border-bottom:1px solid #1e2d3d">🏥 Atenciones médicas</td><td style="text-align:right;font-weight:700">${medicas.length}</td></tr>
+              <tr><td style="padding:9px 0;border-bottom:1px solid #1e2d3d">🦵 Kinesiología</td><td style="text-align:right;font-weight:700">${kines.length}</td></tr>
+              <tr><td style="padding:9px 0;border-bottom:1px solid #1e2d3d">💆 Fichas masoterapia</td><td style="text-align:right;font-weight:700">${fichas.length}</td></tr>
+              <tr><td style="padding:9px 0;border-bottom:1px solid #1e2d3d">🙌 Masajes masivos</td><td style="text-align:right;font-weight:700">${masajesTotal}</td></tr>
+              <tr><td style="padding:9px 0;border-bottom:1px solid #1e2d3d">📦 Insumos consumidos (costo)</td><td style="text-align:right;font-weight:700">${clp(costoInsumos)}</td></tr>
+              <tr><td style="padding:9px 0">Σ Total atenciones individuales</td><td style="text-align:right;font-weight:800;color:#00c2a8;font-size:18px">${totalAt}</td></tr>
+            </table>
+            <p style="color:#9fb3c8;font-size:13px">El detalle completo va adjunto en CSV (se abre con Excel). Generado automáticamente por TRIAGE360.</p>
+          </div>
+        </div>`;
+
+      const { data, error } = await resend.emails.send({
+        from: 'TRIAGE360 <alfredo.jara@sgtrumao.cl>',
+        to: ['alfredo.jara@sgtrumao.cl', 'francia.munoz@sgtrumao.cl'],
+        subject: `📊 Reporte de cierre: ${evento_nombre} (${totalAt} atenciones)`,
+        html: htmlContent,
+        attachments: [{
+          filename: `reporte-${String(evento_nombre).replace(/[^a-zA-Z0-9]+/g, '-').slice(0, 40)}.csv`,
+          content: Buffer.from(csv, 'utf-8').toString('base64'),
+        }],
+      });
+      if (error) { console.error('Error reporte_evento:', error); return res.status(400).json({ error }); }
+      return res.status(200).json({ success: true, data });
+    } catch (error) {
+      console.error('Error en reporte_evento:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
 
   if (tipo === 'asignacion_evento') {
     try {
