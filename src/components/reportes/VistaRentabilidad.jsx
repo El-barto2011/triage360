@@ -9,6 +9,15 @@ const fmtFecha = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CL'
 
 const CATEGORIAS_GASTO = ['traslado', 'alojamiento', 'alimentación', 'insumos', 'arriendo equipo', 'otro']
 
+/* Definido FUERA del componente: si vive adentro, cada render lo recrea
+   y React desmonta/remonta los inputs (pierden el foco al tipear). */
+const Seccion = ({ titulo, children }) => (
+  <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+    <div style={{ fontSize: 11, fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>{titulo}</div>
+    {children}
+  </div>
+)
+
 /* ══════════════════════════════════════════════════════════ */
 export function VistaRentabilidad({ usuario }) {
   const [filas, setFilas] = useState([])
@@ -109,13 +118,6 @@ export function VistaRentabilidad({ usuario }) {
     costos: a.costos + Number(f.costo_insumos || 0) + Number(f.honorarios || 0) + Number(f.gastos || 0),
     margen: a.margen + Number(f.margen || 0),
   }), { ingresos: 0, costos: 0, margen: 0 })
-
-  const Seccion = ({ titulo, children }) => (
-    <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>{titulo}</div>
-      {children}
-    </div>
-  )
 
   return (
     <div>
