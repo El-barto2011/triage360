@@ -46,37 +46,40 @@ export function Login({ onLogin }) {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <div style={{ width: 420, padding: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
+          {/* Logo animado: el anillo de triaje se dibuja verde→amarillo→rojo, late la cruz y aparece el nombre */}
           <svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: 300, margin: "0 auto 8px", display: "block" }}>
-            <defs>
-              <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#00e5c8"/>
-                <stop offset="100%" stopColor="#00a896"/>
-              </linearGradient>
-              <filter id="gl">
-                <feGaussianBlur stdDeviation="2" result="blur"/>
-                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
-              <radialGradient id="bgG" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#00c2a8" stopOpacity="0.12"/>
-                <stop offset="100%" stopColor="#00c2a8" stopOpacity="0"/>
-              </radialGradient>
-            </defs>
-            <circle cx="50" cy="50" r="42" fill="url(#bgG)"/>
-            <circle cx="50" cy="50" r="36" fill="none" stroke="#1e2d3d" strokeWidth="1.5"/>
-            <circle cx="50" cy="50" r="36" fill="none" stroke="url(#lg1)" strokeWidth="2.8"
-              strokeDasharray="170 56" strokeDashoffset="-28" strokeLinecap="round" filter="url(#gl)"/>
-            <circle cx="74" cy="26" r="2.5" fill="#00e5c8" filter="url(#gl)"/>
-            <circle cx="26" cy="26" r="2.5" fill="#00a896" filter="url(#gl)"/>
-            <rect x="38" y="45" width="24" height="8" rx="2.5" fill="url(#lg1)" filter="url(#gl)"/>
-            <rect x="46" y="37" width="8" height="24" rx="2.5" fill="url(#lg1)" filter="url(#gl)"/>
-            <polyline points="14,50 20,50 24,41 28,59 32,46 36,52 44,50 56,50 60,42 64,58 68,50 72,50 76,44 79,55 83,50 88,50"
-              fill="none" stroke="#00c2a8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.4"/>
-            <line x1="103" y1="22" x2="103" y2="78" stroke="#1e2d3d" strokeWidth="1"/>
-            <text x="118" y="44" fill="#e8f0f8" fontSize="26" fontFamily="Arial Black, sans-serif" fontWeight="900" letterSpacing="1">
-              TRIAGE<tspan fill="url(#lg1)">360</tspan>
-            </text>
-            <text x="118" y="60" fill="#7a90a8" fontSize="9" fontFamily="Arial, sans-serif" letterSpacing="3">GESTIÓN CLÍNICA INTELIGENTE</text>
-            <text x="118" y="78" fill="#2d3f52" fontSize="8" fontFamily="Arial, sans-serif" letterSpacing="1">Powered by <tspan fill="#00c2a8" fontWeight="700">TRIAGE360</tspan></text>
+            <style>{`
+              @keyframes t360dibujar { to { stroke-dasharray: 62 152; } }
+              @keyframes t360pop { to { opacity: 1; transform: scale(1); } }
+              @keyframes t360texto { to { opacity: 1; transform: translateX(0); } }
+              .t360-arco { stroke-dasharray: 0 214; animation: t360dibujar .5s ease-out forwards; }
+              .t360-a2 { animation-delay: .4s; }
+              .t360-a3 { animation-delay: .8s; }
+              .t360-cruz { opacity: 0; transform: scale(.5); transform-box: fill-box; transform-origin: center; animation: t360pop .35s cubic-bezier(.34,1.56,.64,1) 1.2s forwards; }
+              .t360-nombre { opacity: 0; transform: translateX(-10px); animation: t360texto .5s ease-out 1.5s forwards; }
+              .t360-tag { opacity: 0; transform: translateX(-10px); animation: t360texto .5s ease-out 1.75s forwards; }
+              @media (prefers-reduced-motion: reduce) {
+                .t360-arco { animation: none; stroke-dasharray: 62 152; }
+                .t360-cruz, .t360-nombre, .t360-tag { animation: none; opacity: 1; transform: none; }
+              }
+            `}</style>
+            <g transform="rotate(-90 50 50)">
+              <circle className="t360-arco" cx="50" cy="50" r="34" fill="none" stroke="#34D88B" strokeWidth="10" strokeLinecap="round"/>
+              <circle className="t360-arco t360-a2" cx="50" cy="50" r="34" fill="none" stroke="#FCD34D" strokeWidth="10" strokeLinecap="round" strokeDashoffset="-71"/>
+              <circle className="t360-arco t360-a3" cx="50" cy="50" r="34" fill="none" stroke="#F87171" strokeWidth="10" strokeLinecap="round" strokeDashoffset="-142"/>
+            </g>
+            <g className="t360-cruz">
+              <rect x="37" y="44" width="26" height="13" rx="3.5" fill="#FFFFFF"/>
+              <rect x="43.5" y="37.5" width="13" height="26" rx="3.5" fill="#FFFFFF"/>
+            </g>
+            <g className="t360-nombre">
+              <text x="104" y="56" fill="#e8f0f8" fontSize="27" fontFamily="'DM Sans', Arial, sans-serif" fontWeight="800" letterSpacing="-0.5">
+                TRIAGE<tspan fill="#00c2a8">360</tspan>
+              </text>
+            </g>
+            <g className="t360-tag">
+              <text x="105" y="74" fill="#7a90a8" fontSize="9" fontFamily="'DM Sans', Arial, sans-serif" letterSpacing="3">GESTIÓN CLÍNICA INTELIGENTE</text>
+            </g>
           </svg>
         </div>
         <div style={{ marginBottom: 16 }}>
