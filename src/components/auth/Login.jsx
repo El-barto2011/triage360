@@ -49,24 +49,25 @@ export function Login({ onLogin }) {
           {/* Logo animado: el anillo de triaje se dibuja verde→amarillo→rojo, late la cruz y aparece el nombre */}
           <svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", maxWidth: 300, margin: "0 auto 8px", display: "block" }}>
             <style>{`
-              @keyframes t360dibujar { to { stroke-dashoffset: 0; } }
-              @keyframes t360pop { to { opacity: 1; transform: scale(1); } }
-              @keyframes t360texto { to { opacity: 1; transform: translateX(0); } }
-              .t360-arco { stroke-dasharray: 100; stroke-dashoffset: 100; animation: t360dibujar .5s ease-out forwards; }
+              @keyframes t360dibujar { from { stroke-dashoffset: 62.2; } to { stroke-dashoffset: 0; } }
+              @keyframes t360pop { from { opacity: 0; transform: scale(.5); } to { opacity: 1; transform: scale(1); } }
+              @keyframes t360texto { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+              /* Estado base = visible; la animación oculta solo al inicio (fill backwards).
+                 Si el navegador no anima (iOS antiguos), el logo igual se ve completo. */
+              .t360-arco { stroke-dasharray: 62.2; stroke-dashoffset: 0; animation: t360dibujar .5s ease-out backwards; }
               .t360-a2 { animation-delay: .4s; }
               .t360-a3 { animation-delay: .8s; }
-              .t360-cruz { opacity: 0; transform: scale(.5); transform-box: fill-box; transform-origin: center; animation: t360pop .35s cubic-bezier(.34,1.56,.64,1) 1.2s forwards; }
-              .t360-nombre { opacity: 0; transform: translateX(-10px); animation: t360texto .5s ease-out 1.5s forwards; }
-              .t360-tag { opacity: 0; transform: translateX(-10px); animation: t360texto .5s ease-out 1.75s forwards; }
+              .t360-cruz { transform-box: fill-box; transform-origin: center; animation: t360pop .35s cubic-bezier(.34,1.56,.64,1) 1.2s backwards; }
+              .t360-nombre { animation: t360texto .5s ease-out 1.5s backwards; }
+              .t360-tag { animation: t360texto .5s ease-out 1.75s backwards; }
               @media (prefers-reduced-motion: reduce) {
-                .t360-arco { animation: none; stroke-dashoffset: 0; }
-                .t360-cruz, .t360-nombre, .t360-tag { animation: none; opacity: 1; transform: none; }
+                .t360-arco, .t360-cruz, .t360-nombre, .t360-tag { animation: none; }
               }
             `}</style>
             <g>
-              <path className="t360-arco" d="M 50 16 A 34 34 0 0 1 82.92 58.51" fill="none" stroke="#34D88B" strokeWidth="10" strokeLinecap="round" pathLength="100"/>
-              <path className="t360-arco t360-a2" d="M 79.44 67 A 34 34 0 0 1 26.17 74.25" fill="none" stroke="#FCD34D" strokeWidth="10" strokeLinecap="round" pathLength="100"/>
-              <path className="t360-arco t360-a3" d="M 20.56 67 A 34 34 0 0 1 40.92 17.24" fill="none" stroke="#F87171" strokeWidth="10" strokeLinecap="round" pathLength="100"/>
+              <path className="t360-arco" d="M 50 16 A 34 34 0 0 1 82.92 58.51" fill="none" stroke="#34D88B" strokeWidth="10" strokeLinecap="round"/>
+              <path className="t360-arco t360-a2" d="M 79.44 67 A 34 34 0 0 1 26.17 74.25" fill="none" stroke="#FCD34D" strokeWidth="10" strokeLinecap="round"/>
+              <path className="t360-arco t360-a3" d="M 20.56 67 A 34 34 0 0 1 40.92 17.24" fill="none" stroke="#F87171" strokeWidth="10" strokeLinecap="round"/>
             </g>
             <g className="t360-cruz">
               <rect x="37" y="44" width="26" height="13" rx="3.5" fill="#FFFFFF"/>
