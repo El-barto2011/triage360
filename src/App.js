@@ -54,9 +54,9 @@ const PERMISOS_TAB = {
   // Enfermero/Paramédico + admin
   adminMedicamentos: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
   // Enfermero/a + Paramédico
-  atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
+  atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico" || u?.profesion === "Kinesiólogo/a",
   // Enfermero/a + Paramédico
-  atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
+  atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico" || u?.profesion === "Kinesiólogo/a",
   // Kinesiólogo + admin
   atencionKine:      (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
   bolsoKine:         (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
@@ -199,7 +199,7 @@ export default function App() {
       more: [T.historialPaciente, T.configuracion],
     };
     if (prof === "Kinesiólogo/a") return {
-      primary: [T.dashboard, T.atencionKine, T.bolsoKine, T.atenciones],
+      primary: [T.dashboard, T.atencionEnfermeria, T.atencionKine, T.bolsoKine],
       more: [T.historialPaciente, T.configuracion],
     };
     if (prof === "Masoterapeuta") return {
@@ -221,8 +221,8 @@ export default function App() {
     { id: "g-operacion", label: "Operación", items: [
       { id: "atenciones", label: "Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "atencionMedica", label: "Prescripción", icon: "med" },
-      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
-      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
+      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
+      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "colaTriaje", label: "Cola Triaje 🚨", icon: "alert" },
       (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "adminMedicamentos", label: "Administración", icon: "bolso" },
       (esAdmin || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionKine", label: "Kinesiología", icon: "event" },
