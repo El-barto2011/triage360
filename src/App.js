@@ -47,7 +47,7 @@ const PERMISOS_TAB = {
   historialMeds:     (_u, admin) => admin,
   logsAuditoria:     (_u, admin) => admin,
   // Médico + admin
-  atencionMedica:    (u, admin) => admin || u?.profesion === "Médico" || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
+  atencionMedica:    (u, admin) => admin || u?.profesion === "Médico",
   colaTriaje:        (u, admin) => admin || u?.profesion === "Médico",
   // Enfermero/Paramédico + admin
   adminMedicamentos: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
@@ -187,7 +187,7 @@ export default function App() {
       more: [T.historialPaciente, T.configuracion],
     };
     if (prof === "Enfermero/a" || prof === "Paramédico") return {
-      primary: [T.dashboard, T.atenciones, T.atencionMedica, T.adminMedicamentos],
+      primary: [T.dashboard, T.atenciones, T.adminMedicamentos, T.historialPaciente],
       more: [T.historialPaciente, T.configuracion],
     };
     if (prof === "Kinesiólogo/a") return {
@@ -212,7 +212,7 @@ export default function App() {
     ]},
     { id: "g-operacion", label: "Operación", items: [
       { id: "atenciones", label: "Atenciones", icon: "event" },
-      (esAdmin || permisos.recetarMedicamentos || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "atencionMedica", label: "Prescripción", icon: "med" },
+      (esAdmin || usuario?.profesion === "Médico") && { id: "atencionMedica", label: "Prescripción", icon: "med" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "colaTriaje", label: "Cola Triaje 🚨", icon: "alert" },
       (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "adminMedicamentos", label: "Administración", icon: "bolso" },
       (esAdmin || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionKine", label: "Kinesiología", icon: "event" },
