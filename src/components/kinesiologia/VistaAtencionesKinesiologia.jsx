@@ -286,7 +286,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
       {/* Modal: Nueva Atención                              */}
       {/* ══════════════════════════════════════════════════ */}
       <Dialog open={modal === "nueva"} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Activity size={16} style={{ color: C.blue }} /> Nueva Atención Kinesiológica
@@ -397,7 +397,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
 
       {/* Modal: Detalle */}
       <Dialog open={modal === "detalle"} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detalle de Atención</DialogTitle></DialogHeader>
           {form && (
             <div className="space-y-4 py-2 text-sm">
@@ -426,7 +426,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
 
       {/* Modal: Bolso */}
       <Dialog open={modal === "bolso"} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Backpack size={16} /> Mi Bolso de Insumos</DialogTitle>
           </DialogHeader>

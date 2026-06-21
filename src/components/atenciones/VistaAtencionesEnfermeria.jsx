@@ -296,7 +296,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
 
       {/* Modal: Nueva Atención */}
       <Dialog open={modal === "nueva"} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Stethoscope size={16} style={{ color: C.blue }} /> Nueva Atención · {rolLabel(usuario?.profesion)}
@@ -478,7 +478,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
 
       {/* Modal: Detalle */}
       <Dialog open={modal === "detalle"} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle de Atención</DialogTitle>
           </DialogHeader>

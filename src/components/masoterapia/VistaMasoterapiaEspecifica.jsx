@@ -265,7 +265,7 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
       {/* Modal: Nueva Ficha                                 */}
       {/* ══════════════════════════════════════════════════ */}
       <Dialog open={modal === "nueva"} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Waves size={16} style={{ color: C.blue }} /> Nueva Ficha de Masoterapia</DialogTitle>
           </DialogHeader>
@@ -453,7 +453,7 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
 
       {/* Modal: Detalle */}
       <Dialog open={modal === "detalle"} onOpenChange={(open) => { if (!open) setModal(null); }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent onInteractOutside={(e) => e.preventDefault()} className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detalle de Ficha</DialogTitle></DialogHeader>
           {form && (
             <div className="space-y-4 py-2 text-sm">
