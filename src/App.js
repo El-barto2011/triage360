@@ -17,7 +17,6 @@ import { VistaAtenciones } from "./components/atenciones/VistaAtenciones";
 import { VistaAtencionesMedicas } from "./components/atenciones/VistaAtencionesMedicas";
 import { VistaAdministracionMedicamentos } from "./components/atenciones/VistaAdministracionMedicamentos";
 import { VistaAtencionesEnfermeria } from "./components/atenciones/VistaAtencionesEnfermeria";
-import { VistaAtencionesEnfermeria } from "./components/atenciones/VistaAtencionesEnfermeria";
 import { VistaAtencionesKinesiologia } from "./components/kinesiologia/VistaAtencionesKinesiologia";
 import ColaTriaje from "./components/atenciones/ColaTriaje";
 import { VistaMasoterapiaUnificada } from "./components/masoterapia/VistaMasoterapiaUnificada";
@@ -56,7 +55,6 @@ const PERMISOS_TAB = {
   // Enfermero/a + Paramédico
   atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico" || u?.profesion === "Kinesiólogo/a",
   // Enfermero/a + Paramédico
-  atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico" || u?.profesion === "Kinesiólogo/a",
   // Kinesiólogo + admin
   atencionKine:      (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
   bolsoKine:         (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
@@ -162,7 +160,6 @@ export default function App() {
       colaTriaje:        { id: "colaTriaje",         label: "Triaje",       icon: "alert" },
       adminMedicamentos: { id: "adminMedicamentos",  label: "Administrar",  icon: "bolso" },
       atencionEnfermeria: { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
-      atencionEnfermeria: { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
       atencionKine:      { id: "atencionKine",       label: "Kinesiología", icon: "event" },
       masoterapia:       { id: "masoterapia",        label: "Masoterapia",  icon: "bolso" },
       bolsoKine:         { id: "bolsoKine",          label: "Mi Bolso",     icon: "bolso" },
@@ -221,8 +218,6 @@ export default function App() {
     { id: "g-operacion", label: "Operación", items: [
       { id: "atenciones", label: "Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "atencionMedica", label: "Prescripción", icon: "med" },
-      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
-      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "colaTriaje", label: "Cola Triaje 🚨", icon: "alert" },
       (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "adminMedicamentos", label: "Administración", icon: "bolso" },
       (esAdmin || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionKine", label: "Kinesiología", icon: "event" },
@@ -368,15 +363,6 @@ export default function App() {
               <div style={S.subtitle}>Evaluación y prescripción médica</div>
             </div>
             <VistaAtencionesMedicas usuario={usuario} carros={carros} />
-          </div>
-        )}
-        {tab === "atencionEnfermeria" && tienePermiso("atencionEnfermeria", usuario, esAdmin) && (
-          <div>
-            <div style={{ marginBottom: 24 }}>
-              <div style={S.title}>Mis Atenciones</div>
-              <div style={S.subtitle}>Registro de atenciones · Enfermería y Paramédicos</div>
-            </div>
-            <VistaAtencionesEnfermeria usuario={usuario} />
           </div>
         )}
         {tab === "atencionEnfermeria" && tienePermiso("atencionEnfermeria", usuario, esAdmin) && (
