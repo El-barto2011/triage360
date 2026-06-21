@@ -47,7 +47,7 @@ const PERMISOS_TAB = {
   historialMeds:     (_u, admin) => admin,
   logsAuditoria:     (_u, admin) => admin,
   // Médico + admin
-  atencionMedica:    (u, admin) => admin || u?.profesion === "Médico",
+  atencionMedica:    (u, admin) => admin || u?.profesion === "Médico" || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
   colaTriaje:        (u, admin) => admin || u?.profesion === "Médico",
   // Enfermero/Paramédico + admin
   adminMedicamentos: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
