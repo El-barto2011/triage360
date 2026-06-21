@@ -219,6 +219,7 @@ export default function App() {
       { id: "atenciones", label: "Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "atencionMedica", label: "Prescripción", icon: "med" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "colaTriaje", label: "Cola Triaje 🚨", icon: "alert" },
+      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "adminMedicamentos", label: "Administración", icon: "bolso" },
       (esAdmin || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionKine", label: "Kinesiología", icon: "event" },
       (esAdmin || usuario?.profesion === "Masoterapeuta") && { id: "masoterapia", label: "Masoterapia", icon: "bolso" },
