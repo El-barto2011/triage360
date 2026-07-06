@@ -16,6 +16,7 @@ import { Badge } from "../ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Separator } from "../ui/separator";
 import { cn } from "../../lib/utils";
+import { confirmDialog } from "../ui/confirm";
 import {
   BarChart2, Download, Lock, Search, ArrowUpDown,
   Pill, Package, Stethoscope, Activity, Waves,
@@ -465,9 +466,12 @@ export function VistaReportes({ usuario, esAdmin }) {
   const cerrarEvento = async () => {
     const eventoObj = eventos.find(e => e.nombre_evento === eventoSeleccionado);
     if (!eventoObj) return;
-    const confirmar = confirm(
-      `¿Estás seguro de cerrar el evento "${eventoSeleccionado}"?\n\nEsta acción NO se puede deshacer.`
-    );
+    const confirmar = await confirmDialog({
+      title: "Cerrar evento",
+      description: `¿Estás seguro de cerrar el evento "${eventoSeleccionado}"?\n\nEsta acción NO se puede deshacer.`,
+      confirmText: "Cerrar evento",
+      variant: "danger",
+    });
     if (!confirmar) return;
     const res = await sb(`equipos_evento?id=eq.${eventoObj.id}`, {
       method: "PATCH",

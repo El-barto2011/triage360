@@ -59,7 +59,7 @@ export function VistaMasoterapiaMasiva({ usuario }) {
 
     const datos = {
       masoterapeuta_id: usuario.id,
-      masoterapeuta_nombre: usuario.email,
+      masoterapeuta_nombre: usuario.nombre || usuario.email,
       evento_id: eventoSeleccionado,
       masajes_realizados: 0,
       fecha: new Date().toISOString().split('T')[0]

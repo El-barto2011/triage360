@@ -14,9 +14,11 @@ export default async function handler(req, res) {
   try {
     console.log('Iniciando verificacion de stock y vencimientos...');
 
-    // ── GUARDIA: Solo enviar alertas si hay un evento en curso ──
+    // ── GUARDIA: Solo enviar alertas si hay un evento activo ──
+    // FIX: la tabla es equipos_evento (estado 'activo'); antes consultaba 'eventos' que no existe
+    // y la guardia silenciaba TODAS las alertas.
     const resEventos = await fetch(
-      `${SUPABASE_URL}/rest/v1/eventos?estado=eq.en_curso&select=id,nombre&limit=1`,
+      `${SUPABASE_URL}/rest/v1/equipos_evento?estado=eq.activo&deleted_at=is.null&select=id,nombre_evento&limit=1`,
       {
         headers: {
           'apikey': SUPABASE_SERVICE_KEY,
@@ -37,7 +39,7 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log(`Evento en curso: ${eventosActivos[0].nombre}. Verificando stock...`);
+    console.log(`Evento en curso: ${eventosActivos[0].nombre_evento}. Verificando stock...`);
     // ── FIN GUARDIA ──────────────────────────────────────────────
 
     const hoy = new Date();

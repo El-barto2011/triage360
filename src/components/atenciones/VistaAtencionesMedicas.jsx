@@ -13,6 +13,8 @@ import { cn } from "../../lib/utils";
 import { Stethoscope, AlertTriangle, Plus, X, ClipboardList, Heart } from "lucide-react";
 import { toast } from "../ui/use-toast";
 import { useEvento } from "../common/SelectorEvento";
+import { fetchPaciente, identFilter, chequearAlergias, validarRut } from "../../config/pacientes";
+import { confirmDialog } from "../ui/confirm";
 
 /* native select styled to match shadcn Input */
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
@@ -56,7 +58,7 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
     setLoading(true);
     const filtro = eventoActual ? `&evento_id=eq.${eventoActual}` : "";
     const [ats, evs] = await Promise.all([
-      sb(`atenciones_medicas?order=created_at.desc&limit=100${filtro}`, {}, usuario?.token),
+      sb(`atenciones_medicas?deleted_at=is.null&order=created_at.desc&limit=100${filtro}`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
     ]);
     if (ats) setAtenciones(ats);
@@ -67,14 +69,12 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
   const buscarPacientePorRut = async (rut) => {
     if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
     // 1° la entidad paciente unificada: autocompleta y trae alergias/antecedentes
-    const ident = (rut || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
-    const pacientes = await sb(`pacientes?identificacion=eq.${ident}&select=id,nombre,edad,alergias,antecedentes`, {}, usuario?.token);
-    const p = pacientes?.[0] || null;
+    const p = await fetchPaciente(sb, rut, usuario?.token);
     setPacienteFicha(p);
     if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
-    // 2° historial de atenciones previas (respaldo del autofill)
+    // 2° historial de atenciones previas (respaldo del autofill, con variantes de RUT)
     const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
-    const found = await sb(`atenciones_medicas?${campo}=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
+    const found = await sb(`atenciones_medicas?${identFilter(campo, rut)}&deleted_at=is.null&order=created_at.desc&limit=10`, {}, usuario?.token);
     if (found?.length > 0) {
       if (!p) { const u = found[0]; setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad })); }
       setHistorialPaciente(found);
@@ -137,13 +137,35 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
       toast({ title: "Campos requeridos", description: "Completa nombre del paciente, evento y motivo de consulta.", variant: "warning" });
       return;
     }
-    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || "00:00"}:00`;
-    const timestampPersonalizado = new Date(fechaHora).toISOString();
+    if (form.paciente_rut && !validarRut(form.paciente_rut)) {
+      const seguirRut = await confirmDialog({
+        title: "RUT posiblemente inválido",
+        description: `El RUT ${form.paciente_rut} tiene un dígito verificador incorrecto.\n\nUn RUT mal escrito crea un paciente duplicado y parte su historial en dos.\n\n¿Guardar de todos modos?`,
+        confirmText: "Guardar igual",
+        cancelText: "Corregir RUT",
+        variant: "danger",
+      });
+      if (!seguirRut) return;
+    }
+    // ── Chequeo de seguridad: alergias registradas vs medicamentos a prescribir ──
+    const conflictos = chequearAlergias(pacienteFicha?.alergias, form.medicamentos_prescritos);
+    if (conflictos.length > 0) {
+      const detalle = conflictos.map(c => `• ${c.medicamento} (alergia registrada: "${c.alergia}")`).join("\n");
+      const continuar = await confirmDialog({
+        title: "Posible conflicto alérgico",
+        description: `El paciente registra alergias que podrían corresponder a medicamentos prescritos:\n\n${detalle}\n\n¿Confirmas la prescripción de todos modos?`,
+        confirmText: "Prescribir igual",
+        cancelText: "Revisar",
+        variant: "danger",
+      });
+      if (!continuar) return;
+    }
     const esMedico = usuario.profesion === "Médico";
     const esEnfermero = usuario.profesion === "Enfermero/a" || usuario.profesion === "Paramédico";
+    const nombreProf = usuario.nombre || usuario.email;
     const datos = {
-      ...(esMedico    ? { medico_id: usuario.id, medico_nombre: usuario.email } : {}),
-      ...(esEnfermero ? { enfermero_id: usuario.id, enfermero_nombre: usuario.email } : {}),
+      ...(esMedico    ? { medico_id: usuario.id, medico_nombre: nombreProf } : {}),
+      ...(esEnfermero ? { enfermero_id: usuario.id, enfermero_nombre: nombreProf } : {}),
       codigo_triaje: form.codigo_triaje || "VERDE",
       es_emergencia: form.codigo_triaje === "ROJO" || form.codigo_triaje === "NEGRO",
       tiempo_espera_minutos: form.tiempo_espera_minutos !== undefined ? form.tiempo_espera_minutos : 60,
@@ -166,7 +188,9 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
       insumos_medico:          form.insumos_medico          || [],
       requiere_administracion: form.requiere_administracion || false,
       administracion_completada: false,
-      created_at: timestampPersonalizado,
+      fecha_atencion: form.fecha_atencion || null,
+      hora_atencion:  form.hora_atencion  || null,
+      // created_at NO se sobrescribe: queda el timestamp real de registro (auditoría)
     };
     setGuardando(true);
     try {
@@ -174,56 +198,31 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
       if (res) {
         setAtenciones(prev => [res[0], ...prev]);
 
-        // ── Descontar medicamentos prescritos del inventario ──
-        let medsDescontados = 0;
-        for (const med of form.medicamentos_prescritos || []) {
-          if (!med.nombre?.trim()) continue;
-          try {
-            const encontrados = await sb(
-              `contenedores_medicamentos?nombre=ilike.*${med.nombre.trim()}*&limit=1`,
-              {}, usuario?.token
-            );
-            if (encontrados?.length > 0) {
-              const item = encontrados[0];
-              const nuevo = Math.max(0, (item.stock || 0) - (parseInt(med.cantidad) || 1));
-              await sb(`contenedores_medicamentos?id=eq.${item.id}`, {
-                method: "PATCH", body: JSON.stringify({ stock: nuevo })
-              }, usuario?.token);
-              medsDescontados++;
-            }
-          } catch (e) {
-            console.error(`Error descuento med ${med.nombre}:`, e);
-          }
-        }
-
-        // ── Descontar insumos del carro ──
-        for (const ins of form.insumos_medico || []) {
-          if (!ins.nombre?.trim()) continue;
-          try {
-            const encontrados = await sb(
-              `contenedores_medicamentos?nombre=ilike.*${ins.nombre.trim()}*&limit=1`,
-              {}, usuario?.token
-            );
-            if (encontrados?.length > 0) {
-              const item = encontrados[0];
-              const nuevo = Math.max(0, (item.stock || 0) - (parseInt(ins.cantidad) || 1));
-              await sb(`contenedores_medicamentos?id=eq.${item.id}`, {
-                method: "PATCH", body: JSON.stringify({ stock: nuevo })
-              }, usuario?.token);
-            }
-          } catch (e) {
-            console.error(`Error descuento insumo ${ins.nombre}:`, e);
+        // ── Descuento de stock transaccional (RPC): prioriza carros/bolsos asignados al evento ──
+        const items = [...(form.medicamentos_prescritos || []), ...(form.insumos_medico || [])]
+          .filter(x => x.nombre?.trim())
+          .map(x => ({ nombre: x.nombre.trim(), cantidad: parseInt(x.cantidad) || 1 }));
+        let resumenStock = "";
+        if (items.length > 0) {
+          const resultado = await sb("rpc/fn_descontar_stock", {
+            method: "POST",
+            body: JSON.stringify({ p_evento_id: form.evento_id || null, p_items: items }),
+          }, usuario?.token);
+          if (Array.isArray(resultado)) {
+            const faltantes = resultado.filter(r => r.faltante > 0);
+            resumenStock = faltantes.length === 0
+              ? ` · Stock descontado (${resultado.length} ítem${resultado.length !== 1 ? "s" : ""})`
+              : ` · ⚠️ Sin stock suficiente: ${faltantes.map(f => `${f.item} (faltan ${f.faltante})`).join(", ")}`;
+          } else {
+            resumenStock = " · ⚠️ No se pudo descontar stock — revisar inventario";
           }
         }
 
         setModal(null);
-        const totalMeds = (form.medicamentos_prescritos || []).filter(m => m.nombre).length;
         toast({
           title: "Atención registrada",
-          description: totalMeds > 0
-            ? `${form.paciente_nombre} · Stock actualizado: ${medsDescontados}/${totalMeds} med.`
-            : `${form.paciente_nombre} — ${form.evento}`,
-          variant: "success"
+          description: `${form.paciente_nombre} — ${form.evento}${resumenStock}`,
+          variant: resumenStock.includes("⚠️") ? "warning" : "success",
         });
       } else {
         toast({ title: "Error al guardar", description: "No se pudo registrar la atención. Intenta nuevamente.", variant: "destructive" });

@@ -1,3 +1,5 @@
+import { enqueue, getAll, remove, esEncolable } from "./offlineQueue";
+
 export const SUPABASE_URL = "https://dnlvzwrujosuckdzmffx.supabase.co";
 export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubHZ6d3J1am9zdWNrZHptZmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NTg0MzAsImV4cCI6MjA5MDIzNDQzMH0.Bhw_ws8XNzWxJXBn1TzLjNppBD9CRWDTuEb_t92G9ZE";
 
@@ -117,9 +119,73 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
     return text ? JSON.parse(text) : [];
   } catch (networkError) {
     console.error("Error de red Supabase:", networkError);
+    // ── Cola offline: si es una creación de atención, guardar local y reintentar al reconectar ──
+    if (esEncolable(endpoint, options.method) && options.body) {
+      try {
+        await enqueue({ endpoint, body: options.body });
+        if (typeof window !== "undefined" && window.__toastOffline) {
+          window.__toastOffline("Sin conexión — atención guardada localmente, se sincronizará al reconectar");
+        }
+        // Respuesta optimista: la UI sigue funcionando; id temporal marca el registro offline
+        let parsed = {};
+        try { parsed = JSON.parse(options.body); } catch (_) {}
+        return [{ ...parsed, id: `offline-${Date.now()}`, __offline: true }];
+      } catch (e) {
+        console.error("No se pudo encolar offline:", e);
+      }
+    }
     if (typeof window !== "undefined" && window.__toastError) {
       window.__toastError("Sin conexión — verifica tu red e intenta nuevamente");
     }
     return null;
   }
 };
+
+/* ════════════════════════════════════════════════════════════
+   REPLAY DE LA COLA OFFLINE
+   Reintenta secuencialmente las escrituras encoladas. Se detiene
+   al primer fallo (probablemente sigue sin red). Devuelve
+   { enviados, pendientes }.
+   ════════════════════════════════════════════════════════════ */
+let _flushing = false;
+export const flushOfflineQueue = async () => {
+  if (_flushing) return { enviados: 0, pendientes: null };
+  _flushing = true;
+  let enviados = 0;
+  try {
+    const pendientes = await getAll();
+    for (const item of pendientes) {
+      const auth = getToken();
+      const headers = { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Prefer": "return=representation" };
+      if (auth) headers["Authorization"] = `Bearer ${auth}`;
+      let res;
+      try {
+        res = await fetch(`${SUPABASE_URL}/rest/v1/${item.endpoint}`, { method: "POST", headers, body: item.body });
+      } catch (_) {
+        break; // sigue sin conexión: detener y conservar el resto
+      }
+      if (res.ok) {
+        await remove(item.id);
+        enviados++;
+      } else if (res.status >= 400 && res.status < 500 && res.status !== 401) {
+        // Error de datos (no de red): descartar para no bloquear la cola indefinidamente
+        console.error(`Descartando item offline por error ${res.status}`);
+        await remove(item.id);
+      } else {
+        break; // 401/5xx: reintentar más tarde
+      }
+    }
+    const restantes = await getAll();
+    if (enviados > 0 && typeof window !== "undefined" && window.__toastOffline) {
+      window.__toastOffline(`${enviados} atención(es) sincronizada(s)${restantes.length ? `, ${restantes.length} pendiente(s)` : ""}`);
+    }
+    return { enviados, pendientes: restantes.length };
+  } finally {
+    _flushing = false;
+  }
+};
+
+// Auto-sincronizar al recuperar conexión
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => { flushOfflineQueue(); });
+}

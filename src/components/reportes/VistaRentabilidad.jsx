@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { C, S } from '../../config/theme'
 import { sb } from '../../config/supabase'
 import { toast } from '../ui/use-toast'
+import { confirmDialog } from "../ui/confirm";
 
 /* ── Helpers ──────────────────────────────────────────────── */
 const clp = (n) => n == null ? '—' : '$' + Math.round(Number(n)).toLocaleString('es-CL')
@@ -98,7 +99,8 @@ export function VistaRentabilidad({ usuario }) {
   }
 
   const eliminar = async (tabla, id) => {
-    if (!window.confirm('¿Eliminar este registro?')) return
+    const ok = await confirmDialog({ title: '¿Eliminar este registro?', description: 'Esta acción no se puede deshacer.', confirmText: 'Eliminar', variant: 'danger' })
+    if (!ok) return
     await sb(`${tabla}?id=eq.${id}`, { method: 'DELETE' }, usuario?.token)
     refrescar()
   }

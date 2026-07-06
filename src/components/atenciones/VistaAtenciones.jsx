@@ -25,13 +25,13 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
         setLoading(true);
 
         // Traer atenciones médicas
-        const medicas = await sb("atenciones_medicas?order=created_at.desc", {}, usuario?.token) || [];
+        const medicas = await sb("atenciones_medicas?deleted_at=is.null&order=created_at.desc&limit=500", {}, usuario?.token) || [];
 
         // Traer atenciones de kinesiología
-        const kines = await sb("atenciones_kinesiologia?order=created_at.desc", {}, usuario?.token) || [];
+        const kines = await sb("atenciones_kinesiologia?deleted_at=is.null&order=created_at.desc&limit=500", {}, usuario?.token) || [];
 
         // Traer fichas de masoterapia
-        const maso = await sb("fichas_masoterapia?order=created_at.desc", {}, usuario?.token) || [];
+        const maso = await sb("fichas_masoterapia?deleted_at=is.null&order=created_at.desc&limit=500", {}, usuario?.token) || [];
 
         // Unificar todas en un solo array con el tipo de atención
         const todasMedicas = medicas.map(a => ({ ...a, tipo_atencion: 'Médica', profesion_real: a.medico_nombre ? 'Médico' : a.enfermero_nombre ? 'Enfermero/a' : 'Paramédico' }));

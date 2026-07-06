@@ -40,7 +40,7 @@ export function GestionUsuarios({ usuario, carros }) {
   const guardar = async () => {
     const res = await sb(`perfiles?user_id=eq.${editando}`, {
       method: "PATCH",
-      body: JSON.stringify({ nombre: form.nombre, profesion: form.profesion, rol: form.rol, evento_id: form.evento_id ? Number(form.evento_id) : null })
+      body: JSON.stringify({ nombre: form.nombre, profesion: form.profesion, rol: form.rol })
     }, usuario?.token);
     if (res !== null) setUsuarios(prev => prev.map(u => u.id === editando ? { ...u, ...form } : u));
     setEditando(null);
@@ -118,12 +118,8 @@ export function GestionUsuarios({ usuario, carros }) {
                 </select>
               </div>
             </div>
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Evento asignado</label>
-              <select style={{ ...S.select, width: "100%" }} value={form.evento_id || ""} onChange={e => setForm(p => ({ ...p, evento_id: e.target.value ? Number(e.target.value) : null }))}>
-                <option value="">Sin evento asignado</option>
-                {eventos.map(ev => <option key={ev.id} value={ev.id}>{ev.nombre_evento}</option>)}
-              </select>
+            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>
+              La asignación a eventos se gestiona desde <strong>Eventos</strong> (equipo del evento), no aquí.
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button style={S.btn("ghost")} onClick={() => setEditando(null)}>Cancelar</button>

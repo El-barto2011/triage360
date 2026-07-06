@@ -2,27 +2,8 @@ import { useState } from 'react'
 import { C, S } from '../../config/theme'
 import { sb } from '../../config/supabase'
 import { toast } from '../ui/use-toast'
-
-/* ── Normaliza RUT/pasaporte igual que fn_norm_ident en la BD ── */
-const normIdent = (v) => (v || '').toUpperCase().replace(/[^0-9A-Z]/g, '')
-
-/* ── RUT: genera variantes con y sin puntos ───────────────── */
-function rutVariants(raw) {
-  const sinPuntos = raw.replace(/\./g, '')
-  if (sinPuntos === raw) {
-    // entrada sin puntos → intentar agregar formato con puntos
-    const m = sinPuntos.match(/^(\d+)(-[\dkK])?$/)
-    if (m) {
-      const num = m[1], dv = m[2] ? '-' + m[2].slice(1) : ''
-      let conPuntos = ''
-      if      (num.length === 8) conPuntos = `${num.slice(0,2)}.${num.slice(2,5)}.${num.slice(5)}${dv}`
-      else if (num.length === 7) conPuntos = `${num.slice(0,1)}.${num.slice(1,4)}.${num.slice(4)}${dv}`
-      return [...new Set([raw, conPuntos].filter(Boolean))]
-    }
-    return [raw]
-  }
-  return [...new Set([raw, sinPuntos])]
-}
+import { normIdent, esPasaporte, identFilter } from '../../config/pacientes'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
 /* ── Select explícito por tabla (sin columnas innecesarias) ── */
 const SEL_MEDICA = [
@@ -46,12 +27,7 @@ const SEL_MASO = [
 
 /* ── Construye endpoint PostgREST con OR de variantes de RUT ─ */
 function endpoint(tabla, campo, valor, select) {
-  const esPassaporte = /^[a-zA-Z]/.test(valor)
-  const variants     = esPassaporte ? [valor] : rutVariants(valor)
-  const filtro       = variants.length > 1
-    ? `or=(${variants.map(v => `${campo}.eq.${v}`).join(',')})`
-    : `${campo}=eq.${variants[0]}`
-  return `${tabla}?${filtro}&deleted_at=is.null&order=created_at.desc&select=${select}&limit=100`
+  return `${tabla}?${identFilter(campo, valor)}&deleted_at=is.null&order=created_at.desc&select=${select}&limit=100`
 }
 
 /* ── Helpers de presentación ──────────────────────────────── */
@@ -106,6 +82,98 @@ function Vitales({ a }) {
   )
 }
 
+/* ── Fecha corta para ejes ─────────────────────────────────── */
+const fechaCorta = (ts) => {
+  const d = new Date(ts)
+  return isNaN(d) ? '—' : d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })
+}
+
+/* ══════════════════════════════════════════════════════════
+   Tendencias por paciente: evolución de dolor (masoterapia) y
+   de signos vitales (médicas) a través de los eventos.
+   ══════════════════════════════════════════════════════════ */
+function Tendencias({ historial }) {
+  // Dolor: fichas de masoterapia con dolor inicial/posterior, orden cronológico
+  const dolorData = historial
+    .filter(a => a.tipo === 'Masoterapia' && (a.dolor_inicial != null || a.dolor_posterior != null))
+    .slice().reverse()
+    .map(a => ({
+      fecha: fechaCorta(a.created_at),
+      'Dolor inicial':   a.dolor_inicial ?? null,
+      'Dolor posterior': a.dolor_posterior ?? null,
+    }))
+
+  // Signos vitales: atenciones médicas con al menos un vital
+  const vitalesData = historial
+    .filter(a => a.tipo === 'Médica' && (a.presion_sistolica || a.frecuencia_cardiaca || a.saturacion_oxigeno))
+    .slice().reverse()
+    .map(a => ({
+      fecha: fechaCorta(a.created_at),
+      'PA sist.': a.presion_sistolica || null,
+      'PA diast.': a.presion_diastolica || null,
+      'FC': a.frecuencia_cardiaca || null,
+      'SpO₂': a.saturacion_oxigeno || null,
+    }))
+
+  const hayDolor   = dolorData.length >= 2
+  const hayVitales = vitalesData.length >= 2
+  if (!hayDolor && !hayVitales) return null
+
+  const ejeChart = { fontSize: 11, fill: C.textMuted }
+
+  return (
+    <div style={{ ...S.card, marginBottom: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Tendencias</div>
+      <div style={{ fontSize: 11, color: C.textFaint, marginBottom: 16 }}>
+        Evolución a través de los eventos registrados
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: hayDolor && hayVitales ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: 20 }}>
+
+        {hayDolor && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>
+              Dolor en masoterapia (escala 0–10)
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={dolorData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="fecha" tick={ejeChart} />
+                <YAxis domain={[0, 10]} tick={ejeChart} />
+                <Tooltip contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="Dolor inicial"   stroke={C.red}   strokeWidth={2} connectNulls />
+                <Line type="monotone" dataKey="Dolor posterior" stroke={C.green} strokeWidth={2} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {hayVitales && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>
+              Signos vitales
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={vitalesData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="fecha" tick={ejeChart} />
+                <YAxis tick={ejeChart} />
+                <Tooltip contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="PA sist."  stroke={C.red}    strokeWidth={2} connectNulls />
+                <Line type="monotone" dataKey="PA diast." stroke={C.orange} strokeWidth={2} connectNulls />
+                <Line type="monotone" dataKey="FC"        stroke={C.accent} strokeWidth={2} connectNulls />
+                <Line type="monotone" dataKey="SpO₂"      stroke={C.blue}   strokeWidth={2} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
 /* ══════════════════════════════════════════════════════════ */
 export function HistorialPaciente({ usuario }) {
   const [query,        setQuery]        = useState('')
@@ -147,7 +215,7 @@ export function HistorialPaciente({ usuario }) {
     setPacienteDB(null)
     setEditFicha(false)
 
-    const campo = /^[a-zA-Z]/.test(rut) ? 'paciente_pasaporte' : 'paciente_rut'
+    const campo = esPasaporte(rut) ? 'paciente_pasaporte' : 'paciente_rut'
 
     try {
       // 1° intento: entidad paciente unificada (vínculo por paciente_id)
@@ -310,6 +378,9 @@ export function HistorialPaciente({ usuario }) {
           )}
         </div>
       )}
+
+      {/* ── Tendencias (dolor + signos vitales) ───────────────── */}
+      {historial.length > 0 && <Tendencias historial={historial} />}
 
       {/* ── Filtros por tipo ──────────────────────────────────── */}
       {historial.length > 0 && (

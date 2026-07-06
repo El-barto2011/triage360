@@ -13,6 +13,8 @@ import { cn } from "../../lib/utils";
 import { Activity, Plus, X, ClipboardList, Backpack, AlertTriangle } from "lucide-react";
 import { useEvento } from "../common/SelectorEvento";
 import { toast } from "../ui/use-toast";
+import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
+import { confirmDialog } from "../ui/confirm";
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
@@ -44,8 +46,8 @@ export function VistaAtencionesKinesiologia({ usuario }) {
     const filtroEvento = eventoActual ? `&evento_id=eq.${eventoActual}` : "";
     const [ats, ins, evs] = await Promise.all([
       sb(esAdmin
-        ? `atenciones_kinesiologia?order=created_at.desc&limit=100${filtroEvento}`
-        : `atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=created_at.desc&limit=50${filtroEvento}`,
+        ? `atenciones_kinesiologia?deleted_at=is.null&order=created_at.desc&limit=100${filtroEvento}`
+        : `atenciones_kinesiologia?kinesiologo_id=eq.${usuario.id}&deleted_at=is.null&order=created_at.desc&limit=50${filtroEvento}`,
         {}, usuario?.token),
       sb(`insumos_kinesiologia?kinesiologo_id=eq.${usuario.id}&order=nombre`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
@@ -58,13 +60,11 @@ export function VistaAtencionesKinesiologia({ usuario }) {
 
   const buscarPacientePorRut = async (rut) => {
     if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
-    const ident = (rut || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
-    const pacientes = await sb(`pacientes?identificacion=eq.${ident}&select=id,nombre,edad,alergias,antecedentes`, {}, usuario?.token);
-    const p = pacientes?.[0] || null;
+    const p = await fetchPaciente(sb, rut, usuario?.token);
     setPacienteFicha(p);
     if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
     const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
-    const found = await sb(`atenciones_kinesiologia?${campo}=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
+    const found = await sb(`atenciones_kinesiologia?${identFilter(campo, rut)}&deleted_at=is.null&order=created_at.desc&limit=10`, {}, usuario?.token);
     if (found?.length > 0) {
       if (!p) { const u = found[0]; setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad })); }
       setHistorialPaciente(found);
@@ -109,11 +109,19 @@ export function VistaAtencionesKinesiologia({ usuario }) {
       toast({ title: "Campos requeridos", description: "Completa nombre del paciente, evento y motivo de consulta.", variant: "warning" });
       return;
     }
-    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || "00:00"}:00`;
-    const timestampPersonalizado = new Date(fechaHora).toISOString();
+    if (form.paciente_rut && !validarRut(form.paciente_rut)) {
+      const seguirRut = await confirmDialog({
+        title: "RUT posiblemente inválido",
+        description: `El RUT ${form.paciente_rut} tiene un dígito verificador incorrecto.\n\nUn RUT mal escrito crea un paciente duplicado y parte su historial en dos.\n\n¿Guardar de todos modos?`,
+        confirmText: "Guardar igual",
+        cancelText: "Corregir RUT",
+        variant: "danger",
+      });
+      if (!seguirRut) return;
+    }
     const datos = {
       kinesiologo_id:     usuario.id,
-      kinesiologo_nombre: usuario.email,
+      kinesiologo_nombre: usuario.nombre || usuario.email,
       paciente_nombre:    form.paciente_nombre,
       paciente_rut:       form.paciente_rut || null,
       paciente_edad:      form.paciente_edad ? parseInt(form.paciente_edad) : null,
@@ -125,7 +133,9 @@ export function VistaAtencionesKinesiologia({ usuario }) {
       observaciones:       form.observaciones   || null,
       recomendaciones:     form.recomendaciones || null,
       insumos_usados:      form.insumos_usados  || [],
-      created_at:          timestampPersonalizado,
+      fecha_atencion:      form.fecha_atencion || null,
+      hora_atencion:       form.hora_atencion  || null,
+      // created_at NO se sobrescribe: queda el timestamp real de registro (auditoría)
     };
     setGuardando(true);
     try {

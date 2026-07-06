@@ -33,6 +33,9 @@ import { EventoProvider, SelectorEvento } from "./components/common/SelectorEven
 import { HistorialPaciente } from "./components/pacientes/HistorialPaciente";
 import { HistorialMedicamentos } from "./components/atenciones/HistorialMedicamentos";
 import { Toaster } from "./components/ui/toaster";
+import { ConfirmHost } from "./components/ui/confirm";
+import { OfflineBanner } from "./components/common/OfflineBanner";
+import { flushOfflineQueue } from "./config/supabase";
 import { toast } from "./components/ui/use-toast";
 
 const PERMISOS_TAB = {
@@ -122,7 +125,10 @@ export default function App() {
   // Registrar handler global de errores de red para supabase.js
   useEffect(() => {
     window.__toastError = (msg) => toast({ title: "Error de conexión", description: msg, variant: "destructive" });
-    return () => { delete window.__toastError; };
+    window.__toastOffline = (msg) => toast({ title: "Modo offline", description: msg });
+    // Intentar sincronizar la cola offline al cargar (por si quedó algo de una sesión previa)
+    flushOfflineQueue();
+    return () => { delete window.__toastError; delete window.__toastOffline; };
   }, []);
 
   useEffect(() => {
@@ -502,6 +508,8 @@ export default function App() {
       </main>
 
       <Toaster />
+      <ConfirmHost />
+      <OfflineBanner />
 
       {isMobile && (
         <>

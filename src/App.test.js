@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
-  render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+// Smoke test: la app monta sin lanzar excepciones.
+// Sin sesión guardada, App resuelve a la pantalla de Login.
+test('la app monta sin errores', () => {
+  const { container } = render(<App />);
+  expect(container).toBeTruthy();
 });

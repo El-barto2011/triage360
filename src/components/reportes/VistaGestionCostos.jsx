@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
+import { confirmDialog } from "../ui/confirm";
 
 const fmt = (n) => n != null ? `$${Number(n).toLocaleString("es-CL")}` : "—";
 
@@ -63,7 +64,8 @@ export function VistaGestionCostos({ usuario, onNavigate }) {
   };
 
   const eliminar = async (costo) => {
-    if (!window.confirm(`¿Eliminar el costo de "${costo.nombre_insumo}"?`)) return;
+    const ok = await confirmDialog({ title: "¿Eliminar costo?", description: `Se eliminará el costo de "${costo.nombre_insumo}". Esta acción no se puede deshacer.`, confirmText: "Eliminar", variant: "danger" });
+    if (!ok) return;
     await sb(`costos_insumos?id=eq.${costo.id}`, { method: "DELETE" }, usuario?.token);
     setCostos(prev => prev.filter(c => c.id !== costo.id));
   };

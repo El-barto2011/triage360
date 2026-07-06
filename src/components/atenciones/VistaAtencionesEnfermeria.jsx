@@ -13,6 +13,8 @@ import { cn } from "../../lib/utils";
 import { Stethoscope, Plus, X, ClipboardList, Heart } from "lucide-react";
 import { toast } from "../ui/use-toast";
 import { useEvento } from "../common/SelectorEvento";
+import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
+import { confirmDialog } from "../ui/confirm";
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
@@ -64,7 +66,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
     if (prof === "Kinesiólogo/a")  campoProfFiltro = `&kinesiologo_id=eq.${usuario.id}`;
 
     const [ats, evs] = await Promise.all([
-      sb(`atenciones_medicas?order=created_at.desc&limit=100${filtro}${campoProfFiltro}`, {}, usuario?.token),
+      sb(`atenciones_medicas?deleted_at=is.null&order=created_at.desc&limit=100${filtro}${campoProfFiltro}`, {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&order=created_at.desc", {}, usuario?.token),
     ]);
     if (ats) setAtenciones(ats);
@@ -74,15 +76,10 @@ export function VistaAtencionesEnfermeria({ usuario }) {
 
   const buscarPacientePorRut = async (rut) => {
     if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
-    const ident = rut.toUpperCase().replace(/[^0-9A-Z]/g, "");
-    const pacientes = await sb(
-      `pacientes?identificacion=eq.${ident}&select=id,nombre,edad,alergias,antecedentes`,
-      {}, usuario?.token
-    );
-    const p = pacientes?.[0] || null;
+    const p = await fetchPaciente(sb, rut, usuario?.token);
     setPacienteFicha(p);
     if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
-    const found = await sb(`atenciones_medicas?paciente_rut=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
+    const found = await sb(`atenciones_medicas?${identFilter("paciente_rut", rut)}&deleted_at=is.null&order=created_at.desc&limit=10`, {}, usuario?.token);
     setHistorialPaciente(found?.length > 0 ? found : []);
     if (found?.length > 0 && !p) setForm(f => ({ ...f, paciente_nombre: found[0].paciente_nombre, paciente_edad: found[0].paciente_edad }));
   };
@@ -125,13 +122,23 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       toast({ title: "Campos requeridos", description: "Completa nombre del paciente, evento y motivo de consulta.", variant: "warning" });
       return;
     }
-    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || "00:00"}:00`;
+    if (form.paciente_rut && !validarRut(form.paciente_rut)) {
+      const seguirRut = await confirmDialog({
+        title: "RUT posiblemente inválido",
+        description: `El RUT ${form.paciente_rut} tiene un dígito verificador incorrecto.\n\nUn RUT mal escrito crea un paciente duplicado y parte su historial en dos.\n\n¿Guardar de todos modos?`,
+        confirmText: "Guardar igual",
+        cancelText: "Corregir RUT",
+        variant: "danger",
+      });
+      if (!seguirRut) return;
+    }
     const prof = usuario?.profesion;
+    const nombreProf = usuario.nombre || usuario.email;
 
     const datos = {
-      ...(prof === "Enfermero/a"   ? { enfermero_id:   usuario.id, enfermero_nombre:   usuario.email } : {}),
-      ...(prof === "Paramédico"    ? { paramedico_id:  usuario.id, paramedico_nombre:  usuario.email } : {}),
-      ...(prof === "Kinesiólogo/a" ? { kinesiologo_id: usuario.id, kinesiologo_nombre: usuario.email } : {}),
+      ...(prof === "Enfermero/a"   ? { enfermero_id:   usuario.id, enfermero_nombre:   nombreProf } : {}),
+      ...(prof === "Paramédico"    ? { paramedico_id:  usuario.id, paramedico_nombre:  nombreProf } : {}),
+      ...(prof === "Kinesiólogo/a" ? { kinesiologo_id: usuario.id, kinesiologo_nombre: nombreProf } : {}),
       codigo_triaje:           form.codigo_triaje || "VERDE",
       es_emergencia:           form.codigo_triaje === "ROJO" || form.codigo_triaje === "NEGRO",
       tiempo_espera_minutos:   form.tiempo_espera_minutos ?? 60,
@@ -155,7 +162,9 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       insumos_medico:          form.insumos_medico || [],
       requiere_administracion: false,
       administracion_completada: false,
-      created_at: new Date(fechaHora).toISOString(),
+      fecha_atencion: form.fecha_atencion || null,
+      hora_atencion:  form.hora_atencion  || null,
+      // created_at NO se sobrescribe: queda el timestamp real de registro (auditoría)
     };
 
     setGuardando(true);
@@ -163,21 +172,25 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       const res = await sb("atenciones_medicas", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
       if (res) {
         setAtenciones(prev => [res[0], ...prev]);
-        // Descontar insumos del carro
-        for (const ins of form.insumos_medico || []) {
-          if (!ins.nombre?.trim()) continue;
-          try {
-            const encontrados = await sb(`contenedores_medicamentos?nombre=ilike.*${ins.nombre.trim()}*&limit=1`, {}, usuario?.token);
-            if (encontrados?.length > 0) {
-              const item = encontrados[0];
-              await sb(`contenedores_medicamentos?id=eq.${item.id}`, {
-                method: "PATCH", body: JSON.stringify({ stock: Math.max(0, (item.stock || 0) - (parseInt(ins.cantidad) || 1)) })
-              }, usuario?.token);
-            }
-          } catch (e) { console.error(e); }
+        // ── Descuento de stock transaccional (RPC): prioriza contenedores del evento ──
+        const items = (form.insumos_medico || [])
+          .filter(x => x.nombre?.trim())
+          .map(x => ({ nombre: x.nombre.trim(), cantidad: parseInt(x.cantidad) || 1 }));
+        let resumenStock = "";
+        if (items.length > 0) {
+          const resultado = await sb("rpc/fn_descontar_stock", {
+            method: "POST",
+            body: JSON.stringify({ p_evento_id: form.evento_id || null, p_items: items }),
+          }, usuario?.token);
+          if (Array.isArray(resultado)) {
+            const faltantes = resultado.filter(r => r.faltante > 0);
+            if (faltantes.length > 0) resumenStock = ` · ⚠️ Sin stock suficiente: ${faltantes.map(f => `${f.item} (faltan ${f.faltante})`).join(", ")}`;
+          } else {
+            resumenStock = " · ⚠️ No se pudo descontar stock";
+          }
         }
         setModal(null);
-        toast({ title: "Atención registrada", description: `${form.paciente_nombre} — ${form.evento}`, variant: "success" });
+        toast({ title: "Atención registrada", description: `${form.paciente_nombre} — ${form.evento}${resumenStock}`, variant: resumenStock ? "warning" : "success" });
       } else {
         toast({ title: "Error al guardar", description: "No se pudo registrar la atención.", variant: "destructive" });
       }

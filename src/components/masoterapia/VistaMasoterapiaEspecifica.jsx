@@ -13,6 +13,8 @@ import { cn } from "../../lib/utils";
 import { Waves, Plus, TrendingDown, CheckCircle2 } from "lucide-react";
 import { useEvento } from "../common/SelectorEvento";
 import { toast } from "../ui/use-toast";
+import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
+import { confirmDialog } from "../ui/confirm";
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
@@ -49,8 +51,8 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
     const filtroEvento = eventoActual ? `&evento_id=eq.${eventoActual}` : "";
     const [fs, evs] = await Promise.all([
       sb(esAdmin
-        ? `fichas_masoterapia?order=created_at.desc&limit=100${filtroEvento}`
-        : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&order=created_at.desc&limit=50${filtroEvento}`,
+        ? `fichas_masoterapia?deleted_at=is.null&order=created_at.desc&limit=100${filtroEvento}`
+        : `fichas_masoterapia?masoterapeuta_id=eq.${usuario.id}&deleted_at=is.null&order=created_at.desc&limit=50${filtroEvento}`,
         {}, usuario?.token),
       sb("equipos_evento?estado=eq.activo&tipo_masoterapia=eq.Específico&order=created_at.desc", {}, usuario?.token),
     ]);
@@ -79,13 +81,11 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
 
   const buscarPacientePorRut = async (rut) => {
     if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
-    const ident = (rut || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
-    const pacientes = await sb(`pacientes?identificacion=eq.${ident}&select=id,nombre,edad,alergias,antecedentes`, {}, usuario?.token);
-    const p = pacientes?.[0] || null;
+    const p = await fetchPaciente(sb, rut, usuario?.token);
     setPacienteFicha(p);
     if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
     const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
-    const found = await sb(`fichas_masoterapia?${campo}=eq.${rut}&order=created_at.desc&limit=10`, {}, usuario?.token);
+    const found = await sb(`fichas_masoterapia?${identFilter(campo, rut)}&deleted_at=is.null&order=created_at.desc&limit=10`, {}, usuario?.token);
     if (found?.length > 0) {
       if (!p) { const u = found[0]; setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad })); }
       setHistorialPaciente(found);
@@ -107,16 +107,36 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
       toast({ title: "Campos requeridos", description: "Completa el nombre del paciente y el evento.", variant: "warning" });
       return;
     }
+    if (form.paciente_rut && !validarRut(form.paciente_rut)) {
+      const seguirRut = await confirmDialog({
+        title: "RUT posiblemente inválido",
+        description: `El RUT ${form.paciente_rut} tiene un dígito verificador incorrecto.\n\nUn RUT mal escrito crea un paciente duplicado y parte su historial en dos.\n\n¿Guardar de todos modos?`,
+        confirmText: "Guardar igual",
+        cancelText: "Corregir RUT",
+        variant: "danger",
+      });
+      if (!seguirRut) return;
+    }
+    // Identificación requerida: sin RUT/pasaporte la atención no se vincula al historial del paciente
+    const identIngresada = form.tipo_identificacion === "pasaporte" ? form.paciente_pasaporte : form.paciente_rut;
+    if (!identIngresada?.trim()) {
+      const continuar = await confirmDialog({
+        title: "Atención sin identificación",
+        description: "Sin RUT/pasaporte esta atención NO quedará en el historial del paciente y no se podrá cruzar con atenciones médicas o de kinesiología.\n\n¿Guardar de todos modos sin identificación?",
+        confirmText: "Guardar sin ID",
+        cancelText: "Agregar RUT",
+        variant: "danger",
+      });
+      if (!continuar) return;
+    }
     if (!form.zonas_trabajadas || form.zonas_trabajadas.length === 0) {
       toast({ title: "Zonas requeridas", description: "Selecciona al menos una zona trabajada.", variant: "warning" });
       return;
     }
-    const fechaHora = `${form.fecha_atencion}T${form.hora_atencion || "00:00"}:00`;
-    const timestampPersonalizado = new Date(fechaHora).toISOString();
     const datos = {
       evento_id: form.evento_id || null,
       masoterapeuta_id:     usuario.id,
-      masoterapeuta_nombre: usuario.email,
+      masoterapeuta_nombre: usuario.nombre || usuario.email,
       paciente_nombre:  form.paciente_nombre,
       paciente_rut:     form.tipo_identificacion === "rut"       ? (form.paciente_rut      || null) : null,
       paciente_pasaporte: form.tipo_identificacion === "pasaporte" ? (form.paciente_pasaporte || null) : null,
@@ -133,7 +153,8 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
       dolor_inicial:    parseInt(form.dolor_inicial)    || 5,
       dolor_posterior:  parseInt(form.dolor_posterior)  || 5,
       observaciones:    form.observaciones || null,
-      created_at:       timestampPersonalizado,
+      hora_inicio:      form.hora_atencion || null,
+      // created_at NO se sobrescribe: queda el timestamp real de registro (auditoría)
     };
     setGuardando(true);
     try {
