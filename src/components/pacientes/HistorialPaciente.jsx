@@ -2,33 +2,8 @@ import { useState } from 'react'
 import { C, S } from '../../config/theme'
 import { sb } from '../../config/supabase'
 import { toast } from '../ui/use-toast'
-import { normIdent, esPasaporte, identFilter } from '../../config/pacientes'
+import { normIdent, esPasaporte } from '../../config/pacientes'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
-
-/* ── Select explícito por tabla (sin columnas innecesarias) ── */
-const SEL_MEDICA = [
-  'id,created_at,evento,paciente_nombre,paciente_edad,paciente_rut,paciente_pasaporte,tipo_identificacion',
-  'medico_nombre,enfermero_nombre,paramedico_nombre',
-  'motivo_consulta,diagnostico,tratamiento,observaciones,medicamentos_prescritos',
-  'codigo_triaje,es_emergencia',
-  'presion_sistolica,presion_diastolica,frecuencia_cardiaca,temperatura,saturacion_oxigeno,frecuencia_respiratoria',
-].join(',')
-
-const SEL_KINE = [
-  'id,created_at,evento,paciente_nombre,paciente_edad,paciente_rut,paciente_pasaporte,tipo_identificacion',
-  'kinesiologo_nombre,motivo_consulta,evaluacion_inicial,tratamiento_realizado,recomendaciones,observaciones',
-].join(',')
-
-const SEL_MASO = [
-  'id,created_at,fecha_atencion,evento,paciente_nombre,paciente_edad,paciente_rut,paciente_pasaporte,tipo_identificacion',
-  'masoterapeuta_nombre,motivo_atencion,zona_afectada,tipo_masaje,zonas_trabajadas',
-  'dolor_inicial,dolor_posterior,duracion_minutos,respuesta_tratamiento,observaciones',
-].join(',')
-
-/* ── Construye endpoint PostgREST con OR de variantes de RUT ─ */
-function endpoint(tabla, campo, valor, select) {
-  return `${tabla}?${identFilter(campo, valor)}&deleted_at=is.null&order=created_at.desc&select=${select}&limit=100`
-}
 
 /* ── Helpers de presentación ──────────────────────────────── */
 const TIPO_COLORES = { 'Médica': C.red, 'Kinesiología': C.green, 'Masoterapia': C.purple }
@@ -218,7 +193,7 @@ export function HistorialPaciente({ usuario }) {
     const campo = esPasaporte(rut) ? 'paciente_pasaporte' : 'paciente_rut'
 
     try {
-      // 1° intento: entidad paciente unificada (vínculo por paciente_id)
+      // Ficha unificada del paciente (alergias/antecedentes)
       const pacientes = await sb(`pacientes?identificacion=eq.${normIdent(rut)}&select=id,nombre,edad,tipo_identificacion,identificacion,alergias,antecedentes`, {}, usuario?.token)
       const pdb = pacientes?.[0] || null
       if (pdb) {
@@ -226,44 +201,38 @@ export function HistorialPaciente({ usuario }) {
         setFichaForm({ alergias: pdb.alergias || '', antecedentes: pdb.antecedentes || '' })
       }
 
-      const porPid = (tabla, select) =>
-        `${tabla}?paciente_id=eq.${pdb?.id}&deleted_at=is.null&order=created_at.desc&select=${select}&limit=100`
+      // Historial COMPLETO cross-event vía RPC SECURITY DEFINER.
+      // Salta el RLS event-scoped para dar continuidad clínica (alergias, tratamientos previos)
+      // sin exponer las listas de atenciones de otros eventos.
+      const res = await sb('rpc/fn_historial_paciente', {
+        method: 'POST',
+        body: JSON.stringify({ p_ident: rut }),
+      }, usuario?.token)
 
-      const [medicas, kines, maso] = await Promise.all([
-        sb(pdb ? porPid('atenciones_medicas', SEL_MEDICA)   : endpoint('atenciones_medicas',     campo, rut, SEL_MEDICA), {}, usuario?.token),
-        sb(pdb ? porPid('atenciones_kinesiologia', SEL_KINE): endpoint('atenciones_kinesiologia', campo, rut, SEL_KINE),  {}, usuario?.token),
-        sb(pdb ? porPid('fichas_masoterapia', SEL_MASO)     : endpoint('fichas_masoterapia',      campo, rut, SEL_MASO),  {}, usuario?.token),
-      ])
+      const medicasArr = res?.medicas || []
+      const kines      = res?.kine    || []
+      const maso       = res?.maso    || []
 
-      // Medicamentos administrados: segundo fetch por IDs de atenciones médicas
-      const medicasArr = medicas || []
-      if (medicasArr.length > 0) {
-        const ids    = medicasArr.map(a => a.id).join(',')
-        const admins = await sb(
-          `administracion_medicamentos?atencion_id=in.(${ids})` +
-          `&select=atencion_id,medicamentos_administrados,administrador_nombre,created_at`,
-          {},
-          usuario?.token
-        )
-        if (admins?.length) {
-          const map = {}
-          admins.forEach(a => {
-            if (!map[a.atencion_id]) map[a.atencion_id] = []
-            map[a.atencion_id].push(a)
-          })
-          setAdminMeds(map)
-        }
+      // Mapa de medicamentos administrados por atención
+      const admins = res?.administracion || []
+      if (admins.length) {
+        const map = {}
+        admins.forEach(a => {
+          if (!map[a.atencion_id]) map[a.atencion_id] = []
+          map[a.atencion_id].push(a)
+        })
+        setAdminMeds(map)
       }
 
       const todo = [
-        ...medicasArr.map(a          => ({ ...a, tipo: 'Médica'       })),
-        ...(kines || []).map(a       => ({ ...a, tipo: 'Kinesiología'  })),
-        ...(maso  || []).map(a       => ({ ...a, tipo: 'Masoterapia'   })),
+        ...medicasArr.map(a => ({ ...a, tipo: 'Médica'       })),
+        ...kines.map(a      => ({ ...a, tipo: 'Kinesiología'  })),
+        ...maso.map(a       => ({ ...a, tipo: 'Masoterapia'   })),
       ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
       if (todo.length > 0) {
         const p = todo[0]
-        setPacienteInfo({ nombre: p.paciente_nombre, edad: p.paciente_edad, id: p[campo] })
+        setPacienteInfo({ nombre: p.paciente_nombre, edad: p.paciente_edad, id: pdb?.identificacion || p[campo] })
       }
       setHistorial(todo)
     } catch (err) {
