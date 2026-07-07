@@ -96,6 +96,34 @@ export const restoreSession = async () => {
    de la sesión activa (que se renueva sola).
    ════════════════════════════════════════════════════════════ */
 
+/* Traduce un error de PostgREST/Postgres a un mensaje claro en español. */
+const _verbo = (m) => m === "POST" ? "guardar" : m === "PATCH" || m === "PUT" ? "actualizar" : m === "DELETE" ? "eliminar" : "cargar";
+export function mensajeError(status, bodyText, method) {
+  let body = {};
+  try { body = JSON.parse(bodyText) || {}; } catch (_) {}
+  const code = body.code || "";
+  const detalle = (body.message || body.details || body.hint || "").trim();
+
+  // Códigos de Postgres (SQLSTATE)
+  if (code === "23505") return "Ya existe un registro con ese dato (posible duplicado).";
+  if (code === "23503") return "No se puede completar: falta un registro relacionado.";
+  if (code === "23502") return "Falta un campo obligatorio.";
+  if (code === "23514") return detalle
+    ? `Valor fuera de rango: ${detalle}`
+    : "Un valor ingresado está fuera del rango permitido.";
+  if (code === "42501" || status === 403) return "No tienes permiso para realizar esta acción.";
+
+  // Estados HTTP
+  if (status === 401) return "Sesión expirada. Vuelve a iniciar sesión.";
+  if (status === 404) return "No se encontró el recurso solicitado.";
+  if (status === 409) return "Conflicto: el registro ya existe o fue modificado por otra persona.";
+  if (status === 413) return "El contenido es demasiado grande.";
+  if (status >= 500) return "Error del servidor. Intenta nuevamente en unos momentos.";
+  if (status === 400 && detalle) return detalle.length > 140 ? detalle.slice(0, 140) + "…" : detalle;
+
+  return `No se pudo ${_verbo(method)} la información (error ${status}).`;
+}
+
 export const sb = async (endpoint, options = {}, token = null, _retry = true) => {
   const auth = getToken() || token;
   const headers = { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Prefer": "return=representation" };
@@ -109,9 +137,11 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
     }
     if (!res.ok) {
       const e = await res.text();
-      console.error(`Supabase ${options.method || "GET"} error ${res.status}:`, e);
-      if (typeof window !== "undefined" && window.__toastError) {
-        window.__toastError(`Error ${res.status} al ${options.method === "POST" ? "guardar" : options.method === "PATCH" ? "actualizar" : "cargar"} datos`);
+      const metodo = options.method || "GET";
+      console.error(`Supabase ${metodo} error ${res.status}:`, e);
+      // No molestar con toasts en lecturas de fondo silenciosas (polling/realtime)
+      if (!(metodo === "GET" && options._silent) && typeof window !== "undefined" && window.__toastError) {
+        window.__toastError(mensajeError(res.status, e, metodo));
       }
       return null;
     }
