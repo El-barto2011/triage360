@@ -3,10 +3,11 @@ import { sb } from "../../config/supabase";
 import { C } from "../../config/theme";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { AlertTriangle, Clock, RefreshCw } from "lucide-react";
+import { AlertTriangle, Clock, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "../ui/button";
 import { toast } from "../ui/use-toast";
 import { useEvento } from "../common/SelectorEvento";
+import { subscribeAtenciones } from "../../config/realtime";
 
 const TRIAJE_CONFIG = {
   ROJO:     { color: "#ef4444", emoji: "🔴", label: "URGENTE",   orden: 1, maxEspera: 5   },
@@ -19,13 +20,27 @@ export default function ColaTriaje({ usuario }) {
   const [cola,    setCola]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
+  const [enVivo,  setEnVivo]  = useState(false);
   const alertasAnteriores = useRef(0);
   const { eventoActual } = useEvento();
 
   useEffect(() => {
     cargarCola();
+
+    // Realtime: refresco instantáneo al crearse/editarse una atención del evento.
+    const cancelar = subscribeAtenciones(
+      usuario?.token,
+      eventoActual,
+      () => cargarCola(),
+      (estado) => setEnVivo(estado === "SUBSCRIBED"),
+    );
+
+    // Polling de respaldo (redes inestables en cancha): recalcula tiempos de espera
+    // y cubre el caso de que el websocket se caiga.
     const interval = setInterval(cargarCola, 30000);
-    return () => clearInterval(interval);
+
+    return () => { cancelar(); clearInterval(interval); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario, eventoActual]);
 
   const cargarCola = async () => {
@@ -87,10 +102,20 @@ export default function ColaTriaje({ usuario }) {
             <div>
               <h2 className="text-xl font-extrabold flex items-center gap-2" style={{ color: C.red }}>
                 <AlertTriangle size={18} /> Cola de Triaje
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
+                  padding: "2px 8px", borderRadius: 999,
+                  color: enVivo ? "#10b981" : C.textMuted,
+                  background: enVivo ? "#10b98115" : C.surface2,
+                  border: `1px solid ${enVivo ? "#10b98140" : C.border}`,
+                }}>
+                  {enVivo ? <Wifi size={11} /> : <WifiOff size={11} />}
+                  {enVivo ? "EN VIVO" : "Reconectando…"}
+                </span>
               </h2>
               <p className="text-xs mt-1" style={{ color: C.textMuted }}>
-                Pacientes de hoy ordenados por urgencia · Auto-actualiza cada 30 seg
-                {ultimaActualizacion && ` · Última actualización: ${ultimaActualizacion.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
+                Pacientes de hoy ordenados por urgencia · {enVivo ? "Actualización instantánea" : "Auto-actualiza cada 30 seg"}
+                {ultimaActualizacion && ` · Última: ${ultimaActualizacion.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={cargarCola} disabled={loading}>
