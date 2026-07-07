@@ -31,6 +31,7 @@ import { Configuracion } from "./components/admin/Configuracion";
 import { LogsAuditoria } from "./components/admin/LogsAuditoria";
 import { EventoProvider, SelectorEvento } from "./components/common/SelectorEvento";
 import { HistorialPaciente } from "./components/pacientes/HistorialPaciente";
+import { GestionPacientes } from "./components/pacientes/GestionPacientes";
 import { HistorialMedicamentos } from "./components/atenciones/HistorialMedicamentos";
 import { Toaster } from "./components/ui/toaster";
 import { ConfirmHost } from "./components/ui/confirm";
@@ -50,6 +51,7 @@ const PERMISOS_TAB = {
   configuracion:     (_u, admin) => admin,
   historialMeds:     (_u, admin) => admin,
   logsAuditoria:     (_u, admin) => admin,
+  gestionPacientes:  (_u, admin) => admin,
   // Médico + admin
   atencionMedica:    (u, admin) => admin || u?.profesion === "Médico",
   colaTriaje:        (u, admin) => admin || u?.profesion === "Médico",
@@ -245,6 +247,7 @@ export default function App() {
     ]},
     { id: "g-pacientes", label: "Pacientes", items: [
       { id: "historialPaciente", label: "Historial Paciente", icon: "med" },
+      esAdmin && { id: "gestionPacientes", label: "Gestión / Duplicados", icon: "med" },
     ]},
     { id: "g-admin", label: "Administración", items: [
       esAdmin && { id: "eventos", label: "Eventos", icon: "event" },
@@ -502,6 +505,15 @@ export default function App() {
               <div style={S.subtitle}>Busca todas las atenciones de un paciente por RUT o Pasaporte</div>
             </div>
             <HistorialPaciente usuario={usuario} />
+          </div>
+        )}
+        {tab === "gestionPacientes" && tienePermiso("gestionPacientes", usuario, esAdmin) && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={S.title}>Gestión de Pacientes</div>
+              <div style={S.subtitle}>Detecta y fusiona registros duplicados de pacientes</div>
+            </div>
+            <GestionPacientes usuario={usuario} />
           </div>
         )}
         {!tienePermiso(tab, usuario, esAdmin) && <SinPermiso />}

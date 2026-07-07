@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { toast } from "../ui/use-toast";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { C } from "../../config/theme";
 import { sb, getToken } from "../../config/supabase";
 import {
@@ -347,7 +347,7 @@ export function VistaReportes({ usuario, esAdmin }) {
     doc.setFont("helvetica", "bold");
     doc.text("Resumen General", 14, y);
     y += 4;
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [["Tipo de Atención", "Total"]],
       body: [
@@ -369,7 +369,7 @@ export function VistaReportes({ usuario, esAdmin }) {
       doc.setFont("helvetica", "bold");
       doc.text("Atenciones Médicas", 14, y);
       y += 4;
-      doc.autoTable({
+      autoTable(doc, {
         startY: y,
         head: [["Paciente", "Triaje", "Motivo", "Médico", "Fecha"]],
         body: datosReporte.atencionesMed.map(a => [
@@ -393,7 +393,7 @@ export function VistaReportes({ usuario, esAdmin }) {
       doc.setFont("helvetica", "bold");
       doc.text("Atenciones de Kinesiología", 14, y);
       y += 4;
-      doc.autoTable({
+      autoTable(doc, {
         startY: y,
         head: [["Paciente", "Kinesiólogo/a", "Motivo", "Fecha"]],
         body: datosReporte.atencionesKine.map(a => [
@@ -416,7 +416,7 @@ export function VistaReportes({ usuario, esAdmin }) {
       doc.setFont("helvetica", "bold");
       doc.text("Medicamentos Prescritos", 14, y);
       y += 4;
-      doc.autoTable({
+      autoTable(doc, {
         startY: y,
         head: [["Medicamento", "Vía", "Cantidad"]],
         body: datosReporte.medicamentosUsados.map(m => [m.nombre, m.via || "", m.cantidad]),
@@ -434,7 +434,7 @@ export function VistaReportes({ usuario, esAdmin }) {
       doc.setFont("helvetica", "bold");
       doc.text("Insumos Utilizados", 14, y);
       y += 4;
-      doc.autoTable({
+      autoTable(doc, {
         startY: y,
         head: [["Insumo", "Cantidad", "Unidad"]],
         body: datosReporte.insumosUsados.map(i => [i.nombre, i.cantidad, i.unidad || ""]),

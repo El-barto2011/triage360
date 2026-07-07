@@ -4,6 +4,8 @@ import { sb } from '../../config/supabase'
 import { toast } from '../ui/use-toast'
 import { normIdent, esPasaporte } from '../../config/pacientes'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 /* ── Helpers de presentación ──────────────────────────────── */
 const TIPO_COLORES = { 'Médica': C.red, 'Kinesiología': C.green, 'Masoterapia': C.purple }
@@ -246,6 +248,68 @@ export function HistorialPaciente({ usuario }) {
   const filas      = filtroTipo === 'Todos' ? historial : historial.filter(a => a.tipo === filtroTipo)
   const contadores = historial.reduce((acc, a) => { acc[a.tipo] = (acc[a.tipo] || 0) + 1; return acc }, {})
 
+  /* ── Exportar historial a PDF (derivaciones, respaldo clínico) ── */
+  const exportarPDF = () => {
+    if (historial.length === 0) return
+    const doc = new jsPDF()
+    const pageW = doc.internal.pageSize.getWidth()
+    let y = 16
+
+    doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 194, 168)
+    doc.text('TRIAGE360', pageW / 2, y, { align: 'center' })
+    y += 7
+    doc.setFontSize(13); doc.setTextColor(30, 30, 30)
+    doc.text('Historial clínico del paciente', pageW / 2, y, { align: 'center' })
+    y += 9
+
+    // Datos del paciente
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(0)
+    doc.text(pacienteInfo?.nombre || '—', 14, y); y += 6
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80)
+    const ident = pacienteDB?.identificacion || pacienteInfo?.id || ''
+    doc.text(`Identificación: ${ident}${pacienteInfo?.edad ? `   ·   Edad: ${pacienteInfo.edad} años` : ''}`, 14, y); y += 5
+    if (pacienteDB?.alergias) {
+      doc.setTextColor(200, 0, 0); doc.setFont('helvetica', 'bold')
+      doc.text(`ALERGIAS: ${pacienteDB.alergias}`, 14, y); y += 5
+      doc.setTextColor(80); doc.setFont('helvetica', 'normal')
+    }
+    if (pacienteDB?.antecedentes) {
+      doc.text(`Antecedentes: ${pacienteDB.antecedentes}`, 14, y); y += 5
+    }
+    doc.setTextColor(120); doc.setFontSize(8)
+    doc.text(`Generado el ${new Date().toLocaleString('es-CL')} · ${historial.length} atención(es)`, 14, y)
+    doc.setTextColor(0); y += 6
+
+    // Tabla cronológica
+    const body = historial.map(a => {
+      const prof = a.medico_nombre || a.enfermero_nombre || a.paramedico_nombre || a.kinesiologo_nombre || a.masoterapeuta_nombre || '—'
+      const detalle = [
+        a.motivo_consulta && `Motivo: ${a.motivo_consulta}`,
+        a.diagnostico && `Dx: ${a.diagnostico}`,
+        a.tratamiento && `Tto: ${a.tratamiento}`,
+        a.tratamiento_realizado && `Tto: ${a.tratamiento_realizado}`,
+        (a.dolor_inicial != null || a.dolor_posterior != null) && `Dolor: ${a.dolor_inicial ?? '?'}→${a.dolor_posterior ?? '?'}/10`,
+        Array.isArray(a.zonas_trabajadas) && a.zonas_trabajadas.length && `Zonas: ${a.zonas_trabajadas.join(', ')}`,
+        a.codigo_triaje && a.tipo === 'Médica' && `Triaje: ${a.codigo_triaje}`,
+      ].filter(Boolean).join(' · ')
+      return [formatFecha(a.created_at), a.tipo, a.evento || '—', prof, detalle || '—']
+    })
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Fecha', 'Tipo', 'Evento', 'Profesional', 'Detalle clínico']],
+      body,
+      theme: 'striped',
+      headStyles: { fillColor: [0, 194, 168], fontSize: 8 },
+      styles: { fontSize: 7.5, cellPadding: 2, overflow: 'linebreak' },
+      columnStyles: { 0: { cellWidth: 26 }, 1: { cellWidth: 22 }, 2: { cellWidth: 30 }, 3: { cellWidth: 28 }, 4: { cellWidth: 'auto' } },
+      margin: { left: 14, right: 14 },
+    })
+
+    const slug = (pacienteInfo?.nombre || 'paciente').replace(/\s+/g, '_')
+    doc.save(`historial_${slug}_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
   return (
     <div>
 
@@ -281,6 +345,12 @@ export function HistorialPaciente({ usuario }) {
               <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
                 {pacienteInfo.id}{pacienteInfo.edad ? ` · ${pacienteInfo.edad} años` : ''}
               </div>
+              <button
+                onClick={exportarPDF}
+                style={{ ...S.btn('ghost'), fontSize: 11, padding: '4px 12px', marginTop: 8 }}
+              >
+                Exportar historial a PDF
+              </button>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {Object.entries(contadores).map(([tipo, count]) => (
