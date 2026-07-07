@@ -17,13 +17,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Separator } from "../ui/separator";
 import { cn } from "../../lib/utils";
 import { confirmDialog } from "../ui/confirm";
+import { selectCls } from "../common/FormControls";
 import {
   BarChart2, Download, Lock, Search, ArrowUpDown,
   Pill, Package, Stethoscope, Activity, Waves,
   FileSpreadsheet, FileText,
 } from "lucide-react";
-
-const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
 /* ── Reusable sortable TanStack table ─────────────────── */
 function DataTable({ data, columns, searchPlaceholder = "Buscar...", pageSize = 10 }) {
