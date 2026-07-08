@@ -76,37 +76,32 @@ export function VistaMasoterapiaMasiva({ usuario }) {
     }
   };
 
+  // Ajuste atómico vía RPC (evita perder cuentas con dos dispositivos simultáneos y nunca baja de 0)
+  const ajustarMasajes = async (delta) => {
+    if (!registroHoy) return;
+    const res = await sb("rpc/fn_ajustar_masajes", {
+      method: "POST",
+      body: JSON.stringify({ p_id: registroHoy.id, p_delta: delta })
+    }, usuario?.token);
+    // La RPC devuelve la fila actualizada (objeto) o un array según PostgREST
+    const fila = Array.isArray(res) ? res[0] : res;
+    if (fila && typeof fila === "object") {
+      setRegistroHoy(fila);
+      setHistorial(prev => prev.map(h => h.id === registroHoy.id ? fila : h));
+    }
+  };
+
   const sumarMasaje = async () => {
     if (!registroHoy) {
       await iniciarContador();
       return;
     }
-
-    const nuevoConteo = registroHoy.masajes_realizados + 1;
-    const res = await sb(`atenciones_masoterapia_masiva?id=eq.${registroHoy.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ masajes_realizados: nuevoConteo })
-    }, usuario?.token);
-
-    if (res) {
-      setRegistroHoy(res[0]);
-      setHistorial(prev => prev.map(h => h.id === registroHoy.id ? res[0] : h));
-    }
+    await ajustarMasajes(1);
   };
 
   const restarMasaje = async () => {
     if (!registroHoy || registroHoy.masajes_realizados === 0) return;
-
-    const nuevoConteo = registroHoy.masajes_realizados - 1;
-    const res = await sb(`atenciones_masoterapia_masiva?id=eq.${registroHoy.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ masajes_realizados: nuevoConteo })
-    }, usuario?.token);
-
-    if (res) {
-      setRegistroHoy(res[0]);
-      setHistorial(prev => prev.map(h => h.id === registroHoy.id ? res[0] : h));
-    }
+    await ajustarMasajes(-1);
   };
 
   const cambiarEvento = (nuevoEventoId) => {

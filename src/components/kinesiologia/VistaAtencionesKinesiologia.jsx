@@ -134,9 +134,11 @@ export function VistaAtencionesKinesiologia({ usuario }) {
         for (const insumo of form.insumos_usados || []) {
           const insumoEnBolso = insumos.find(i => i.nombre === insumo.nombre);
           if (insumoEnBolso) {
+            // Piso en 0: nunca dejar stock negativo (antes: stock - cantidad sin guarda)
+            const nuevoStock = Math.max(Number(insumoEnBolso.stock) - Number(insumo.cantidad || 0), 0);
             await sb(`insumos_kinesiologia?id=eq.${insumoEnBolso.id}`, {
               method: "PATCH",
-              body: JSON.stringify({ stock: insumoEnBolso.stock - insumo.cantidad }),
+              body: JSON.stringify({ stock: nuevoStock }),
             }, usuario?.token);
           }
         }
@@ -173,12 +175,17 @@ export function VistaAtencionesKinesiologia({ usuario }) {
   const ajustarStockInsumo = async (insumo) => {
     const nuevoStock = prompt(`Stock actual: ${insumo.stock} ${insumo.unidad}\nNuevo stock:`, insumo.stock);
     if (nuevoStock === null) return;
+    const parsed = parseFloat(nuevoStock);
+    if (isNaN(parsed) || parsed < 0) {
+      toast({ title: "Valor inválido", description: "El stock debe ser un número mayor o igual a 0.", variant: "destructive" });
+      return;
+    }
     const res = await sb(`insumos_kinesiologia?id=eq.${insumo.id}`, {
-      method: "PATCH", body: JSON.stringify({ stock: parseFloat(nuevoStock) }),
+      method: "PATCH", body: JSON.stringify({ stock: parsed }),
     }, usuario?.token);
     if (res) {
-      setInsumos(prev => prev.map(i => i.id === insumo.id ? { ...i, stock: parseFloat(nuevoStock) } : i));
-      toast({ title: "Stock actualizado", description: `${insumo.nombre}: ${insumo.stock} → ${nuevoStock} ${insumo.unidad}`, variant: "success" });
+      setInsumos(prev => prev.map(i => i.id === insumo.id ? { ...i, stock: parsed } : i));
+      toast({ title: "Stock actualizado", description: `${insumo.nombre}: ${insumo.stock} → ${parsed} ${insumo.unidad}`, variant: "success" });
     }
   };
 

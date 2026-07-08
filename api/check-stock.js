@@ -86,31 +86,28 @@ export default async function handler(req, res) {
     // PARTE 2: VENCIMIENTOS PROXIMOS (30 dias)
     const headers = { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` };
 
-    const [resContProx, resInsProx, resMedProx, resContVenc, resInsVenc, resMedVenc] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/contenedores_medicamentos?select=nombre_insumo,fecha_vencimiento,nombre,tipo&fecha_vencimiento=lte.${en30diasStr}&fecha_vencimiento=gte.${hoyStr}`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/insumos_carro?select=nombre_insumo,fecha_vencimiento,cajon&fecha_vencimiento=lte.${en30diasStr}&fecha_vencimiento=gte.${hoyStr}`, { headers }),
+    // NOTA: la tabla `insumos_carro` no existe en la base — los insumos de carro viven en
+    // `contenedores_medicamentos` (tipo='carro'). Se eliminaron esas 2 consultas fantasma
+    // que fallaban silenciosamente. Ahora los vencimientos salen de contenedores + medicamentos.
+    const [resContProx, resMedProx, resContVenc, resMedVenc] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/contenedores_medicamentos?select=nombre_insumo,fecha_vencimiento,nombre,tipo,cajon&fecha_vencimiento=lte.${en30diasStr}&fecha_vencimiento=gte.${hoyStr}`, { headers }),
       fetch(`${SUPABASE_URL}/rest/v1/medicamentos?select=nombre,vencimiento,caja&vencimiento=lte.${en30diasStr}&vencimiento=gte.${hoyStr}`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/contenedores_medicamentos?select=nombre_insumo,fecha_vencimiento,nombre,tipo&fecha_vencimiento=lt.${hoyStr}`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/insumos_carro?select=nombre_insumo,fecha_vencimiento,cajon&fecha_vencimiento=lt.${hoyStr}`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/contenedores_medicamentos?select=nombre_insumo,fecha_vencimiento,nombre,tipo,cajon&fecha_vencimiento=lt.${hoyStr}`, { headers }),
       fetch(`${SUPABASE_URL}/rest/v1/medicamentos?select=nombre,vencimiento,caja&vencimiento=lt.${hoyStr}`, { headers })
     ]);
 
     const contProx = resContProx.ok ? await resContProx.json() : [];
-    const insProx = resInsProx.ok ? await resInsProx.json() : [];
     const medProx = resMedProx.ok ? await resMedProx.json() : [];
     const contVenc = resContVenc.ok ? await resContVenc.json() : [];
-    const insVenc = resInsVenc.ok ? await resInsVenc.json() : [];
     const medVenc = resMedVenc.ok ? await resMedVenc.json() : [];
 
     const proximosVencer = [
-      ...contProx.map(i => ({ nombre: i.nombre_insumo || i.nombre, vencimiento: i.fecha_vencimiento, ubicacion: i.nombre || '-', tipo: 'Contenedor' })),
-      ...insProx.map(i => ({ nombre: i.nombre_insumo, vencimiento: i.fecha_vencimiento, ubicacion: i.cajon || '-', tipo: 'Carro' })),
+      ...contProx.map(i => ({ nombre: i.nombre_insumo || i.nombre, vencimiento: i.fecha_vencimiento, ubicacion: `${i.nombre || '-'}${i.cajon ? ' · ' + i.cajon : ''}`, tipo: i.tipo === 'bolso' ? 'Bolso' : 'Carro' })),
       ...medProx.map(i => ({ nombre: i.nombre, vencimiento: i.vencimiento, ubicacion: i.caja || '-', tipo: 'Medicamento' }))
     ].sort((a, b) => new Date(a.vencimiento) - new Date(b.vencimiento));
 
     const yaVencidos = [
-      ...contVenc.map(i => ({ nombre: i.nombre_insumo || i.nombre, vencimiento: i.fecha_vencimiento, ubicacion: i.nombre || '-', tipo: 'Contenedor' })),
-      ...insVenc.map(i => ({ nombre: i.nombre_insumo, vencimiento: i.fecha_vencimiento, ubicacion: i.cajon || '-', tipo: 'Carro' })),
+      ...contVenc.map(i => ({ nombre: i.nombre_insumo || i.nombre, vencimiento: i.fecha_vencimiento, ubicacion: `${i.nombre || '-'}${i.cajon ? ' · ' + i.cajon : ''}`, tipo: i.tipo === 'bolso' ? 'Bolso' : 'Carro' })),
       ...medVenc.map(i => ({ nombre: i.nombre, vencimiento: i.vencimiento, ubicacion: i.caja || '-', tipo: 'Medicamento' }))
     ];
 
