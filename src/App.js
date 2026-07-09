@@ -345,7 +345,7 @@ export default function App() {
               <div style={S.title}>Atenciones Mensuales 🏥</div>
               <div style={S.subtitle}>Registro mensual · Todas las atenciones del sistema</div>
             </div>
-            <VistaAtenciones carros={carros} usuario={usuario} permisos={permisos} industria={industria} />
+            <VistaAtenciones usuario={usuario} industria={industria} />
           </div>
         )}
         {tab === "bolsoKine" && tienePermiso("bolsoKine", usuario, esAdmin) && (

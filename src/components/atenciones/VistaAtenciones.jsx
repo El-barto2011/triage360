@@ -1,16 +1,12 @@
 import { useState, useEffect } from "react";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
-import { TIPOS_ATENCION } from "../../config/constants";
 import { PROFESIONES } from "../../config/permisos";
 import { useEvento } from "../common/SelectorEvento";
-import { toast } from "../ui/use-toast";
 
-export function VistaAtenciones({ carros, usuario, permisos, industria }) {
+export function VistaAtenciones({ usuario, industria }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({});
   const [filtroEvento, setFiltroEvento] = useState("Todos");
   const [filtroProfesion, setFiltroProfesion] = useState("Todas");
   const [fichaVer, setFichaVer] = useState(null);
@@ -70,65 +66,6 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
     const matchProf = filtroProfesion === "Todas" || a.profesion_real === filtroProfesion;
     return matchEv && matchProf;
   });
-
-  const F = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const abrirNueva = () => {
-    const ahora = new Date();
-    const hh = String(ahora.getHours()).padStart(2, "0");
-    const mm = String(ahora.getMinutes()).padStart(2, "0");
-    setForm({
-      evento: carros.find(c => c.evento_asignado !== "Sin asignar")?.evento_asignado || "",
-      fecha: ahora.toISOString().slice(0, 10),
-      paciente: "", rut: "", edad: "",
-      profesion: "Médico", profesional: "",
-      tipo: "Consulta general",
-      hora_ingreso: `${hh}:${mm}`, hora_egreso: "",
-      diagnostico: "", tratamiento: "",
-      insumos_usados: "", derivacion: "No", observaciones: ""
-    });
-    setModal("nueva");
-  };
-
-  const guardar = async () => {
-    if (!form.paciente) {
-      toast({ title: "Error de validación", description: "Falta el nombre del paciente", variant: "destructive" });
-      return;
-    }
-    if (!form.profesional) {
-      toast({ title: "Error de validación", description: "Falta el nombre del profesional", variant: "destructive" });
-      return;
-    }
-    const datos = { ...form, edad: +form.edad, usuario_email: usuario?.email };
-    delete datos.id;
-    try {
-      if (modal === "nueva") {
-        const res = await sb("atenciones", { method: "POST", body: JSON.stringify(datos) }, usuario?.token);
-        if (res) {
-          setAtenciones(prev => [res[0], ...prev]);
-          toast({ title: "Atención registrada", description: `Paciente: ${form.paciente}` });
-        } else {
-          throw new Error("Sin respuesta");
-        }
-      } else {
-        const res = await sb(`atenciones?id=eq.${form.id}`, { method: "PATCH", body: JSON.stringify(datos) }, usuario?.token);
-        if (res) {
-          setAtenciones(prev => prev.map(a => a.id === form.id ? res[0] : a));
-          toast({ title: "Atención actualizada" });
-        } else {
-          throw new Error("Sin respuesta");
-        }
-      }
-      setModal(null);
-    } catch {
-      toast({ title: "Error al guardar", description: "No se pudo registrar la atención", variant: "destructive" });
-    }
-  };
-
-  const eliminar = async (id) => {
-    await sb(`atenciones?id=eq.${id}`, { method: "DELETE" }, usuario?.token);
-    setAtenciones(prev => prev.filter(a => a.id !== id));
-  };
 
   const coloresProfesion = {
     "Médico": C.red, "Enfermero/a": C.blue, "Paramédico": C.orange,
@@ -247,120 +184,6 @@ export function VistaAtenciones({ carros, usuario, permisos, industria }) {
           </table>
         </div>
       </div>
-
-      {/* Modal nueva/editar atención */}
-      {modal && (
-        <div style={S.modal} onClick={() => setModal(null)}>
-          <div style={{ ...S.modalBox, width: 620 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-              <div style={{ fontSize: 17, fontWeight: 700 }}>{modal === "nueva" ? "Nueva Atención" : "Editar Atención"}</div>
-              <button aria-label="Cerrar modal" style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setModal(null)}><Icon name="close" size={20} color={C.textMuted} /></button>
-            </div>
-
-            {/* Evento */}
-            <div style={{ background: C.surface2, borderRadius: 8, padding: "12px 16px", marginBottom: 18, fontSize: 13, color: C.textMuted }}>
-              <div style={S.formLabel}>Evento</div>
-              <select style={{ ...S.select, width: "100%" }} value={form.evento || ""} onChange={e => F("evento", e.target.value)}>
-                {carros.filter(c => c.evento_asignado !== "Sin asignar").map(c => (
-                  <option key={c.id}>{c.evento_asignado}</option>
-                ))}
-                <option value="Otro">Otro</option>
-              </select>
-            </div>
-
-            {/* Paciente */}
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Datos del Paciente</div>
-            <div style={S.grid2}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Nombre completo</label>
-                <input style={S.input} value={form.paciente || ""} onChange={e => F("paciente", e.target.value)} placeholder="Nombre del paciente" />
-              </div>
-              <div style={S.grid2}>
-                <div style={S.formRow}>
-                  <label style={S.formLabel}>RUT</label>
-                  <input style={S.input} value={form.rut || ""} onChange={e => F("rut", e.target.value)} placeholder="12.345.678-9" />
-                </div>
-                <div style={S.formRow}>
-                  <label style={S.formLabel}>Edad</label>
-                  <input style={S.input} type="number" value={form.edad || ""} onChange={e => F("edad", e.target.value)} placeholder="0" />
-                </div>
-              </div>
-            </div>
-
-            {/* Profesional */}
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Profesional que Atiende</div>
-            <div style={S.grid2}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Profesión</label>
-                <select style={{ ...S.select, width: "100%" }} value={form.profesion || "Médico"} onChange={e => F("profesion", e.target.value)}>
-                  {PROFESIONES.map(p => <option key={p}>{p}</option>)}
-                </select>
-              </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Nombre del profesional</label>
-                <input style={S.input} value={form.profesional || ""} onChange={e => F("profesional", e.target.value)} placeholder="Nombre completo" />
-              </div>
-            </div>
-
-            {/* Atención */}
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Datos de la Atención</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Tipo</label>
-                <select style={{ ...S.select, width: "100%" }} value={form.tipo || ""} onChange={e => F("tipo", e.target.value)}>
-                  {(industria?.tipos_atencion || TIPOS_ATENCION).map(t => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Hora ingreso</label>
-                <input style={S.input} type="time" value={form.hora_ingreso || ""} onChange={e => F("hora_ingreso", e.target.value)} />
-              </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Hora egreso</label>
-                <input style={S.input} type="time" value={form.hora_egreso || ""} onChange={e => F("hora_egreso", e.target.value)} />
-              </div>
-            </div>
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Diagnóstico / Motivo de consulta</label>
-              <input style={S.input} value={form.diagnostico || ""} onChange={e => F("diagnostico", e.target.value)} placeholder="Ej: Contusión rodilla derecha" />
-            </div>
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Tratamiento / Procedimiento realizado</label>
-              <input style={S.input} value={form.tratamiento || ""} onChange={e => F("tratamiento", e.target.value)} placeholder="Ej: Inmovilización, frío local" />
-            </div>
-            <div style={S.formRow}>
-              <label style={S.formLabel}>Insumos utilizados</label>
-              <input style={S.input} value={form.insumos_usados || ""} onChange={e => F("insumos_usados", e.target.value)} placeholder="Ej: Venda x1, gasas x4" />
-            </div>
-            {permisos?.recetarMedicamentos ? (
-              <div style={S.formRow}>
-                <label style={S.formLabel}>💊 Medicamentos recetados</label>
-                <input style={S.input} value={form.medicamentos_recetados || ""} onChange={e => F("medicamentos_recetados", e.target.value)} placeholder="Ej: Ibuprofeno 600mg, Paracetamol 500mg" />
-              </div>
-            ) : (
-              <div style={{ background: C.yellowDim, border: `1px solid ${C.yellow}30`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.yellow, marginBottom: 16 }}>
-                ⚠️ Solo el médico puede recetar medicamentos
-              </div>
-            )}
-            <div style={S.grid2}>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Derivación</label>
-                <select style={{ ...S.select, width: "100%" }} value={form.derivacion || "No"} onChange={e => F("derivacion", e.target.value)}>
-                  {["No", "Hospital", "Clínica", "SAPU", "Ambulancia", "Otro"].map(d => <option key={d}>{d}</option>)}
-                </select>
-              </div>
-              <div style={S.formRow}>
-                <label style={S.formLabel}>Observaciones</label>
-                <input style={S.input} value={form.observaciones || ""} onChange={e => F("observaciones", e.target.value)} placeholder="Opcional" />
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-              <button style={S.btn("ghost")} onClick={() => setModal(null)}>Cancelar</button>
-              <button style={S.btn("primary")} onClick={guardar}>Guardar atención</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal ficha completa */}
       {fichaVer && (() => {
