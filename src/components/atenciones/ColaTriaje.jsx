@@ -8,6 +8,7 @@ import { Button } from "../ui/button";
 import { toast } from "../ui/use-toast";
 import { useEvento } from "../common/SelectorEvento";
 import { subscribeAtenciones } from "../../config/realtime";
+import { inicioDiaLocalISO } from "../../config/fechas";
 
 const TRIAJE_CONFIG = {
   ROJO:     { color: "#ef4444", emoji: "🔴", label: "URGENTE",   orden: 1, maxEspera: 5   },
@@ -45,11 +46,13 @@ export default function ColaTriaje({ usuario }) {
 
   const cargarCola = async () => {
     try {
-      const hoy = new Date().toISOString().split("T")[0];
+      // Inicio del día en hora LOCAL (antes era medianoche UTC: a las 20–21 h de Chile
+      // la cola se vaciaba y los pacientes en espera desaparecían de la pantalla).
+      const desde = encodeURIComponent(inicioDiaLocalISO());
       const filtroEvento = eventoActual ? `&evento_id=eq.${eventoActual}` : "";
 
       const atenciones = await sb(
-        `atenciones_medicas?created_at=gte.${hoy}T00:00:00&order=created_at.asc&limit=200${filtroEvento}`,
+        `atenciones_medicas?created_at=gte.${desde}&deleted_at=is.null&order=created_at.asc&limit=200${filtroEvento}`,
         {}, usuario?.token
       );
 

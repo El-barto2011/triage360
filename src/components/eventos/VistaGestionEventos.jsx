@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { C, S, Icon } from "../../config/theme";
 import { sb, getToken } from "../../config/supabase";
 import { toast } from "../ui/use-toast";
+import { hoyLocal } from "../../config/fechas";
 
 export function VistaGestionEventos({ usuario }) {
   const [eventos, setEventos] = useState([]);
@@ -21,7 +22,7 @@ export function VistaGestionEventos({ usuario }) {
 
       if (evs) {
         // Auto-cerrar eventos que ya pasaron su fecha_fin
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = hoyLocal();
         const eventosActualizados = [];
 
         for (const ev of evs) {
@@ -48,7 +49,7 @@ export function VistaGestionEventos({ usuario }) {
   const abrirNuevoEvento = () => {
     setForm({
       nombre_evento: "",
-      fecha_evento: new Date().toISOString().split('T')[0],
+      fecha_evento: hoyLocal(),
       fecha_fin: "",
       hora_inicio: "",
       hora_fin: "",
@@ -210,6 +211,10 @@ export function VistaGestionEventos({ usuario }) {
             evento: {
               nombre: evento.nombre_evento,
               fecha: evento.fecha_evento,
+              fecha_fin: evento.fecha_fin || null,
+              hora_inicio: evento.hora_inicio ? String(evento.hora_inicio).slice(0, 5) : null,
+              hora_fin: evento.hora_fin ? String(evento.hora_fin).slice(0, 5) : null,
+              observaciones: evento.observaciones || null,
               ubicacion: evento.ubicacion || "Por confirmar",
               carros: evento.carros_asignados || [],
               bolsos: evento.bolsos_asignados || []

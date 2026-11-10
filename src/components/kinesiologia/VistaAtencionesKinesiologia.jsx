@@ -15,6 +15,7 @@ import { toast } from "../ui/use-toast";
 import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
+import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 export function VistaAtencionesKinesiologia({ usuario }) {
   const [atenciones, setAtenciones] = useState([]);
@@ -66,7 +67,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
   const abrirNuevaAtencion = () => {
     const ahora = new Date();
     setForm({
-      fecha_atencion: ahora.toISOString().split("T")[0],
+      fecha_atencion: fechaLocal(ahora),
       hora_atencion:  ahora.toTimeString().slice(0, 5),
       paciente_nombre: "", paciente_rut: "", paciente_edad: "",
       categoria_paciente: "Jugador",
@@ -191,9 +192,9 @@ export function VistaAtencionesKinesiologia({ usuario }) {
 
   if (loading) return <div className="p-10 text-center text-sm" style={{ color: C.textMuted }}>Cargando atenciones...</div>;
 
-  const hoy = new Date().toISOString().split("T")[0];
-  const atencionesHoy      = atenciones.filter(a => new Date(a.created_at).toISOString().split("T")[0] === hoy);
-  const atencionesAnteriores = atenciones.filter(a => new Date(a.created_at).toISOString().split("T")[0] !== hoy);
+  const hoy = hoyLocal();
+  const atencionesHoy      = atenciones.filter(a => fechaLocal(a.created_at) === hoy);
+  const atencionesAnteriores = atenciones.filter(a => fechaLocal(a.created_at) !== hoy);
   const insumosAlerta      = insumos.filter(i => i.stock <= i.minimo);
 
   return (

@@ -6,6 +6,7 @@ import { normIdent, esPasaporte } from '../../config/pacientes'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { hoyLocal } from "../../config/fechas";
 
 /* ── Helpers de presentación ──────────────────────────────── */
 const TIPO_COLORES = { 'Médica': C.red, 'Kinesiología': C.green, 'Masoterapia': C.purple }
@@ -307,7 +308,7 @@ export function HistorialPaciente({ usuario }) {
     })
 
     const slug = (pacienteInfo?.nombre || 'paciente').replace(/\s+/g, '_')
-    doc.save(`historial_${slug}_${new Date().toISOString().split('T')[0]}.pdf`)
+    doc.save(`historial_${slug}_${hoyLocal()}.pdf`)
   }
 
   return (

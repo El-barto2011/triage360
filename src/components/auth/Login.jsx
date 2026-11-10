@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, S } from "../../config/theme";
-import { SUPABASE_URL, SUPABASE_KEY, saveSession } from "../../config/supabase";
+import { SUPABASE_URL, SUPABASE_KEY, saveSession, clearSession } from "../../config/supabase";
 
 export function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -37,6 +37,13 @@ export function Login({ onLogin }) {
       });
       const perfiles = await perfilRes.json();
       const perfil = perfiles?.[0] || {};
+      // Usuario desactivado o eliminado por el administrador: no entra a la app
+      if (perfil.activo === false || perfil.deleted_at) {
+        clearSession();
+        setError("Tu cuenta está desactivada. Contacta al administrador.");
+        setLoading(false);
+        return;
+      }
       onLogin({
         token,
         id: perfil.id,
@@ -107,7 +114,7 @@ export function Login({ onLogin }) {
           {loading ? "Ingresando..." : "Ingresar"}
         </button>
         <div style={{ marginTop: 20, padding: "12px 14px", background: C.surface2, borderRadius: 8, fontSize: 12, color: C.textMuted }}>
-          <strong>💡 Primera vez:</strong> Los usuarios son creados por el administrador en Supabase → Authentication → Users
+          <strong>💡 ¿Primera vez o olvidaste tu contraseña?</strong> Pide tu acceso al administrador de tu organización.
         </div>
       </div>
     </div>

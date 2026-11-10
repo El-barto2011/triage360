@@ -16,6 +16,7 @@ import { useEvento } from "../common/SelectorEvento";
 import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
+import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 const TRIAJE = [
   { codigo: "VERDE",    color: "#10b981", emoji: "🟢", label: "VERDE",    espera: 60   },
@@ -79,7 +80,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
     const ahora = new Date();
     const eventoPresel = eventoActual ? eventos.find(e => e.id === eventoActual) : eventos[0];
     setForm({
-      fecha_atencion: ahora.toISOString().split("T")[0],
+      fecha_atencion: fechaLocal(ahora),
       hora_atencion:  ahora.toTimeString().slice(0, 5),
       paciente_nombre: "", paciente_rut: "", paciente_edad: "",
       categoria_paciente: "Jugador",
@@ -194,9 +195,9 @@ export function VistaAtencionesEnfermeria({ usuario }) {
 
   if (loading) return <div className="p-10 text-center text-sm" style={{ color: C.textMuted }}>Cargando atenciones...</div>;
 
-  const hoy = new Date().toISOString().split("T")[0];
-  const atencionesHoy        = atenciones.filter(a => new Date(a.created_at).toISOString().split("T")[0] === hoy);
-  const atencionesAnteriores = atenciones.filter(a => new Date(a.created_at).toISOString().split("T")[0] !== hoy);
+  const hoy = hoyLocal();
+  const atencionesHoy        = atenciones.filter(a => fechaLocal(a.created_at) === hoy);
+  const atencionesAnteriores = atenciones.filter(a => fechaLocal(a.created_at) !== hoy);
   const triajeColor = (c) => c === "ROJO" ? "#ef4444" : c === "AMARILLO" ? "#f59e0b" : c === "NEGRO" ? "#374151" : "#10b981";
 
   return (

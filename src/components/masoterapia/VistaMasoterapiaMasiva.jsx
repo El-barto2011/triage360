@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { toast } from "../ui/use-toast";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
+import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 export function VistaMasoterapiaMasiva({ usuario }) {
   const [registroHoy, setRegistroHoy] = useState(null);
@@ -39,10 +40,10 @@ export function VistaMasoterapiaMasiva({ usuario }) {
 
     if (hist) {
       setHistorial(hist);
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = hoyLocal();
       const idActivo = eventoSeleccionado ?? evs?.[0]?.id;
       const regHoy = hist.find(h => {
-        const fechaReg = new Date(h.created_at).toISOString().split('T')[0];
+        const fechaReg = fechaLocal(h.created_at);
         return fechaReg === hoy && h.evento_id === idActivo;
       });
       setRegistroHoy(regHoy || null);
@@ -62,7 +63,7 @@ export function VistaMasoterapiaMasiva({ usuario }) {
       masoterapeuta_nombre: usuario.nombre || usuario.email,
       evento_id: eventoSeleccionado,
       masajes_realizados: 0,
-      fecha: new Date().toISOString().split('T')[0]
+      fecha: hoyLocal()
     };
 
     const res = await sb("atenciones_masoterapia_masiva", {
@@ -106,9 +107,9 @@ export function VistaMasoterapiaMasiva({ usuario }) {
 
   const cambiarEvento = (nuevoEventoId) => {
     setEventoSeleccionado(nuevoEventoId);
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = hoyLocal();
     const regHoy = historial.find(h => {
-      const fechaReg = new Date(h.created_at).toISOString().split('T')[0];
+      const fechaReg = fechaLocal(h.created_at);
       return fechaReg === hoy && h.evento_id === nuevoEventoId;
     });
     setRegistroHoy(regHoy || null);
@@ -216,7 +217,7 @@ export function VistaMasoterapiaMasiva({ usuario }) {
         <div style={S.card}>
           <div style={{ fontWeight: 700, color: C.textMuted, marginBottom: 12 }}>Historial Reciente</div>
           {historial.slice(0, 10).map(reg => {
-            const esHoy = new Date(reg.created_at).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+            const esHoy = fechaLocal(reg.created_at) === hoyLocal();
             return (
               <div key={reg.id} style={{
                 padding: 12,

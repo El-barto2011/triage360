@@ -1,6 +1,6 @@
 # Memoria Técnica — TRIAGE360
-Última actualización: 2026-07-09 · Última operación: Fase 1 seguridad — H1 (.env) parchado y verificado en producción
-Próximo paso sugerido: Alfredo activa leaked password protection + evalúa repo privado → luego Fase 2: bug A (CRUD tabla `atenciones` inexistente)
+Última actualización: 2026-11-10 · Última operación: Reconocimiento completo #2 (código + BD + Vercel) + 10 arreglos en rama `claude/mejoras-app-2026-11` (sin tocar producción)
+Próximo paso sugerido: Alfredo revisa/mergea la rama → aprueba el SQL de seguridad entregado fuera del repo → hace el repo privado → decide pestaña "Mis Atenciones" de kinesiólogos
 
 ## Mapa funcional (Analista)
 - **Qué es**: SaaS de gestión clínica para eventos deportivos/masivos. Producción: triage360.vercel.app · Supabase `dnlvzwrujosuckdzmffx` · Vercel auto-deploy desde main · Resend (sa-east-1, sgtrumao.cl).
@@ -13,7 +13,10 @@ Próximo paso sugerido: Alfredo activa leaked password protection + evalúa repo
 
 ## Mapa estructural (Arquitecto)
 - **Refactor 2026-06-04**: App.js 625 líneas (router + nav + permisos) + ~45 componentes en `src/components/{admin,atenciones,auth,common,dashboard,eventos,inventario,kinesiologia,masoterapia,pacientes,reportes,ui}` + `src/config/` (constants, permisos, supabase, offlineQueue, realtime, theme, pacientes) + tests. Total ~13.5k líneas sin backup.
-- ⚠️ La skill `triage360-dev` está DESACTUALIZADA (describe monolito de 6.033 líneas y lista de tablas vieja). El README está al día.
+- ⚠️ La skill `triage360-dev` está DESACTUALIZADA (describe monolito de 6.033 líneas, lista de tablas vieja y da por pendiente el form de eventos con fecha_fin/hora_inicio/hora_fin/observaciones, que YA está implementado). El README está al día.
+- **2026-11-10**: 25 tablas (se sumaron `costos_insumos` y 3 tablas `masajes_anglo_*` de otro producto), 10 vistas (todas con security_invoker), 52 tests, build OK. Bundle principal ~2 MB sin comprimir (sin code-splitting). No hay service worker: el "modo offline" solo funciona mientras la pestaña siga abierta.
+- **Uso real (BD)**: 13 eventos, todos cerrados; última atención clínica registrada en junio 2026. 41 atenciones médicas (40 sin signos vitales), 19 kine, 42 fichas maso. 0 pacientes con alergias registradas (solo se pueden cargar desde Historial Paciente, no al atender).
+- **`src/config/fechas.js`** (nuevo): única fuente de "hoy" en hora local. NO volver a usar `new Date().toISOString().split("T")[0]` para "hoy" (es UTC: en Chile cambia de día a las 20–21 h).
 - **Acceso a datos**: wrapper REST propio `sb()` en config/supabase.js (fetch + PostgREST) con manejo de sesión, cola offline y reintentos — NO usa el cliente supabase-js para queries (aunque está en package.json).
 - **Componentes más grandes**: VistaReportes 790, VistaAtencionesMedicas 702, VistaGestionEventos 659, VistaGestionCostos 622, Dashboard 582.
 - **Esquema real Supabase (22 tablas, RLS 100%)**: perfiles(17), equipos_evento(13=eventos), asignaciones_evento(24), atenciones_medicas(41), atenciones_kinesiologia(19), fichas_masoterapia(42), atenciones_masoterapia_masiva(6), administracion_medicamentos(1), historial_administracion_medicamentos(1), pacientes(28), contenedores_medicamentos(757), medicamentos(26), insumos_kinesiologia(270), catalogo_insumos(123), catalogo_insumos_kines(30), catalogo_alias(17), consumos_evento(75), ingresos_evento(1), gastos_evento(0), logs_auditoria(51), anamnesis_nutricion(2) ⚠️ producto distinto en mismo proyecto.
@@ -39,6 +42,11 @@ Próximo paso sugerido: Alfredo activa leaked password protection + evalúa repo
 | 2026-07-08 | logs_auditoria solo tiene política SELECT — verificar mecanismo de inserción (trigger/definer) o los logs no se están escribiendo | 🟡 | abierto |
 | 2026-07-08 | anamnesis_nutricion (producto Nutri de Cami) vive en el MISMO proyecto Supabase que datos clínicos TRIAGE360 | 🟡 | abierto |
 | 2026-07-08 | Rol/permisos de UI se leen de localStorage (client-side) — aceptable porque RLS es la barrera real, pero mantener esa disciplina | 🟢 | — |
+| 2026-11-10 | Revisión de políticas RLS y funciones: informe y SQL de ajuste entregados a Alfredo FUERA del repo (el repo es público, no documentar aquí el detalle). Pendiente de su aprobación para aplicar | — | abierto |
+| 2026-11-10 | `/api/send-email`: cualquier usuario logueado podía enviar correos de asignación a cualquier destinatario con HTML sin escapar | 🟡 | ✅ en rama — solo admin para asignación/reporte, HTML escapado, destinatario y evento_id validados |
+| 2026-11-10 | Repo sigue PÚBLICO (verificado por API). Tablas `masajes_anglo_*`: 6 funciones SECURITY DEFINER ejecutables por anon (por diseño, protegidas con clave) — revisar fortaleza de la clave | 🟡 | abierto |
+| 2026-11-10 | Sin recuperación/cambio de contraseña en la app; login no verificaba `activo` | 🟡 | parcial — login ahora bloquea perfiles desactivados (rama); reset de contraseña pendiente |
+| 2026-11-10 | Ley 21.719 (datos personales, salud = dato sensible) entra en vigencia el 1-dic-2026 (hay proyecto para postergarla a oct-2027, aún no es ley). Falta: registro de consentimiento, log de LECTURAS de ficha, política de retención | 🟡 | abierto |
 
 ## Pruebas (Ejecutor)
 - Pendiente primera batería (próxima operación). Prioridades: flujo "Atenciones Mensuales" crear/editar/borrar (rotura A), pestaña Valorización (rotura B), cola offline con escritura fallida, inserción de logs de auditoría.
@@ -46,12 +54,26 @@ Próximo paso sugerido: Alfredo activa leaked password protection + evalúa repo
 | Bug | Severidad | Estado | Detectado | Cerrado |
 |---|---|---|---|---|
 | A: CRUD de VistaAtenciones escribe a tabla `atenciones` inexistente | 🟡 (reclasif. de 🔴) | ✅ VERIFICADO — era CÓDIGO MUERTO: abrirNueva/guardar/eliminar y el modal nunca se invocaban (sin botón). La vista es solo-lectura; la creación real ocurre en las vistas por especialidad. Eliminado. | 2026-07-08 | 2026-07-09 |
-| B: Valorización/Reportes consultan `costos_insumos` + 4 vistas inexistentes | 🔴 | abierto (ídem) | 2026-07-08 | |
-| C: Imports muertos (VistaCarros en App.js) y componentes legacy sin uso | 🟢 | abierto | 2026-07-08 | |
-| D: alertBolso calculado desde constantes estáticas, no refleja stock real | 🟡 | abierto | 2026-07-08 | |
+| B: Valorización/Reportes consultan `costos_insumos` + 4 vistas inexistentes | 🟢 (reclasif.) | ✅ Las 4 vistas y la tabla YA EXISTEN en la BD (verificado 2026-11-10). `costos_insumos` tiene 0 filas: la valorización de insumos sale vacía hasta cargar costos. Dashboard aún tiene `costos = null` hardcodeado (pendiente reconectar). | 2026-07-08 | 2026-11-10 |
+| C: Imports muertos (VistaCarros en App.js) y componentes legacy sin uso | 🟢 | parcial — import de App.js quitado (rama); `VistaCarros.jsx`/`VistaBolsoNaranja.jsx` siguen en el repo sin uso | 2026-07-08 | |
+| D: alertBolso calculado desde constantes estáticas, no refleja stock real | 🟡 | ✅ en rama — App.js y Dashboard leen bolsos reales de `contenedores_medicamentos` | 2026-07-08 | 2026-11-10 |
+| E: "Hoy" calculado en UTC en 11 vistas — desde las 20–21 h (Chile) la Cola de Triaje se vaciaba, "Atenciones de hoy" se partía y la fecha por defecto era la de mañana | 🔴 | ✅ en rama — helper `config/fechas.js` + 8 tests (también corridos con TZ=America/Santiago) | 2026-11-10 | 2026-11-10 |
+| F: cron `check-events` cerraba el evento ~04:30 AM de su ÚLTIMO día (`fecha_fin=lte.hoy`). Evidencia BD: eventos 15, 16, 17, 19 y 27 cerrados en la madrugada del día en que terminaban | 🔴 | ✅ en rama — ahora `lt` + fecha de Chile + ignora eliminados | 2026-11-10 | 2026-11-10 |
+| G: Dashboard "Alertas Críticas" marcaba como VENCIDO todo insumo SIN fecha de vencimiento (`new Date(null)` = 1970): ~589 falsas alertas que tapaban las 13 reales | 🔴 | ✅ en rama — `estadoVenc` seguro ante nulos + test | 2026-11-10 | 2026-11-10 |
+| H: Reportes filtraban por NOMBRE de evento (11 atenciones kine/maso con texto desfasado quedaban fuera), incluían eliminadas y consultaban `administracion_medicamentos?evento=` (columna inexistente → error en cada reporte) | 🟡 | ✅ en rama — filtra por `evento_id`, excluye eliminadas, administraciones por `atencion_id` | 2026-11-10 | 2026-11-10 |
+| I: Email de asignación no incluía horario, fecha fin ni observaciones (la plantilla los soportaba, el front no los enviaba) | 🟡 | ✅ en rama | 2026-11-10 | 2026-11-10 |
+| J: Kinesiólogos ven "Mis Atenciones" pero el RLS de INSERT en `atenciones_medicas` no los incluye → "No tienes permiso" al guardar | 🟡 | abierto — decisión de Alfredo (quitar pestaña o ampliar política) | 2026-11-10 | |
+| K: Atención guardada offline no descuenta stock al sincronizar, y sin clave de idempotencia puede duplicarse si la respuesta se pierde | 🟡 | abierto — requiere columna `client_uuid` única (cambio de esquema) | 2026-11-10 | |
+| L: Cola de Triaje no tiene estado de paciente (en espera / en atención / alta): todo paciente del día termina en "TIEMPO EXCEDIDO" aunque ya fue atendido | 🟡 | abierto — requiere columna `estado_atencion` + rediseño de flujo | 2026-11-10 | |
 
 ## UX clínica (Revisor)
-- Pendiente primera pasada (próxima operación, tras arreglos 🔴).
+- Primera pasada 2026-11-10 (lectura de código + datos de uso, sin sesión en la app):
+  - 🔴 Triaje e ingreso son el mismo formulario: no existe "ingreso rápido" (nombre + color en 10 s) separado de la atención completa. La cola muestra pacientes ya atendidos.
+  - 🟡 40 de 41 atenciones sin signos vitales → el bloque no se usa; evaluar plegarlo o hacerlo obligatorio solo en ROJO/AMARILLO.
+  - 🟡 Alergias no se preguntan al atender (0 registradas) → el chequeo alergia-medicamento nunca se activa.
+  - 🟡 Formulario médico solo acepta RUT (sin pasaporte), aunque la BD y las otras vistas sí lo soportan.
+  - 🟡 Insumos se escriben a mano (texto libre) y se descuentan por coincidencia parcial de nombre → riesgo de descontar el ítem equivocado.
+  - 🟢 Login mostraba "usuarios se crean en Supabase → Authentication" (texto interno) → reemplazado en rama.
 
 ## Decisiones técnicas
 | Fecha | Decisión | Por qué | Agente |
@@ -62,4 +84,5 @@ Próximo paso sugerido: Alfredo activa leaked password protection + evalúa repo
 | Fecha | Cambio | Archivos | Verificado con |
 |---|---|---|---|
 | 2026-07-08 | H1: `.env` limpiado (solo flag de build, sin credenciales) + advertencia anti-secretos. Verificado: nadie usa REACT_APP_SUPABASE_* en src/ ni api/; build no cambia | .env (commit 8cde152, pusheado + deploy READY) | grep de referencias + Vercel READY |
+| 2026-11-10 | Rama `claude/mejoras-app-2026-11`: bugs E, F, G, H, I, D + endurecimiento send-email + login bloquea desactivados + manifest PWA con nombre real + `evento` en atención médica + nombre real del administrador de medicamentos | src/config/fechas.js(+test), constants.js, App.js, Dashboard, ColaTriaje, 6 vistas de atención, VistaReportes, VistaGestionEventos, Login, api/check-events.js, api/send-email.js, public/manifest.json | 52/52 tests (UTC y America/Santiago) + `npm run build` OK + eslint 0 errores. NO probado con sesión real en la app |
 | 2026-07-09 | Bug A: eliminado código muerto de VistaAtenciones (crear/editar/borrar + modal, ~177 líneas) que apuntaba a la tabla inexistente `atenciones`. Vista queda solo-lectura (comportamiento real ya vigente). Props `carros`/`permisos` quitadas de la llamada en App.js | src/components/atenciones/VistaAtenciones.jsx (566→389), src/App.js | babel parse OK en ambos + grep confirma 0 refs a tabla `atenciones` en código vivo |

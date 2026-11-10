@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, S, Icon } from "./config/theme";
-import { MEDICAMENTOS_INYECTABLES, MEDICAMENTOS_ORALES, MEDICAMENTOS_AEROSOLES, CARROS_INICIALES, estadoVenc, estadoStock } from "./config/constants";
+import { CARROS_INICIALES, estadoVenc, estadoStock } from "./config/constants";
 import { getIndustria, getPermisos } from "./config/permisos";
 import { sb, restoreSession, clearSession } from "./config/supabase";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -8,7 +8,6 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import { Login } from "./components/auth/Login";
 import { SinPermiso } from "./components/common/SinPermiso";
 import { Dashboard } from "./components/dashboard/Dashboard";
-import { VistaCarros } from "./components/inventario/VistaCarros";
 import { VistaCarrosClinicosDB } from "./components/inventario/VistaCarrosClinicosDB";
 import { VistaBolsosMedicamentos } from "./components/inventario/VistaBolsosMedicamentos";
 import { VistaBolsoKinesiologia } from "./components/inventario/VistaBolsoKinesiologia";
@@ -75,7 +74,7 @@ function tienePermiso(tab, usuario, esAdmin) {
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [moreOpen, setMoreOpen] = useState(false);
-  const [carros, setCarros] = useState(CARROS_INICIALES);
+  const [carros] = useState(CARROS_INICIALES);
   const [usuario, setUsuario] = useState(null);
   const [restaurando, setRestaurando] = useState(true);
   const [industriaKey, setIndustriaKey] = useState(() => localStorage.getItem("industriaKey") || "eventos");
@@ -88,6 +87,7 @@ export default function App() {
     return next;
   });
   const [alertCarros, setAlertCarros] = useState(0);
+  const [alertBolso, setAlertBolso] = useState(0);
   const industria = getIndustria(industriaKey);
   const isMobile = useIsMobile();
 
@@ -135,19 +135,22 @@ export default function App() {
 
   useEffect(() => {
     if (!usuario) return;
-    sb("contenedores_medicamentos?tipo=eq.carro&select=nombre,stock,minimo,fecha_vencimiento", {}, usuario.token)
+    // Carros y bolsos en una sola consulta: los globos de alerta salen del stock real de la BD
+    sb("contenedores_medicamentos?deleted_at=is.null&select=tipo,nombre,stock,minimo,fecha_vencimiento", { _silent: true }, usuario.token)
       .then(data => {
         if (!data) return;
-        const carrosConAlerta = new Set(
+        const conAlerta = (tipo) => new Set(
           data
+            .filter(i => i.tipo === tipo)
             .filter(i => {
               const stockMal = estadoStock({ stock: Number(i.stock), minimo: Number(i.minimo) }) !== "ok";
-              const vencMal = i.fecha_vencimiento && estadoVenc(i.fecha_vencimiento) !== "ok";
+              const vencMal = estadoVenc(i.fecha_vencimiento) !== "ok";
               return stockMal || vencMal;
             })
             .map(i => i.nombre)
-        );
-        setAlertCarros(carrosConAlerta.size);
+        ).size;
+        setAlertCarros(conAlerta("carro"));
+        setAlertBolso(conAlerta("bolso"));
       });
   }, [usuario]);
 
@@ -156,8 +159,6 @@ export default function App() {
 
   const esAdmin = usuario?.rol === "admin";
   const permisos = getPermisos(usuario);
-  const allMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
-  const alertBolso = allMeds.filter(i => estadoVenc(i.vencimiento) !== "ok" || estadoStock(i) !== "ok").length;
 
   const getMobileNavConfig = () => {
     const prof = usuario?.profesion;
@@ -234,7 +235,7 @@ export default function App() {
     ]},
     { id: "g-inventario", label: "Inventario", items: [
       (esAdmin || permisos.verInventario) && { id: "carros", label: "Carros Clínicos", icon: "carro", badge: alertCarros },
-      (esAdmin || permisos.verBolso) && { id: "bolsos", label: "Bolso Medicamentos", icon: "bolso" },
+      (esAdmin || permisos.verBolso) && { id: "bolsos", label: "Bolso Medicamentos", icon: "bolso", badge: alertBolso },
       (esAdmin || permisos.verBolsoKine) && { id: "bolsoKine", label: "Bolso Kinesiólogo/a", icon: "bolso" },
     ]},
     { id: "g-finanzas", label: "Finanzas", items: [

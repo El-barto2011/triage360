@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { toast } from "../ui/use-toast";
 import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
+import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 export function VistaAdministracionMedicamentos({ usuario }) {
   const [pendientes, setPendientes] = useState([]);
@@ -22,7 +23,7 @@ export function VistaAdministracionMedicamentos({ usuario }) {
 
     // Cargar atenciones pendientes
     const pend = await sb(
-      "atenciones_medicas?requiere_administracion=eq.true&administracion_completada=eq.false&order=created_at.asc",
+      "atenciones_medicas?requiere_administracion=eq.true&administracion_completada=eq.false&deleted_at=is.null&order=created_at.asc",
       {},
       usuario?.token
     );
@@ -108,7 +109,7 @@ export function VistaAdministracionMedicamentos({ usuario }) {
     const datosAdmin = {
       atencion_id: form.atencion_id,
       administrador_id: usuario.id,
-      administrador_nombre: usuario.email,
+      administrador_nombre: usuario.nombre || usuario.email,
       administrador_tipo: usuario.profesion || "Enfermero/a",
       medicamentos_administrados: form.medicamentos_administrados,
       insumos_administracion: form.insumos_administracion || [],
@@ -148,9 +149,9 @@ export function VistaAdministracionMedicamentos({ usuario }) {
     p.medicamentos_prescritos?.some(m => m.urgente)
   );
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyLocal();
   const administracionesHoy = misCasos.filter(a => {
-    const fecha = new Date(a.created_at).toISOString().split('T')[0];
+    const fecha = fechaLocal(a.created_at);
     return fecha === hoy;
   });
 
