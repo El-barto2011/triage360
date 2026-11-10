@@ -9,6 +9,10 @@ import { toast } from "../ui/use-toast";
 import { useEvento } from "../common/SelectorEvento";
 import { subscribeAtenciones } from "../../config/realtime";
 import { inicioDiaLocalISO } from "../../config/fechas";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Textarea } from "../ui/textarea";
+import { Input } from "../ui/input";
+import { Field } from "../common/FormControls";
 
 const TRIAJE_CONFIG = {
   ROJO:     { color: "#ef4444", emoji: "🔴", label: "URGENTE",   orden: 1, maxEspera: 5   },
@@ -23,6 +27,7 @@ export default function ColaTriaje({ usuario }) {
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const [enVivo,  setEnVivo]  = useState(false);
   const [cambiando, setCambiando] = useState(null);   // id de la atención cuyo estado se está guardando
+  const [cierre, setCierre] = useState(null);         // { paciente, estado, diagnostico, tratamiento, observaciones, destino }
   const alertasAnteriores = useRef(0);
   const { eventoActual } = useEvento();
 
@@ -98,21 +103,52 @@ export default function ColaTriaje({ usuario }) {
     }
   };
 
-  const cambiarEstado = async (paciente, estado) => {
+  const cambiarEstado = async (paciente, estado, extra = {}) => {
     setCambiando(paciente.id);
     try {
       const res = await sb(`atenciones_medicas?id=eq.${paciente.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ estado_atencion: estado, estado_cambio_at: new Date().toISOString() }),
+        body: JSON.stringify({ ...extra, estado_atencion: estado, estado_cambio_at: new Date().toISOString() }),
       }, usuario?.token);
       if (res) {
         const textos = { en_atencion: "En atención", alta: "Alta registrada", derivado: "Derivación registrada" };
         toast({ title: textos[estado] || "Estado actualizado", description: paciente.paciente_nombre });
         await cargarCola();
+        return true;
       }
+      return false;
     } finally {
       setCambiando(null);
     }
+  };
+
+  // Alta y derivación abren la ficha del MISMO registro para completar diagnóstico y
+  // tratamiento: así el paciente que ingresó "en espera" no termina con dos atenciones.
+  const abrirCierre = (paciente, estado) => setCierre({
+    paciente, estado,
+    diagnostico:   paciente.diagnostico   || "",
+    tratamiento:   paciente.tratamiento   || "",
+    observaciones: paciente.observaciones || "",
+    destino: "",
+  });
+
+  const guardarCierre = async () => {
+    if (!cierre) return;
+    const { paciente, estado } = cierre;
+    const obs = [cierre.observaciones.trim(), estado === "derivado" && cierre.destino.trim() ? `Derivado a: ${cierre.destino.trim()}` : ""]
+      .filter(Boolean).join("\n");
+    const extra = {
+      diagnostico:   cierre.diagnostico.trim() || null,
+      tratamiento:   cierre.tratamiento.trim() || null,
+      observaciones: obs || null,
+    };
+    // Si quien cierra es médico y la atención no tenía médico, queda registrado como tratante
+    if (usuario?.profesion === "Médico" && !paciente.medico_id) {
+      extra.medico_id = usuario.id;
+      extra.medico_nombre = usuario.nombre || usuario.email;
+    }
+    const ok = await cambiarEstado(paciente, estado, extra);
+    if (ok) setCierre(null);
   };
 
   const enEspera = cola.filter(a => !a.enAtencion).length;
@@ -280,10 +316,10 @@ export default function ColaTriaje({ usuario }) {
                         <Play size={13} /> Atender
                       </Button>
                     )}
-                    <Button variant="outline" size="sm" disabled={cambiando === paciente.id} onClick={() => cambiarEstado(paciente, "alta")}>
+                    <Button variant="outline" size="sm" disabled={cambiando === paciente.id} onClick={() => abrirCierre(paciente, "alta")}>
                       <Check size={13} /> Alta
                     </Button>
-                    <Button variant="outline" size="sm" disabled={cambiando === paciente.id} onClick={() => cambiarEstado(paciente, "derivado")}>
+                    <Button variant="outline" size="sm" disabled={cambiando === paciente.id} onClick={() => abrirCierre(paciente, "derivado")}>
                       <Ambulance size={13} /> Derivar
                     </Button>
                   </div>
@@ -293,6 +329,47 @@ export default function ColaTriaje({ usuario }) {
           ))}
         </div>
       )}
+
+      {/* Cierre de la atención: completa la ficha del mismo registro */}
+      <Dialog open={!!cierre} onOpenChange={(open) => { if (!open) setCierre(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {cierre?.estado === "derivado" ? "Derivar" : "Dar alta"} · {cierre?.paciente?.paciente_nombre}
+            </DialogTitle>
+          </DialogHeader>
+          {cierre && (
+            <div className="space-y-4 py-2">
+              <p className="text-xs" style={{ color: C.textMuted }}>
+                Motivo: {cierre.paciente.motivo_consulta || "—"} · Los campos son opcionales.
+              </p>
+              {cierre.estado === "derivado" && (
+                <Field label="Derivado a">
+                  <Input value={cierre.destino} onChange={e => setCierre(c => ({ ...c, destino: e.target.value }))} placeholder="Centro asistencial, ambulancia, acompañante" />
+                </Field>
+              )}
+              <Field label="Diagnóstico">
+                <Textarea value={cierre.diagnostico} onChange={e => setCierre(c => ({ ...c, diagnostico: e.target.value }))} placeholder="Evaluación / diagnóstico" />
+              </Field>
+              <Field label="Tratamiento">
+                <Textarea value={cierre.tratamiento} onChange={e => setCierre(c => ({ ...c, tratamiento: e.target.value }))} placeholder="Tratamiento realizado" />
+              </Field>
+              <Field label="Observaciones">
+                <Textarea value={cierre.observaciones} onChange={e => setCierre(c => ({ ...c, observaciones: e.target.value }))} placeholder="Indicaciones al paciente" />
+              </Field>
+              <p className="text-xs" style={{ color: C.textMuted }}>
+                Si necesita medicamentos, regístralos en Prescripción; desde aquí solo se cierra la atención.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCierre(null)}>Cancelar</Button>
+                <Button variant="teal" disabled={cambiando === cierre.paciente.id} onClick={guardarCierre}>
+                  {cierre.estado === "derivado" ? "Registrar derivación" : "Registrar alta"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
