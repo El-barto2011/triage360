@@ -16,6 +16,7 @@ import { toast } from "../ui/use-toast";
 import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
+import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 const ZONAS = [
   "Cuello", "Hombros", "Espalda alta", "Espalda baja", "Brazos",
@@ -55,7 +56,7 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
   const abrirNuevaFicha = () => {
     const ahora = new Date();
     setForm({
-      fecha_atencion: ahora.toISOString().split("T")[0],
+      fecha_atencion: fechaLocal(ahora),
       hora_atencion:  ahora.toTimeString().slice(0, 5),
       paciente_nombre: "", paciente_rut: "", paciente_pasaporte: "",
       tipo_identificacion: "rut", paciente_edad: "",
@@ -177,9 +178,9 @@ export function VistaMasoterapiaEspecifica({ usuario }) {
     );
   }
 
-  const hoy = new Date().toISOString().split("T")[0];
-  const fichasHoy        = fichas.filter(f => new Date(f.created_at).toISOString().split("T")[0] === hoy);
-  const fichasAnteriores = fichas.filter(f => new Date(f.created_at).toISOString().split("T")[0] !== hoy);
+  const hoy = hoyLocal();
+  const fichasHoy        = fichas.filter(f => fechaLocal(f.created_at) === hoy);
+  const fichasAnteriores = fichas.filter(f => fechaLocal(f.created_at) !== hoy);
 
   return (
     <div className="space-y-4">

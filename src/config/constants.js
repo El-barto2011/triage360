@@ -25,8 +25,17 @@ export const calcularPorcentajeValorizado = (conPrecio, total) => {
 };
 
 export const today = new Date();
-export const diasHastaVenc = (f) => Math.ceil((new Date(f) - today) / 86400000);
-export const estadoVenc = (f) => { const d = diasHastaVenc(f); return d < 0 ? "vencido" : d <= 60 ? "proximo" : "ok"; };
+// "Hoy" se calcula en cada llamada (antes quedaba congelado al abrir la app: una pestaña
+// abierta varios días calculaba vencimientos con una fecha vieja).
+export const diasHastaVenc = (f) => Math.ceil((new Date(f) - new Date()) / 86400000);
+// Sin fecha de vencimiento NO es "vencido": new Date(null) es 1970 y marcaba como vencidos
+// todos los insumos sin fecha (cientos de falsas alertas en el Dashboard).
+export const tieneVenc = (f) => !!f && !isNaN(new Date(f).getTime());
+export const estadoVenc = (f) => {
+  if (!tieneVenc(f)) return "ok";
+  const d = diasHastaVenc(f);
+  return d < 0 ? "vencido" : d <= 60 ? "proximo" : "ok";
+};
 export const estadoStock = (i) => i.stock === 0 ? "agotado" : i.stock < i.minimo ? "bajo" : "ok";
 
 export const MEDICAMENTOS_INYECTABLES = [

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { C, S } from "../../config/theme";
 import { sb } from "../../config/supabase";
-import { diasHastaVenc, estadoVenc, estadoStock, MEDICAMENTOS_INYECTABLES, MEDICAMENTOS_ORALES, MEDICAMENTOS_AEROSOLES } from "../../config/constants";
+import { diasHastaVenc, estadoVenc, estadoStock } from "../../config/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
@@ -14,6 +14,7 @@ import {
   Backpack, CheckCircle2, XCircle, ChevronRight, Activity,
   ShieldAlert, CalendarDays, Zap,
 } from "lucide-react";
+import { inicioDiaLocalISO, inicioMesLocalISO } from "../../config/fechas";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip,
   ResponsiveContainer, Cell,
@@ -102,9 +103,8 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
   const { eventoActual, eventos } = useEvento();
   const eventoObj = eventos.find(e => e.id === eventoActual);
 
-  const todosMeds = [...MEDICAMENTOS_INYECTABLES, ...MEDICAMENTOS_ORALES, ...MEDICAMENTOS_AEROSOLES];
-
   const [carrosDB,      setCarrosDB]      = useState([]);
+  const [bolsosDB,      setBolsosDB]      = useState([]);
   const [atencionesHoy, setAtencionesHoy] = useState(null);
   const [atencionesMes, setAtencionesMes] = useState(null);
   const [costoMes,      setCostoMes]      = useState(null);
@@ -115,14 +115,18 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
   // Datos en tiempo real para todos los usuarios
   useEffect(() => {
     if (!usuario?.token) return;
-    const hoyISO    = new Date().toISOString().split("T")[0];
-    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+    // Límites en hora local (no UTC) para que "hoy" y "este mes" coincidan con el turno real
+    const hoyISO    = encodeURIComponent(inicioDiaLocalISO());
+    const inicioMes = encodeURIComponent(inicioMesLocalISO());
     Promise.all([
-      sb("contenedores_medicamentos?tipo=eq.carro&select=nombre,stock,minimo,fecha_vencimiento,nombre_insumo,cajon,unidad", {}, usuario.token),
-      sb(`atenciones_medicas?created_at=gte.${hoyISO}&select=id`, {}, usuario.token),
-      sb(`atenciones_medicas?created_at=gte.${inicioMes}&select=id`, {}, usuario.token),
+      sb("contenedores_medicamentos?deleted_at=is.null&select=tipo,nombre,stock,minimo,fecha_vencimiento,nombre_insumo,cajon,unidad", {}, usuario.token),
+      sb(`atenciones_medicas?created_at=gte.${hoyISO}&deleted_at=is.null&select=id`, {}, usuario.token),
+      sb(`atenciones_medicas?created_at=gte.${inicioMes}&deleted_at=is.null&select=id`, {}, usuario.token),
     ]).then(([data, hoy, mes]) => {
-      if (data) setCarrosDB(data);
+      if (data) {
+        setCarrosDB(data.filter(i => i.tipo === "carro"));
+        setBolsosDB(data.filter(i => i.tipo === "bolso"));
+      }
       setAtencionesHoy(hoy?.length ?? 0);
       setAtencionesMes(mes?.length ?? 0);
     });
@@ -133,10 +137,10 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
     if (!esAdmin || !usuario?.token) { setLoading(false); return; }
     const cargar = async () => {
       setLoading(true);
-      const [inv] = await Promise.all([
+      const [inv, costos] = await Promise.all([
         sb("vista_valor_inventario_completo_v3", {}, usuario.token),
+        sb("vista_costos_medicamentos_por_evento?select=fecha_evento,costo_total", { _silent: true }, usuario.token),
       ]);
-      const costos = null; // vista_costos_medicamentos_por_evento no existe aún
 
       if (costos) {
         const hoy        = new Date();
@@ -173,7 +177,16 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
   const alertasVencDB   = carrosDB.filter(i => i.fecha_vencimiento && estadoVenc(i.fecha_vencimiento) !== "ok");
   const stockBajoDB     = carrosDB.filter(i => estadoStock({ stock: Number(i.stock), minimo: Number(i.minimo) }) !== "ok");
 
-  // Alertas del bolso (aún desde constantes estáticas)
+  // Medicamentos de los bolsos: stock y vencimientos REALES desde la BD
+  // (antes eran constantes de ejemplo y mostraban alertas ficticias).
+  const todosMeds = bolsosDB.map((i, idx) => ({
+    ...i,
+    id: `bolso-${idx}`,
+    nombre: `${i.nombre_insumo} · ${i.nombre}`,
+    vencimiento: i.fecha_vencimiento,
+    stock: Number(i.stock),
+    minimo: Number(i.minimo),
+  }));
   const alertasVencMeds = todosMeds.filter(i => estadoVenc(i.vencimiento) !== "ok");
   const stockBajoMeds   = todosMeds.filter(i => estadoStock(i) !== "ok");
 
@@ -197,7 +210,7 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
   const carrosDBNorm = carrosDB.map((i, idx) => ({
     ...i,
     id: `db-${idx}`,
-    nombre: i.nombre_insumo,
+    nombre: `${i.nombre_insumo} · ${i.nombre}`,
     vencimiento: i.fecha_vencimiento,
     stock: Number(i.stock),
     minimo: Number(i.minimo),

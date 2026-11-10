@@ -3,6 +3,32 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Escapa texto antes de insertarlo en el HTML del correo (evita inyección de HTML/enlaces
+// en correos enviados desde el dominio de la empresa).
+const h = (v) => String(v ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const hList = (arr) => (Array.isArray(arr) ? arr : []).map(h);
+const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
+
+// Tipos de correo que solo puede disparar un administrador (se generan desde Eventos y Reportes).
+const SOLO_ADMIN = new Set(['asignacion_evento', 'reporte_evento']);
+
+async function esAdmin(userId) {
+  try {
+    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const r = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/perfiles?user_id=eq.${encodeURIComponent(userId)}&select=rol,activo`,
+      { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } }
+    );
+    if (!r.ok) return false;
+    const [perfil] = await r.json();
+    return !!perfil && perfil.rol === 'admin' && perfil.activo !== false;
+  } catch (_) {
+    return false;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
@@ -14,6 +40,7 @@ export default async function handler(req, res) {
   if (!userToken) {
     return res.status(401).json({ error: 'No autorizado' });
   }
+  let authUser = null;
   try {
     const userRes = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, {
       headers: {
@@ -24,17 +51,27 @@ export default async function handler(req, res) {
     if (!userRes.ok) {
       return res.status(401).json({ error: 'Sesión inválida' });
     }
+    authUser = await userRes.json();
   } catch (e) {
     return res.status(401).json({ error: 'No se pudo validar la sesión' });
   }
 
-  const { destinatario, nombreProfesional, rol, evento, equipo } = req.body;
-  const tipo = req.body.tipo || req.body.type; // acepta ambas claves
+  const { destinatario, nombreProfesional, rol, evento, equipo } = req.body || {};
+  const tipo = req.body?.tipo || req.body?.type; // acepta ambas claves
+
+  // ── Autorización: asignaciones y reportes de cierre solo los envía un administrador ──
+  if (SOLO_ADMIN.has(tipo) && !(await esAdmin(authUser?.id))) {
+    return res.status(403).json({ error: 'Solo un administrador puede enviar este correo' });
+  }
 
   /* ══════════ REPORTE DE CIERRE DE EVENTO (con CSV adjunto) ══════════ */
   if (tipo === 'reporte_evento') {
     try {
-      const { evento_id, evento_nombre, fecha_cierre } = req.body.data || req.body;
+      const { evento_id: eventoIdRaw, evento_nombre, fecha_cierre } = req.body.data || req.body;
+      const evento_id = Number(eventoIdRaw);
+      if (!Number.isInteger(evento_id) || evento_id <= 0) {
+        return res.status(400).json({ error: 'evento_id inválido' });
+      }
       const SB = process.env.SUPABASE_URL;
       const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
       const hdrs = { apikey: KEY, Authorization: `Bearer ${KEY}` };
@@ -73,7 +110,7 @@ export default async function handler(req, res) {
       const totalAt = medicas.length + kines.length + fichas.length;
       const htmlContent = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0d1b24;color:#e8f0f8;border-radius:12px;overflow:hidden">
-          <div style="background:#00c2a8;padding:22px 26px"><h2 style="margin:0;color:#0d1b24">📊 Reporte de cierre — ${evento_nombre}</h2></div>
+          <div style="background:#00c2a8;padding:22px 26px"><h2 style="margin:0;color:#0d1b24">📊 Reporte de cierre — ${h(evento_nombre)}</h2></div>
           <div style="padding:26px">
             <p style="color:#9fb3c8">Evento cerrado el ${fmtF(fecha_cierre)}. Resumen de la operación:</p>
             <table style="width:100%;border-collapse:collapse;margin:14px 0">
@@ -108,6 +145,9 @@ export default async function handler(req, res) {
 
   if (tipo === 'asignacion_evento') {
     try {
+      if (!evento || !EMAIL_RE.test(String(destinatario || ''))) {
+        return res.status(400).json({ error: 'Datos de asignación incompletos o destinatario inválido' });
+      }
       // Formatear fecha inicio
       const fechaInicio = new Date(evento.fecha).toLocaleDateString('es-CL', {
         weekday: 'long',
@@ -133,17 +173,17 @@ export default async function handler(req, res) {
       if (evento.hora_inicio || evento.hora_fin) {
         horarioTexto = `<div class="info-item">
           <span class="label">🕐 Horario:</span> 
-          <span class="value">${evento.hora_inicio || '--:--'} - ${evento.hora_fin || '--:--'}</span>
+          <span class="value">${h(evento.hora_inicio || '--:--')} - ${h(evento.hora_fin || '--:--')}</span>
         </div>`;
       }
 
       // Construir lista de equipo
       let listaEquipo = '';
-      if (equipo.medicos?.length > 0) listaEquipo += `<li><strong>Médicos:</strong> ${equipo.medicos.join(', ')}</li>`;
-      if (equipo.enfermeros?.length > 0) listaEquipo += `<li><strong>Enfermeros:</strong> ${equipo.enfermeros.join(', ')}</li>`;
-      if (equipo.paramedicos?.length > 0) listaEquipo += `<li><strong>Paramédicos:</strong> ${equipo.paramedicos.join(', ')}</li>`;
-      if (equipo.kinesiologos?.length > 0) listaEquipo += `<li><strong>Kinesiólogos:</strong> ${equipo.kinesiologos.join(', ')}</li>`;
-      if (equipo.masoterapeutas?.length > 0) listaEquipo += `<li><strong>Masoterapeutas:</strong> ${equipo.masoterapeutas.join(', ')}</li>`;
+      if (equipo?.medicos?.length > 0) listaEquipo += `<li><strong>Médicos:</strong> ${hList(equipo.medicos).join(', ')}</li>`;
+      if (equipo?.enfermeros?.length > 0) listaEquipo += `<li><strong>Enfermeros:</strong> ${hList(equipo.enfermeros).join(', ')}</li>`;
+      if (equipo?.paramedicos?.length > 0) listaEquipo += `<li><strong>Paramédicos:</strong> ${hList(equipo.paramedicos).join(', ')}</li>`;
+      if (equipo?.kinesiologos?.length > 0) listaEquipo += `<li><strong>Kinesiólogos:</strong> ${hList(equipo.kinesiologos).join(', ')}</li>`;
+      if (equipo?.masoterapeutas?.length > 0) listaEquipo += `<li><strong>Masoterapeutas:</strong> ${hList(equipo.masoterapeutas).join(', ')}</li>`;
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -179,7 +219,7 @@ export default async function handler(req, res) {
     </div>
     
     <div class="content">
-      <p>Hola <strong>${nombreProfesional}</strong>,</p>
+      <p>Hola <strong>${h(nombreProfesional)}</strong>,</p>
       
       <p>Has sido asignado al siguiente evento:</p>
       
@@ -187,11 +227,11 @@ export default async function handler(req, res) {
         <h3>📅 Detalles del Evento</h3>
         <div class="info-item">
           <span class="label">Evento:</span> 
-          <span class="value"><strong>${evento.nombre}</strong></span>
+          <span class="value"><strong>${h(evento.nombre)}</strong></span>
         </div>
         <div class="info-item">
           <span class="label">📍 Ubicación:</span> 
-          <span class="value">${evento.ubicacion}</span>
+          <span class="value">${h(evento.ubicacion)}</span>
         </div>
         <div class="info-item">
           <span class="label">🗓️ Fecha:</span> 
@@ -200,14 +240,14 @@ export default async function handler(req, res) {
         ${horarioTexto}
         <div class="info-item">
           <span class="label">👤 Tu rol:</span> 
-          <span class="value"><strong>${rol}</strong></span>
+          <span class="value"><strong>${h(rol)}</strong></span>
         </div>
       </div>
 
       ${evento.observaciones ? `
       <div class="observaciones">
         <div class="observaciones-title">💬 Observaciones Importantes</div>
-        <div class="observaciones-text">${evento.observaciones}</div>
+        <div class="observaciones-text">${h(evento.observaciones)}</div>
       </div>
       ` : ''}
 
@@ -217,13 +257,13 @@ export default async function handler(req, res) {
         ${evento.carros?.length > 0 ? `
         <div class="info-item">
           <span class="label">🚑 Carros Clínicos:</span><br>
-          ${evento.carros.map(c => `<span class="badge">${c}</span>`).join('')}
+          ${evento.carros.map(c => `<span class="badge">${h(c)}</span>`).join('')}
         </div>
         ` : ''}
         ${evento.bolsos?.length > 0 ? `
         <div class="info-item">
           <span class="label">💊 Bolsos de Medicamentos:</span><br>
-          ${evento.bolsos.map(b => `<span class="badge">${b}</span>`).join('')}
+          ${evento.bolsos.map(b => `<span class="badge">${h(b)}</span>`).join('')}
         </div>
         ` : ''}
       </div>
@@ -279,11 +319,11 @@ export default async function handler(req, res) {
     try {
       const { insumos, profesional, evento } = req.body;
 
-      const filasInsumos = insumos.map(i => `
+      const filasInsumos = (Array.isArray(insumos) ? insumos : []).map(i => `
         <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${i.nombre}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #dc2626; font-weight: 700;">${i.stockActual} ${i.unidad}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #64748b;">${i.minimo} ${i.unidad}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">${h(i.nombre)}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #dc2626; font-weight: 700;">${h(i.stockActual)} ${h(i.unidad)}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #64748b;">${h(i.minimo)} ${h(i.unidad)}</td>
         </tr>
       `).join('');
 
@@ -311,8 +351,8 @@ export default async function handler(req, res) {
     <div class="content">
       <p>Se ha detectado <strong>stock bajo el mínimo</strong> luego de una atención registrada:</p>
       <ul style="color: #64748b; font-size: 14px;">
-        <li><strong>Profesional:</strong> ${profesional}</li>
-        <li><strong>Evento:</strong> ${evento}</li>
+        <li><strong>Profesional:</strong> ${h(profesional)}</li>
+        <li><strong>Evento:</strong> ${h(evento)}</li>
         <li><strong>Hora:</strong> ${new Date().toLocaleString('es-CL')}</li>
       </ul>
       <table>

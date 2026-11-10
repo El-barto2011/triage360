@@ -18,6 +18,7 @@ import { Separator } from "../ui/separator";
 import { cn } from "../../lib/utils";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls } from "../common/FormControls";
+import { hoyLocal } from "../../config/fechas";
 import {
   BarChart2, Download, Lock, Search, ArrowUpDown,
   Pill, Package, Stethoscope, Activity, Waves,
@@ -143,13 +144,24 @@ export function VistaReportes({ usuario, esAdmin }) {
   const generarReporte = async () => {
     if (!eventoSeleccionado || eventoSeleccionado === "todos") return;
     setLoading(true);
-    const [atencionesKine, atencionesMed, adminMed, masoterapiaMasiva, fichasMasoterapia] = await Promise.all([
-      sb(`atenciones_kinesiologia?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
-      sb(`atenciones_medicas?evento=eq.${eventoSeleccionado}`,      {}, usuario?.token),
-      sb(`administracion_medicamentos?evento=eq.${eventoSeleccionado}&order=created_at.desc`, {}, usuario?.token),
-      sb(`atenciones_masoterapia_masiva?evento=eq.${eventoSeleccionado}`, {}, usuario?.token),
-      sb(`fichas_masoterapia?evento=eq.${eventoSeleccionado}`,      {}, usuario?.token),
+    // Se filtra por evento_id (no por nombre): el nombre en texto puede quedar desfasado si el
+    // evento se renombra y dejaba atenciones fuera del reporte. Se excluyen las eliminadas.
+    const eventoObj = eventos.find(e => e.nombre_evento === eventoSeleccionado);
+    const porEvento = eventoObj
+      ? `evento_id=eq.${eventoObj.id}`
+      : `evento=eq.${encodeURIComponent(eventoSeleccionado)}`;
+    const [atencionesKine, atencionesMed, masoterapiaMasiva, fichasMasoterapia] = await Promise.all([
+      sb(`atenciones_kinesiologia?${porEvento}&deleted_at=is.null`, {}, usuario?.token),
+      sb(`atenciones_medicas?${porEvento}&deleted_at=is.null`,      {}, usuario?.token),
+      sb(`atenciones_masoterapia_masiva?${porEvento}`,              {}, usuario?.token),
+      sb(`fichas_masoterapia?${porEvento}&deleted_at=is.null`,      {}, usuario?.token),
     ]);
+    // administracion_medicamentos no tiene columna de evento: se obtiene por las atenciones del evento
+    // (antes se consultaba ?evento=eq… y la consulta fallaba en cada reporte).
+    const idsAtenciones = (atencionesMed || []).map(a => a.id);
+    const adminMed = idsAtenciones.length > 0
+      ? await sb(`administracion_medicamentos?atencion_id=in.(${idsAtenciones.join(",")})&order=created_at.desc`, {}, usuario?.token)
+      : [];
 
     let costos = [];
     if (esAdmin) costos = await sb("costos_insumos", {}, usuario?.token) || [];
@@ -211,7 +223,7 @@ export function VistaReportes({ usuario, esAdmin }) {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.setAttribute("href", URL.createObjectURL(blob));
-    link.setAttribute("download", `reporte_${datosReporte.evento.replace(/\s/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `reporte_${datosReporte.evento.replace(/\s/g, "_")}_${hoyLocal()}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -315,7 +327,7 @@ export function VistaReportes({ usuario, esAdmin }) {
       XLSX.utils.book_append_sheet(wb, ws, "Costos");
     }
 
-    XLSX.writeFile(wb, `reporte_${slug}_${new Date().toISOString().split("T")[0]}.xlsx`);
+    XLSX.writeFile(wb, `reporte_${slug}_${hoyLocal()}.xlsx`);
   };
 
   /* ── Export PDF ─────────────────────────────────────── */
@@ -458,7 +470,7 @@ export function VistaReportes({ usuario, esAdmin }) {
     }
 
     const slug = datosReporte.evento.replace(/\s/g, "_");
-    doc.save(`reporte_${slug}_${new Date().toISOString().split("T")[0]}.pdf`);
+    doc.save(`reporte_${slug}_${hoyLocal()}.pdf`);
   };
 
   /* ── Cerrar evento (unchanged) ───────────────────────── */

@@ -5,9 +5,11 @@
    disponible (tests, navegadores viejos).
 
    Diseño de seguridad clínica:
-   - Solo se encolan CREACIONES (POST) de tablas de atención (SAFELIST).
-     PATCH/DELETE y descuentos de stock NO se encolan para no reordenar
-     operaciones dependientes.
+   - Solo se encolan CREACIONES (POST) de tablas de atención (SAFELIST) y el
+     descuento de stock que las acompaña (RPC_ENCOLABLES). PATCH/DELETE NO se
+     encolan para no reordenar operaciones dependientes.
+   - Cada creación lleva un client_uuid: si se reenvía dos veces, la base
+     ignora la segunda (índice único) en vez de duplicar la atención.
    - El reintento es SECUENCIAL y se detiene al primer fallo.
    ════════════════════════════════════════════════════════════ */
 
@@ -27,6 +29,46 @@ export function esEncolable(endpoint, method) {
   if ((method || "GET").toUpperCase() !== "POST") return false;
   const tabla = String(endpoint).split("?")[0].split("/")[0];
   return SAFELIST.has(tabla);
+}
+
+/** RPC que también se encolan: el descuento de stock de una atención registrada sin red.
+    Va en la misma cola FIFO, DESPUÉS de su atención, así el orden se conserva. */
+export const RPC_ENCOLABLES = new Set(["rpc/fn_descontar_stock"]);
+
+export function esRpcEncolable(endpoint, method) {
+  if ((method || "GET").toUpperCase() !== "POST") return false;
+  return RPC_ENCOLABLES.has(String(endpoint).split("?")[0]);
+}
+
+/** Identificador único generado en el dispositivo (idempotencia al sincronizar). */
+export function nuevoUuid() {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  } catch (_) {}
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+/** Agrega client_uuid al cuerpo de una creación (si no lo trae). Devuelve el body como string. */
+export function conClientUuid(body) {
+  try {
+    const obj = JSON.parse(body);
+    if (!obj || Array.isArray(obj) || typeof obj !== "object") return body;
+    if (!obj.client_uuid) obj.client_uuid = nuevoUuid();
+    return JSON.stringify(obj);
+  } catch (_) {
+    return body;
+  }
+}
+
+/** Endpoint de reenvío: si el cuerpo trae client_uuid, un duplicado se ignora en vez de fallar. */
+export function endpointIdempotente(endpoint, body) {
+  let tieneUuid = false;
+  try { tieneUuid = !!JSON.parse(body)?.client_uuid; } catch (_) {}
+  if (!tieneUuid || String(endpoint).includes("on_conflict=")) return endpoint;
+  return `${endpoint}${String(endpoint).includes("?") ? "&" : "?"}on_conflict=client_uuid`;
 }
 
 /* ── Fallback en memoria ─────────────────────────────────────── */

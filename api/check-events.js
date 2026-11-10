@@ -15,11 +15,14 @@ export default async function handler(req, res) {
   try {
     console.log('Iniciando verificación de cierre de eventos...');
 
-    const hoy = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    // Fecha de HOY en Chile (el cron corre en UTC). en-CA entrega YYYY-MM-DD.
+    const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
 
-    // 1. Obtener eventos activos cuya fecha_fin ya pasó
+    // 1. Obtener eventos activos cuya fecha_fin YA PASÓ (estrictamente anterior a hoy).
+    //    Antes se usaba "lte": como el cron corre ~04:30 de la madrugada, un evento se cerraba
+    //    el mismo día en que terminaba, horas antes de que el equipo empezara a atender.
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/equipos_evento?estado=eq.activo&fecha_fin=lte.${hoy}&select=*`,
+      `${SUPABASE_URL}/rest/v1/equipos_evento?estado=eq.activo&deleted_at=is.null&fecha_fin=lt.${hoy}&select=*`,
       {
         headers: {
           'apikey': SUPABASE_SERVICE_KEY,
