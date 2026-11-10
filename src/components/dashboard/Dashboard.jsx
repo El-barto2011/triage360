@@ -137,10 +137,10 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
     if (!esAdmin || !usuario?.token) { setLoading(false); return; }
     const cargar = async () => {
       setLoading(true);
-      const [inv] = await Promise.all([
+      const [inv, costos] = await Promise.all([
         sb("vista_valor_inventario_completo_v3", {}, usuario.token),
+        sb("vista_costos_medicamentos_por_evento?select=fecha_evento,costo_total", { _silent: true }, usuario.token),
       ]);
-      const costos = null; // vista_costos_medicamentos_por_evento no existe aún
 
       if (costos) {
         const hoy        = new Date();

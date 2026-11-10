@@ -1,4 +1,4 @@
-import { enqueue, getAll, remove, esEncolable } from "./offlineQueue";
+import { enqueue, getAll, remove, esEncolable, esRpcEncolable, conClientUuid, endpointIdempotente } from "./offlineQueue";
 
 export const SUPABASE_URL = "https://dnlvzwrujosuckdzmffx.supabase.co";
 export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubHZ6d3J1am9zdWNrZHptZmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NTg0MzAsImV4cCI6MjA5MDIzNDQzMH0.Bhw_ws8XNzWxJXBn1TzLjNppBD9CRWDTuEb_t92G9ZE";
@@ -125,6 +125,11 @@ export function mensajeError(status, bodyText, method) {
 }
 
 export const sb = async (endpoint, options = {}, token = null, _retry = true) => {
+  // Toda creación de atención viaja con un client_uuid propio: si la respuesta se pierde
+  // y la atención se reenvía desde la cola offline, no se duplica.
+  if (esEncolable(endpoint, options.method) && options.body) {
+    options = { ...options, body: conClientUuid(options.body) };
+  }
   const auth = getToken() || token;
   const headers = { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Prefer": "return=representation" };
   if (auth) headers["Authorization"] = `Bearer ${auth}`;
@@ -164,6 +169,15 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
         console.error("No se pudo encolar offline:", e);
       }
     }
+    // ── Descuento de stock sin red: se encola detrás de su atención y se aplica al reconectar ──
+    if (esRpcEncolable(endpoint, options.method) && options.body) {
+      try {
+        await enqueue({ endpoint, body: options.body, rpc: true });
+        return [{ __offline: true }];
+      } catch (e) {
+        console.error("No se pudo encolar el descuento de stock:", e);
+      }
+    }
     if (typeof window !== "undefined" && window.__toastError) {
       window.__toastError("Sin conexión — verifica tu red e intenta nuevamente");
     }
@@ -186,17 +200,23 @@ export const flushOfflineQueue = async () => {
     const pendientes = await getAll();
     for (const item of pendientes) {
       const auth = getToken();
-      const headers = { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Prefer": "return=representation" };
+      const esRpc = !!item.rpc;
+      // Atenciones: si ya llegó antes (misma client_uuid), la base la ignora y no se duplica.
+      const headers = {
+        "Content-Type": "application/json", "apikey": SUPABASE_KEY,
+        "Prefer": esRpc ? "return=representation" : "return=representation,resolution=ignore-duplicates",
+      };
       if (auth) headers["Authorization"] = `Bearer ${auth}`;
+      const destino = esRpc ? item.endpoint : endpointIdempotente(item.endpoint, item.body);
       let res;
       try {
-        res = await fetch(`${SUPABASE_URL}/rest/v1/${item.endpoint}`, { method: "POST", headers, body: item.body });
+        res = await fetch(`${SUPABASE_URL}/rest/v1/${destino}`, { method: "POST", headers, body: item.body });
       } catch (_) {
         break; // sigue sin conexión: detener y conservar el resto
       }
       if (res.ok) {
         await remove(item.id);
-        enviados++;
+        if (!esRpc) enviados++;
       } else if (res.status >= 400 && res.status < 500 && res.status !== 401) {
         // Error de datos (no de red): descartar para no bloquear la cola indefinidamente
         console.error(`Descartando item offline por error ${res.status}`);

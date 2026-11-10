@@ -16,6 +16,7 @@ import { useEvento } from "../common/SelectorEvento";
 import { fetchPaciente, identFilter, chequearAlergias, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
+import { EstadoPaciente, IdentificacionPaciente, useInsumosEvento, DatalistInsumos, estadoAtencionInfo } from "../common/CamposAtencion";
 import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 /* native select styled to match shadcn Input */
@@ -45,6 +46,8 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const { eventoActual } = useEvento();
+  // Insumos reales del evento elegido en el formulario (autocompletar con stock a la vista)
+  const insumosEvento = useInsumosEvento(eventos.find(e => e.id === form.evento_id), usuario?.token);
 
   useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
 
@@ -60,14 +63,14 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
     setLoading(false);
   };
 
-  const buscarPacientePorRut = async (rut) => {
+  const buscarPacientePorRut = async (rut, tipo = form.tipo_identificacion) => {
     if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
     // 1° la entidad paciente unificada: autocompleta y trae alergias/antecedentes
     const p = await fetchPaciente(sb, rut, usuario?.token);
     setPacienteFicha(p);
     if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
     // 2° historial de atenciones previas (respaldo del autofill, con variantes de RUT)
-    const campo = form.tipo_identificacion === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
+    const campo = tipo === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
     const found = await sb(`atenciones_medicas?${identFilter(campo, rut)}&deleted_at=is.null&order=created_at.desc&limit=10`, {}, usuario?.token);
     if (found?.length > 0) {
       if (!p) { const u = found[0]; setForm(f => ({ ...f, paciente_nombre: u.paciente_nombre, paciente_edad: u.paciente_edad })); }
@@ -85,14 +88,16 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
     setForm({
       fecha_atencion: fechaLocal(ahora),
       hora_atencion: ahora.toTimeString().slice(0, 5),
-      paciente_nombre: "", paciente_rut: "", paciente_edad: "",
+      paciente_nombre: "", paciente_rut: "", paciente_pasaporte: "", tipo_identificacion: "rut", paciente_edad: "",
       categoria_paciente: "Jugador",
       evento: eventoPresel?.nombre_evento || "",
       evento_id: eventoPresel?.id || null,
+      estado_atencion: "alta",
       motivo_consulta: "", diagnostico: "", tratamiento: "", observaciones: "",
       medicamentos_prescritos: [], insumos_medico: [], requiere_administracion: false,
     });
     setHistorialPaciente([]);
+    setPacienteFicha(null);
     setModal("nueva");
   };
 
@@ -131,7 +136,8 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
       toast({ title: "Campos requeridos", description: "Completa nombre del paciente, evento y motivo de consulta.", variant: "warning" });
       return;
     }
-    if (form.paciente_rut && !validarRut(form.paciente_rut)) {
+    const esPasaporte = form.tipo_identificacion === "pasaporte";
+    if (!esPasaporte && form.paciente_rut && !validarRut(form.paciente_rut)) {
       const seguirRut = await confirmDialog({
         title: "RUT posiblemente inválido",
         description: `El RUT ${form.paciente_rut} tiene un dígito verificador incorrecto.\n\nUn RUT mal escrito crea un paciente duplicado y parte su historial en dos.\n\n¿Guardar de todos modos?`,
@@ -170,7 +176,11 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
       saturacion_oxigeno:    form.saturacion_oxigeno    ? parseInt(form.saturacion_oxigeno)    : null,
       frecuencia_respiratoria: form.frecuencia_respiratoria ? parseInt(form.frecuencia_respiratoria) : null,
       paciente_nombre:    form.paciente_nombre,
-      paciente_rut:       form.paciente_rut || null,
+      paciente_rut:       esPasaporte ? null : (form.paciente_rut || null),
+      paciente_pasaporte: esPasaporte ? (form.paciente_pasaporte || null) : null,
+      tipo_identificacion: esPasaporte ? "pasaporte" : "rut",
+      estado_atencion:    form.estado_atencion || "alta",
+      estado_cambio_at:   new Date().toISOString(),
       paciente_edad:      form.paciente_edad ? parseInt(form.paciente_edad) : null,
       categoria_paciente: form.categoria_paciente || "Jugador",
       evento_id: form.evento_id || null,
@@ -203,7 +213,9 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
             method: "POST",
             body: JSON.stringify({ p_evento_id: form.evento_id || null, p_items: items }),
           }, usuario?.token);
-          if (Array.isArray(resultado)) {
+          if (Array.isArray(resultado) && resultado[0]?.__offline) {
+            resumenStock = " · Stock se descontará al reconectar";
+          } else if (Array.isArray(resultado)) {
             const faltantes = resultado.filter(r => r.faltante > 0);
             resumenStock = faltantes.length === 0
               ? ` · Stock descontado (${resultado.length} ítem${resultado.length !== 1 ? "s" : ""})`
@@ -455,22 +467,14 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
               <Field label="Nombre del Paciente" required>
                 <Input value={form.paciente_nombre || ""} onChange={e => setForm(f => ({ ...f, paciente_nombre: e.target.value }))} placeholder="Juan Pérez" />
               </Field>
-              <Field label="RUT">
-                <Input
-                  value={form.paciente_rut || ""}
-                  onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_rut: v })); buscarPacientePorRut(v); }}
-                  placeholder="12.345.678-9"
-                />
-                {historialPaciente.length > 0 && (
-                  <p className="text-xs text-green-400 mt-1">✓ {historialPaciente.length} atención{historialPaciente.length > 1 ? "es" : ""} previa{historialPaciente.length > 1 ? "s" : ""}</p>
-                )}
-              </Field>
+              <IdentificacionPaciente form={form} setForm={setForm} onBuscar={buscarPacientePorRut} previas={historialPaciente.length} />
             </div>
 
             {/* Autocomplete de medicamentos desde el catálogo (adiós tipeos) */}
             <datalist id="dl-catalogo-meds">
               {catalogoMeds.map(n => <option key={n} value={n} />)}
             </datalist>
+            <DatalistInsumos id="dl-insumos-evento" insumos={insumosEvento} />
 
             {/* ⚠️ Ficha clínica del paciente: alergias visibles ANTES de atender */}
             {pacienteFicha && (pacienteFicha.alergias || pacienteFicha.antecedentes) && (
@@ -592,7 +596,7 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
               </div>
               {(form.insumos_medico || []).map((ins, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: C.border }}>
-                  <Input className="flex-1" placeholder="Nombre del insumo" value={ins.nombre} onChange={e => actualizarInsumo(i, "nombre", e.target.value)} />
+                  <Input className="flex-1" placeholder="Escribe y elige el insumo del carro" list="dl-insumos-evento" value={ins.nombre} onChange={e => actualizarInsumo(i, "nombre", e.target.value)} />
                   <Input type="number" className="w-20" placeholder="Cant." value={ins.cantidad} onChange={e => actualizarInsumo(i, "cantidad", parseInt(e.target.value) || 1)} />
                   <select className={cn(selectCls, "w-24")} value={ins.unidad} onChange={e => actualizarInsumo(i, "unidad", e.target.value)}>
                     <option>unid.</option><option>ml</option><option>mg</option><option>amp.</option>
@@ -607,6 +611,8 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
             <Field label="Observaciones">
               <Textarea value={form.observaciones || ""} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="Observaciones adicionales..." />
             </Field>
+
+            <EstadoPaciente value={form.estado_atencion} onChange={v => setForm(f => ({ ...f, estado_atencion: v }))} />
 
             {/* Requiere administración */}
             <label className="flex items-start gap-3 text-sm cursor-pointer">
@@ -658,6 +664,10 @@ export function VistaAtencionesMedicas({ usuario, carros }) {
               <div>
                 <p className="font-bold text-base">{form.paciente_nombre}</p>
                 {form.paciente_rut && <p style={{ color: C.textMuted }}>RUT: {form.paciente_rut}</p>}
+                {form.paciente_pasaporte && <p style={{ color: C.textMuted }}>Pasaporte: {form.paciente_pasaporte}</p>}
+                {form.estado_atencion && form.estado_atencion !== "alta" && (
+                  <p className="font-semibold" style={{ color: estadoAtencionInfo(form.estado_atencion).color }}>{estadoAtencionInfo(form.estado_atencion).label}</p>
+                )}
                 {form.paciente_edad && <p style={{ color: C.textMuted }}>Edad: {form.paciente_edad} años</p>}
                 <p className="mt-1" style={{ color: C.textMuted }}>
                   {form.evento} · {new Date(form.created_at).toLocaleString("es-CL")}

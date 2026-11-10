@@ -16,6 +16,7 @@ import { useEvento } from "../common/SelectorEvento";
 import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
+import { EstadoPaciente, IdentificacionPaciente, useInsumosEvento, DatalistInsumos } from "../common/CamposAtencion";
 import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 const TRIAJE = [
@@ -43,6 +44,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
   const [pacienteFicha, setPacienteFicha]   = useState(null);
 
   const { eventoActual } = useEvento();
+  const insumosEvento = useInsumosEvento(eventos.find(e => e.id === form.evento_id), usuario?.token);
 
   useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
 
@@ -55,7 +57,6 @@ export function VistaAtencionesEnfermeria({ usuario }) {
     let campoProfFiltro = "";
     if (prof === "Enfermero/a")    campoProfFiltro = `&enfermero_id=eq.${usuario.id}`;
     if (prof === "Paramédico")     campoProfFiltro = `&paramedico_id=eq.${usuario.id}`;
-    if (prof === "Kinesiólogo/a")  campoProfFiltro = `&kinesiologo_id=eq.${usuario.id}`;
 
     const [ats, evs] = await Promise.all([
       sb(`atenciones_medicas?deleted_at=is.null&order=created_at.desc&limit=100${filtro}${campoProfFiltro}`, {}, usuario?.token),
@@ -66,12 +67,13 @@ export function VistaAtencionesEnfermeria({ usuario }) {
     setLoading(false);
   };
 
-  const buscarPacientePorRut = async (rut) => {
+  const buscarPacientePorRut = async (rut, tipo = form.tipo_identificacion) => {
     if (!rut || rut.length < 8) { setHistorialPaciente([]); setPacienteFicha(null); return; }
     const p = await fetchPaciente(sb, rut, usuario?.token);
     setPacienteFicha(p);
     if (p) setForm(f => ({ ...f, paciente_nombre: p.nombre || f.paciente_nombre, paciente_edad: p.edad ?? f.paciente_edad }));
-    const found = await sb(`atenciones_medicas?${identFilter("paciente_rut", rut)}&deleted_at=is.null&order=created_at.desc&limit=10`, {}, usuario?.token);
+    const campo = tipo === "pasaporte" ? "paciente_pasaporte" : "paciente_rut";
+    const found = await sb(`atenciones_medicas?${identFilter(campo, rut)}&deleted_at=is.null&order=created_at.desc&limit=10`, {}, usuario?.token);
     setHistorialPaciente(found?.length > 0 ? found : []);
     if (found?.length > 0 && !p) setForm(f => ({ ...f, paciente_nombre: found[0].paciente_nombre, paciente_edad: found[0].paciente_edad }));
   };
@@ -82,10 +84,11 @@ export function VistaAtencionesEnfermeria({ usuario }) {
     setForm({
       fecha_atencion: fechaLocal(ahora),
       hora_atencion:  ahora.toTimeString().slice(0, 5),
-      paciente_nombre: "", paciente_rut: "", paciente_edad: "",
+      paciente_nombre: "", paciente_rut: "", paciente_pasaporte: "", tipo_identificacion: "rut", paciente_edad: "",
       categoria_paciente: "Jugador",
       evento: eventoPresel?.nombre_evento || "",
       evento_id: eventoPresel?.id || null,
+      estado_atencion: "alta",
       motivo_consulta: "", diagnostico: "", tratamiento: "", observaciones: "",
       insumos_medico: [],
     });
@@ -114,7 +117,8 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       toast({ title: "Campos requeridos", description: "Completa nombre del paciente, evento y motivo de consulta.", variant: "warning" });
       return;
     }
-    if (form.paciente_rut && !validarRut(form.paciente_rut)) {
+    const esPasaporte = form.tipo_identificacion === "pasaporte";
+    if (!esPasaporte && form.paciente_rut && !validarRut(form.paciente_rut)) {
       const seguirRut = await confirmDialog({
         title: "RUT posiblemente inválido",
         description: `El RUT ${form.paciente_rut} tiene un dígito verificador incorrecto.\n\nUn RUT mal escrito crea un paciente duplicado y parte su historial en dos.\n\n¿Guardar de todos modos?`,
@@ -130,7 +134,6 @@ export function VistaAtencionesEnfermeria({ usuario }) {
     const datos = {
       ...(prof === "Enfermero/a"   ? { enfermero_id:   usuario.id, enfermero_nombre:   nombreProf } : {}),
       ...(prof === "Paramédico"    ? { paramedico_id:  usuario.id, paramedico_nombre:  nombreProf } : {}),
-      ...(prof === "Kinesiólogo/a" ? { kinesiologo_id: usuario.id, kinesiologo_nombre: nombreProf } : {}),
       codigo_triaje:           form.codigo_triaje || "VERDE",
       es_emergencia:           form.codigo_triaje === "ROJO" || form.codigo_triaje === "NEGRO",
       tiempo_espera_minutos:   form.tiempo_espera_minutos ?? 60,
@@ -141,7 +144,11 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       saturacion_oxigeno:      form.saturacion_oxigeno      ? parseInt(form.saturacion_oxigeno)      : null,
       frecuencia_respiratoria: form.frecuencia_respiratoria ? parseInt(form.frecuencia_respiratoria) : null,
       paciente_nombre:         form.paciente_nombre,
-      paciente_rut:            form.paciente_rut   || null,
+      paciente_rut:            esPasaporte ? null : (form.paciente_rut || null),
+      paciente_pasaporte:      esPasaporte ? (form.paciente_pasaporte || null) : null,
+      tipo_identificacion:     esPasaporte ? "pasaporte" : "rut",
+      estado_atencion:         form.estado_atencion || "alta",
+      estado_cambio_at:        new Date().toISOString(),
       paciente_edad:           form.paciente_edad  ? parseInt(form.paciente_edad) : null,
       categoria_paciente:      form.categoria_paciente || "Jugador",
       evento_id:               form.evento_id || null,
@@ -174,7 +181,9 @@ export function VistaAtencionesEnfermeria({ usuario }) {
             method: "POST",
             body: JSON.stringify({ p_evento_id: form.evento_id || null, p_items: items }),
           }, usuario?.token);
-          if (Array.isArray(resultado)) {
+          if (Array.isArray(resultado) && resultado[0]?.__offline) {
+            resumenStock = " · Stock se descontará al reconectar";
+          } else if (Array.isArray(resultado)) {
             const faltantes = resultado.filter(r => r.faltante > 0);
             if (faltantes.length > 0) resumenStock = ` · ⚠️ Sin stock suficiente: ${faltantes.map(f => `${f.item} (faltan ${f.faltante})`).join(", ")}`;
           } else {
@@ -353,15 +362,9 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               <Field label="Nombre del Paciente" required>
                 <Input value={form.paciente_nombre || ""} onChange={e => setForm(f => ({ ...f, paciente_nombre: e.target.value }))} placeholder="Juan Pérez" />
               </Field>
-              <Field label="RUT">
-                <Input value={form.paciente_rut || ""}
-                  onChange={e => { const v = e.target.value; setForm(f => ({ ...f, paciente_rut: v })); buscarPacientePorRut(v); }}
-                  placeholder="12.345.678-9" />
-                {historialPaciente.length > 0 && (
-                  <p className="text-xs text-green-400 mt-1">✓ {historialPaciente.length} atención{historialPaciente.length > 1 ? "es" : ""} previa{historialPaciente.length > 1 ? "s" : ""}</p>
-                )}
-              </Field>
+              <IdentificacionPaciente form={form} setForm={setForm} onBuscar={buscarPacientePorRut} previas={historialPaciente.length} />
             </div>
+            <DatalistInsumos id="dl-insumos-evento-enf" insumos={insumosEvento} />
 
             {pacienteFicha && (pacienteFicha.alergias || pacienteFicha.antecedentes) && (
               <div style={{ borderRadius: 8, padding: "10px 14px", background: pacienteFicha.alergias ? C.redDim : C.surface2, border: `1px solid ${pacienteFicha.alergias ? C.red : C.border}` }}>
@@ -439,7 +442,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               </div>
               {(form.insumos_medico || []).map((ins, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: C.border }}>
-                  <Input className="flex-1" placeholder="Nombre del insumo" value={ins.nombre} onChange={e => actualizarInsumo(i, "nombre", e.target.value)} />
+                  <Input className="flex-1" placeholder="Escribe y elige el insumo del carro" list="dl-insumos-evento-enf" value={ins.nombre} onChange={e => actualizarInsumo(i, "nombre", e.target.value)} />
                   <Input type="number" className="w-20" placeholder="Cant." value={ins.cantidad} onChange={e => actualizarInsumo(i, "cantidad", parseInt(e.target.value) || 1)} />
                   <select className={cn(selectCls, "w-24")} value={ins.unidad} onChange={e => actualizarInsumo(i, "unidad", e.target.value)}>
                     <option>unid.</option><option>ml</option><option>mg</option><option>amp.</option>
@@ -454,6 +457,8 @@ export function VistaAtencionesEnfermeria({ usuario }) {
             <Field label="Observaciones">
               <Textarea value={form.observaciones || ""} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="Observaciones adicionales..." />
             </Field>
+
+            <EstadoPaciente value={form.estado_atencion} onChange={v => setForm(f => ({ ...f, estado_atencion: v }))} />
 
             {historialPaciente.length > 0 && (
               <div className="rounded-lg border p-4 space-y-2" style={{ background: C.surface2, borderColor: C.border }}>

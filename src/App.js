@@ -56,9 +56,9 @@ const PERMISOS_TAB = {
   colaTriaje:        (u, admin) => admin || u?.profesion === "Médico",
   // Enfermero/Paramédico + admin
   adminMedicamentos: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
-  // Enfermero/a + Paramédico
-  atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico" || u?.profesion === "Kinesiólogo/a",
-  // Enfermero/a + Paramédico
+  // Enfermero/a + Paramédico (los kinesiólogos registran solo en Kinesiología: la base
+  // no les permite crear atenciones médicas y la pestaña les fallaba al guardar)
+  atencionEnfermeria: (u, admin) => admin || u?.profesion === "Enfermero/a" || u?.profesion === "Paramédico",
   // Kinesiólogo + admin
   atencionKine:      (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
   bolsoKine:         (u, admin) => admin || u?.profesion === "Kinesiólogo/a",
@@ -205,8 +205,8 @@ export default function App() {
       more: [T.historialPaciente, T.configuracion],
     };
     if (prof === "Kinesiólogo/a") return {
-      primary: [T.dashboard, T.atencionEnfermeria, T.atencionKine, T.bolsoKine],
-      more: [T.historialPaciente, T.configuracion],
+      primary: [T.dashboard, T.atencionKine, T.bolsoKine, T.historialPaciente],
+      more: [T.configuracion],
     };
     if (prof === "Masoterapeuta") return {
       primary: [T.dashboard, T.masoterapia, T.atenciones, T.historialPaciente],
@@ -228,7 +228,7 @@ export default function App() {
       { id: "atenciones", label: "Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "atencionMedica", label: "Prescripción", icon: "med" },
       (esAdmin || usuario?.profesion === "Médico") && { id: "colaTriaje", label: "Cola Triaje 🚨", icon: "alert" },
-      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico" || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
+      (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "atencionEnfermeria", label: "Mis Atenciones", icon: "event" },
       (esAdmin || usuario?.profesion === "Enfermero/a" || usuario?.profesion === "Paramédico") && { id: "adminMedicamentos", label: "Administración", icon: "bolso" },
       (esAdmin || usuario?.profesion === "Kinesiólogo/a") && { id: "atencionKine", label: "Kinesiología", icon: "event" },
       (esAdmin || usuario?.profesion === "Masoterapeuta") && { id: "masoterapia", label: "Masoterapia", icon: "bolso" },
@@ -389,7 +389,7 @@ export default function App() {
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>🚨 Cola de Triaje</div>
-              <div style={S.subtitle}>Pacientes ordenados por urgencia · Se actualiza cada 30 segundos</div>
+              <div style={S.subtitle}>Pacientes en espera, ordenados por urgencia · Se actualiza sola</div>
             </div>
             <ColaTriaje usuario={usuario} />
           </div>
