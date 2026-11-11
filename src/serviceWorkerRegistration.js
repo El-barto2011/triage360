@@ -1,9 +1,14 @@
 /* Registro del service worker (public/service-worker.js).
    - Solo en producción y solo si el navegador lo soporta.
-   - Apagado de emergencia: abrir la app con ?sw=off lo desinstala y borra sus copias;
-     queda apagado en ese dispositivo hasta abrirla con ?sw=on. */
+   - Interruptor por dispositivo, desde la URL:
+       ?sw=on   lo activa en ESTE dispositivo (queda recordado)
+       ?sw=off  lo desinstala, borra sus copias y lo deja apagado (apagado de emergencia)
+   - SW_ACTIVO_POR_DEFECTO decide qué pasa en los dispositivos que nunca usaron el interruptor.
+     Mientras esté en false, la app instalable está en PRUEBA: solo corre donde se abrió con ?sw=on.
+     Para activarla para todo el equipo, cambiar a true. */
 
-const CLAVE_APAGADO = "t360_sw_off";
+export const SW_ACTIVO_POR_DEFECTO = false;
+const CLAVE = "t360_sw";            // "on" | "off" | (sin valor = usar el valor por defecto)
 
 export async function desinstalarServiceWorker() {
   try {
@@ -16,18 +21,27 @@ export async function desinstalarServiceWorker() {
   } catch (_) {}
 }
 
-/** Decide qué hacer según la URL y lo guardado: "apagar" | "registrar". */
-export function decisionServiceWorker(search, storage) {
-  const params = new URLSearchParams(search || "");
-  const sw = params.get("sw");
+/** Decide qué hacer según la URL y lo guardado: "apagar" | "registrar" | "nada". */
+export function decisionServiceWorker(search, storage, porDefecto = SW_ACTIVO_POR_DEFECTO) {
+  const sw = new URLSearchParams(search || "").get("sw");
+  let guardado = null;
   try {
-    if (sw === "off") storage.setItem(CLAVE_APAGADO, "1");
-    if (sw === "on") storage.removeItem(CLAVE_APAGADO);
-    if (storage.getItem(CLAVE_APAGADO) === "1") return "apagar";
+    if (sw === "on" || sw === "off") storage.setItem(CLAVE, sw);
+    guardado = storage.getItem(CLAVE);
   } catch (_) {
-    if (sw === "off") return "apagar";
+    guardado = sw === "on" || sw === "off" ? sw : null;
   }
-  return "registrar";
+  if (guardado === "off") return "apagar";
+  if (guardado === "on") return "registrar";
+  return porDefecto ? "registrar" : "nada";
+}
+
+/** ¿Este dispositivo tiene activa la app instalable? (para mostrar o no el aviso de instalación) */
+export function appInstalableActiva() {
+  try {
+    if (!("serviceWorker" in navigator)) return false;
+    return decisionServiceWorker("", window.localStorage) === "registrar";
+  } catch (_) { return false; }
 }
 
 export function registrarServiceWorker() {
@@ -36,6 +50,7 @@ export function registrarServiceWorker() {
 
   const decision = decisionServiceWorker(window.location.search, window.localStorage);
   if (decision === "apagar") { desinstalarServiceWorker(); return; }
+  if (decision !== "registrar") return;
 
   window.addEventListener("load", () => {
     navigator.serviceWorker

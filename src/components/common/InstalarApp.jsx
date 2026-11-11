@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Download, X, Share } from "lucide-react";
+import { appInstalableActiva } from "../../serviceWorkerRegistration";
 
 /* ════════════════════════════════════════════════════════════
    Invitación a instalar TRIAGE360 en el teléfono.
@@ -38,6 +39,8 @@ export function InstalarApp() {
   }, []);
 
   const ios = esIOS();
+  // Solo se invita a instalar donde la app instalable está activa (abre sin señal de verdad)
+  if (!appInstalableActiva()) return null;
   if (instalada || cerrado || (!aviso && !ios)) return null;
 
   const cerrar = () => {

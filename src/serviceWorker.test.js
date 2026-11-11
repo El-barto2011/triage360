@@ -152,17 +152,24 @@ describe("service worker", () => {
   });
 });
 
-describe("apagado de emergencia (?sw=off)", () => {
+describe("interruptor por dispositivo (?sw=on / ?sw=off)", () => {
   const almacen = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) }; };
 
-  test("por defecto se registra", () => {
-    expect(decisionServiceWorker("", almacen())).toBe("registrar");
+  test("en prueba (por defecto apagado): un dispositivo cualquiera no registra nada", () => {
+    expect(decisionServiceWorker("", almacen(), false)).toBe("nada");
   });
-  test("?sw=off apaga y queda apagado en visitas siguientes; ?sw=on lo reactiva", () => {
+  test("?sw=on lo activa en ese dispositivo y queda recordado", () => {
     const ls = almacen();
-    expect(decisionServiceWorker("?sw=off", ls)).toBe("apagar");
-    expect(decisionServiceWorker("", ls)).toBe("apagar");
-    expect(decisionServiceWorker("?sw=on", ls)).toBe("registrar");
-    expect(decisionServiceWorker("", ls)).toBe("registrar");
+    expect(decisionServiceWorker("?sw=on", ls, false)).toBe("registrar");
+    expect(decisionServiceWorker("", ls, false)).toBe("registrar");
+  });
+  test("?sw=off desinstala y queda apagado aunque el valor por defecto sea activo", () => {
+    const ls = almacen();
+    expect(decisionServiceWorker("?sw=off", ls, true)).toBe("apagar");
+    expect(decisionServiceWorker("", ls, true)).toBe("apagar");
+    expect(decisionServiceWorker("?sw=on", ls, true)).toBe("registrar");
+  });
+  test("cuando se active para todos, un dispositivo cualquiera registra", () => {
+    expect(decisionServiceWorker("", almacen(), true)).toBe("registrar");
   });
 });
