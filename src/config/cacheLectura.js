@@ -22,6 +22,7 @@ export const TABLAS_CACHEABLES = new Set([
   "catalogo_insumos_kines",
   "catalogo_alias",
   "insumos_kinesiologia",
+  "plantillas_atencion",
 ]);
 
 export function esCacheable(endpoint, method) {

@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Textarea } from "../ui/textarea";
 import { Input } from "../ui/input";
 import { Field } from "../common/FormControls";
+import { CamposDerivacion, limpiarDerivacion, horaAhora, SIN_ALERGIAS } from "../common/CamposAtencion";
+import { IngresoRapido, BotonIngresoRapido } from "./IngresoRapido";
 
 const TRIAJE_CONFIG = {
   ROJO:     { color: "#ef4444", emoji: "🔴", label: "URGENTE",   orden: 1, maxEspera: 5   },
@@ -29,7 +31,8 @@ export default function ColaTriaje({ usuario }) {
   const [cambiando, setCambiando] = useState(null);   // id de la atención cuyo estado se está guardando
   const [cierre, setCierre] = useState(null);         // { paciente, estado, diagnostico, tratamiento, observaciones, destino }
   const alertasAnteriores = useRef(0);
-  const { eventoActual } = useEvento();
+  const { eventoActual, eventos = [] } = useEvento();
+  const [rapido, setRapido] = useState(false);
 
   useEffect(() => {
     cargarCola();
@@ -129,18 +132,17 @@ export default function ColaTriaje({ usuario }) {
     diagnostico:   paciente.diagnostico   || "",
     tratamiento:   paciente.tratamiento   || "",
     observaciones: paciente.observaciones || "",
-    destino: "",
+    derivacion: estado === "derivado" ? { ...(paciente.derivacion || {}), hora_salida: paciente.derivacion?.hora_salida || horaAhora() } : null,
   });
 
   const guardarCierre = async () => {
     if (!cierre) return;
     const { paciente, estado } = cierre;
-    const obs = [cierre.observaciones.trim(), estado === "derivado" && cierre.destino.trim() ? `Derivado a: ${cierre.destino.trim()}` : ""]
-      .filter(Boolean).join("\n");
     const extra = {
       diagnostico:   cierre.diagnostico.trim() || null,
       tratamiento:   cierre.tratamiento.trim() || null,
-      observaciones: obs || null,
+      observaciones: cierre.observaciones.trim() || null,
+      ...(estado === "derivado" ? { derivacion: limpiarDerivacion(cierre.derivacion) } : {}),
     };
     // Si quien cierra es médico y la atención no tenía médico, queda registrado como tratante
     if (usuario?.profesion === "Médico" && !paciente.medico_id) {
@@ -182,10 +184,13 @@ export default function ColaTriaje({ usuario }) {
                 {ultimaActualizacion && ` · Última: ${ultimaActualizacion.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={cargarCola} disabled={loading}>
-              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-              Actualizar
-            </Button>
+            <div className="flex gap-2 flex-wrap justify-end">
+              <BotonIngresoRapido onClick={() => setRapido(true)} />
+              <Button variant="outline" size="sm" onClick={cargarCola} disabled={loading}>
+                <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+                Actualizar
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -226,7 +231,7 @@ export default function ColaTriaje({ usuario }) {
           <CardContent className="p-12 text-center">
             <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
             <div className="font-semibold" style={{ color: C.text }}>Cola vacía</div>
-            <div className="text-sm mt-1" style={{ color: C.textMuted }}>No hay pacientes esperando{eventoActual ? " en este evento" : ""}. Al registrar una atención, elige <strong>En espera</strong> en "¿Cómo queda el paciente?" y aparecerá aquí ordenado por urgencia.</div>
+            <div className="text-sm mt-1" style={{ color: C.textMuted }}>No hay pacientes esperando{eventoActual ? " en este evento" : ""}. Usa <strong>Ingreso rápido</strong> para recibir a un paciente en segundos; aparecerá aquí ordenado por urgencia.</div>
           </CardContent>
         </Card>
       ) : (
@@ -269,6 +274,12 @@ export default function ColaTriaje({ usuario }) {
                     <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{paciente.paciente_nombre}</div>
                     {paciente.paciente_rut && (
                       <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>RUT: {paciente.paciente_rut}</div>
+                    )}
+                    {paciente.datos_extra?.["Número de dorsal"] && (
+                      <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Dorsal {paciente.datos_extra["Número de dorsal"]}</div>
+                    )}
+                    {paciente.alergias && paciente.alergias !== SIN_ALERGIAS && (
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#ef4444", marginTop: 4 }}>⚠️ ALERGIAS: {paciente.alergias}</div>
                     )}
                     {paciente.motivo_consulta && (
                       <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
@@ -343,10 +354,11 @@ export default function ColaTriaje({ usuario }) {
               <p className="text-xs" style={{ color: C.textMuted }}>
                 Motivo: {cierre.paciente.motivo_consulta || "—"} · Los campos son opcionales.
               </p>
+              {cierre.paciente.alergias && cierre.paciente.alergias !== SIN_ALERGIAS && (
+                <p className="text-xs font-bold" style={{ color: "#ef4444" }}>⚠️ ALERGIAS: {cierre.paciente.alergias}</p>
+              )}
               {cierre.estado === "derivado" && (
-                <Field label="Derivado a">
-                  <Input value={cierre.destino} onChange={e => setCierre(c => ({ ...c, destino: e.target.value }))} placeholder="Centro asistencial, ambulancia, acompañante" />
-                </Field>
+                <CamposDerivacion value={cierre.derivacion} onChange={d => setCierre(c => ({ ...c, derivacion: d }))} />
               )}
               <Field label="Diagnóstico">
                 <Textarea value={cierre.diagnostico} onChange={e => setCierre(c => ({ ...c, diagnostico: e.target.value }))} placeholder="Evaluación / diagnóstico" />
@@ -370,6 +382,7 @@ export default function ColaTriaje({ usuario }) {
           )}
         </DialogContent>
       </Dialog>
+      <IngresoRapido abierto={rapido} onCerrar={() => setRapido(false)} usuario={usuario} eventos={eventos} eventoActual={eventoActual} onGuardado={() => cargarCola()} />
     </div>
   );
 }
