@@ -48,7 +48,7 @@ export function OfflineBanner() {
     }}>
       {offline ? <WifiOff size={16} /> : <CheckCircle2 size={16} />}
       <span>
-        {offline ? "Sin conexión" : "Conectado"}
+        {offline ? "Sin conexión · puedes seguir registrando atenciones" : "Conectado"}
         {pendientes > 0 && ` · ${pendientes} atención(es) sin sincronizar`}
       </span>
       {pendientes > 0 && online && (

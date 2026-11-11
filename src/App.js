@@ -35,6 +35,7 @@ import { HistorialMedicamentos } from "./components/atenciones/HistorialMedicame
 import { Toaster } from "./components/ui/toaster";
 import { ConfirmHost } from "./components/ui/confirm";
 import { OfflineBanner } from "./components/common/OfflineBanner";
+import { InstalarApp } from "./components/common/InstalarApp";
 import { flushOfflineQueue } from "./config/supabase";
 import { toast } from "./components/ui/use-toast";
 
@@ -523,6 +524,7 @@ export default function App() {
       <Toaster />
       <ConfirmHost />
       <OfflineBanner />
+      <InstalarApp />
 
       {isMobile && (
         <>
