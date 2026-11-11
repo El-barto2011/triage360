@@ -49,7 +49,21 @@ export function registrarServiceWorker() {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
 
   const decision = decisionServiceWorker(window.location.search, window.localStorage);
-  if (decision === "apagar") { desinstalarServiceWorker(); return; }
+  if (decision === "apagar") {
+    // Un service worker desinstalado sigue atendiendo a la página ya abierta y puede volver a
+    // crear sus copias. Por eso, si todavía controla esta página, se recarga UNA vez: la
+    // segunda carga ya no pasa por él y la limpieza queda completa.
+    const controlada = !!navigator.serviceWorker.controller;
+    desinstalarServiceWorker().then(() => {
+      let yaRecargo = false;
+      try { yaRecargo = sessionStorage.getItem("t360_sw_recarga") === "1"; } catch (_) { yaRecargo = true; }
+      if (controlada && !yaRecargo) {
+        try { sessionStorage.setItem("t360_sw_recarga", "1"); } catch (_) {}
+        window.location.replace(window.location.pathname);
+      }
+    });
+    return;
+  }
   if (decision !== "registrar") return;
 
   window.addEventListener("load", () => {
