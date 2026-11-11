@@ -1,4 +1,5 @@
 import { enqueue, getAll, remove, esEncolable, esRpcEncolable, conClientUuid, endpointIdempotente } from "./offlineQueue";
+import { esCacheable, guardarLectura, leerLectura, limpiarCacheLectura } from "./cacheLectura";
 
 export const SUPABASE_URL = "https://dnlvzwrujosuckdzmffx.supabase.co";
 export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubHZ6d3J1am9zdWNrZHptZmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NTg0MzAsImV4cCI6MjA5MDIzNDQzMH0.Bhw_ws8XNzWxJXBn1TzLjNppBD9CRWDTuEb_t92G9ZE";
@@ -8,6 +9,8 @@ export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdX
    - Persiste access_token + refresh_token en localStorage
    - Renueva automáticamente 2 min antes del vencimiento
    - Reintenta con refresh ante un 401
+   - SIN RED no se cierra la sesión: se conserva y se reintenta al volver
+     la conexión (antes, pasar una hora sin señal sacaba al usuario al login)
    ════════════════════════════════════════════════════════════ */
 
 const SESSION_KEY = "triage360_session";
@@ -43,7 +46,10 @@ export const clearSession = () => {
   _session = null;
   if (_refreshTimer) clearTimeout(_refreshTimer);
   _persist();
+  limpiarCacheLectura();   // al salir no quedan copias locales de catálogos ni eventos
 };
+
+const REINTENTO_SIN_RED_MS = 30000;
 
 export const getToken = () => _session?.access_token || null;
 
@@ -51,12 +57,27 @@ export const refreshSession = async () => {
   if (_refreshing) return _refreshing;           // ya hay un refresh en curso
   if (!_session?.refresh_token) return null;
   _refreshing = (async () => {
+    let res;
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY },
         body: JSON.stringify({ refresh_token: _session.refresh_token }),
       });
+    } catch (sinRed) {
+      // No hay conexión: la sesión NO se toca. Se reintenta en 30 s y al volver la red.
+      if (_refreshTimer) clearTimeout(_refreshTimer);
+      _refreshTimer = setTimeout(() => { refreshSession(); }, REINTENTO_SIN_RED_MS);
+      _refreshing = null;
+      return null;
+    }
+    try {
+      // Error del servidor (5xx): tampoco es un rechazo de la sesión; reintentar más tarde
+      if (res.status >= 500) {
+        if (_refreshTimer) clearTimeout(_refreshTimer);
+        _refreshTimer = setTimeout(() => { refreshSession(); }, REINTENTO_SIN_RED_MS);
+        return null;
+      }
       if (!res.ok) throw new Error(`refresh ${res.status}`);
       const data = await res.json();
       saveSession(data);
@@ -83,7 +104,10 @@ export const restoreSession = async () => {
   if (!_session?.refresh_token) { clearSession(); return null; }
   // Si vence en menos de 5 min (o ya venció), renovar de inmediato
   if (!_session.expires_at || _session.expires_at * 1000 - Date.now() < 5 * 60 * 1000) {
-    return await refreshSession();
+    const renovada = await refreshSession();
+    // Sin red la renovación no se pudo intentar: se abre igual con la sesión guardada
+    // (las escrituras quedan en la cola offline y la sesión se renueva al reconectar).
+    return renovada || _session;
   }
   _scheduleRefresh();
   return _session;
@@ -151,9 +175,17 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
       return null;
     }
     const text = await res.text();
-    return text ? JSON.parse(text) : [];
+    const data = text ? JSON.parse(text) : [];
+    // Datos de referencia: se guarda la última copia para poder trabajar sin señal
+    if (esCacheable(endpoint, options.method)) guardarLectura(endpoint, data);
+    return data;
   } catch (networkError) {
     console.error("Error de red Supabase:", networkError);
+    // ── Lectura sin red: devolver la última copia de catálogos / eventos ──
+    if (esCacheable(endpoint, options.method)) {
+      const copia = leerLectura(endpoint);
+      if (copia) return copia.data;
+    }
     // ── Cola offline: si es una creación de atención, guardar local y reintentar al reconectar ──
     if (esEncolable(endpoint, options.method) && options.body) {
       try {
@@ -178,7 +210,12 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
         console.error("No se pudo encolar el descuento de stock:", e);
       }
     }
-    if (typeof window !== "undefined" && window.__toastError) {
+    // Sin señal las lecturas fallan en cadena: el banner "Sin conexión" ya lo avisa,
+    // así que no se muestra un error por cada una. Las escrituras sí avisan.
+    const metodo = (options.method || "GET").toUpperCase();
+    const sinSenal = typeof navigator !== "undefined" && navigator.onLine === false;
+    const silenciar = metodo === "GET" && (sinSenal || options._silent);
+    if (!silenciar && typeof window !== "undefined" && window.__toastError) {
       window.__toastError("Sin conexión — verifica tu red e intenta nuevamente");
     }
     return null;
@@ -198,6 +235,10 @@ export const flushOfflineQueue = async () => {
   let enviados = 0;
   try {
     const pendientes = await getAll();
+    // Tras horas sin señal el token está vencido: renovarlo antes de reenviar
+    if (pendientes.length > 0 && _session?.expires_at && _session.expires_at * 1000 - Date.now() < 60 * 1000) {
+      await refreshSession();
+    }
     for (const item of pendientes) {
       const auth = getToken();
       const esRpc = !!item.rpc;
@@ -237,5 +278,11 @@ export const flushOfflineQueue = async () => {
 
 // Auto-sincronizar al recuperar conexión
 if (typeof window !== "undefined") {
-  window.addEventListener("online", () => { flushOfflineQueue(); });
+  window.addEventListener("online", async () => {
+    // Al volver la red: primero renovar la sesión si hace falta, después sincronizar
+    if (_session?.refresh_token && (!_session.expires_at || _session.expires_at * 1000 - Date.now() < 5 * 60 * 1000)) {
+      await refreshSession();
+    }
+    flushOfflineQueue();
+  });
 }

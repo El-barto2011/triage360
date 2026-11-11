@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import reportWebVitals from './reportWebVitals';
+import { registrarServiceWorker } from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -18,3 +19,6 @@ root.render(
 // to log results (for example: reportWebVitals(console.log))
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
+
+// App instalable: permite abrir TRIAGE360 sin señal (ver public/service-worker.js)
+registrarServiceWorker();
