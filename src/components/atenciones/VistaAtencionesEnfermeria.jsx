@@ -16,7 +16,12 @@ import { useEvento } from "../common/SelectorEvento";
 import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
-import { EstadoPaciente, IdentificacionPaciente, useInsumosEvento, DatalistInsumos } from "../common/CamposAtencion";
+import {
+  EstadoPaciente, IdentificacionPaciente, useInsumosEvento, DatalistInsumos,
+  MotivosRapidos, CamposExtra, CampoAlergias, SignosVitales, CamposDerivacion, PlantillasAtencion,
+  aplicarPlantilla, faltanSignosVitales, limpiarExtra, limpiarDerivacion, resumenDerivacion, horaAhora, SIN_ALERGIAS,
+} from "../common/CamposAtencion";
+import { IngresoRapido, BotonIngresoRapido } from "./IngresoRapido";
 import { fechaLocal, hoyLocal } from "../../config/fechas";
 
 const TRIAJE = [
@@ -44,6 +49,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
   const [pacienteFicha, setPacienteFicha]   = useState(null);
 
   const { eventoActual } = useEvento();
+  const [rapido, setRapido] = useState(false);                       // diálogo de ingreso rápido
   const insumosEvento = useInsumosEvento(eventos.find(e => e.id === form.evento_id), usuario?.token);
 
   useEffect(() => { cargarDatos(); }, [usuario, eventoActual]);
@@ -89,6 +95,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       evento: eventoPresel?.nombre_evento || "",
       evento_id: eventoPresel?.id || null,
       estado_atencion: "alta",
+      alergias: "", datos_extra: {}, derivacion: null,
       motivo_consulta: "", diagnostico: "", tratamiento: "", observaciones: "",
       insumos_medico: [],
     });
@@ -128,6 +135,17 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       });
       if (!seguirRut) return;
     }
+    // Signos vitales: en rojo y amarillo se piden, pero nunca bloquean el registro de una urgencia
+    if (faltanSignosVitales(form)) {
+      const seguir = await confirmDialog({
+        title: "Sin signos vitales",
+        description: `El triaje es ${form.codigo_triaje} y no hay ningún signo vital registrado.\n\n¿Guardar de todos modos?`,
+        confirmText: "Guardar igual",
+        cancelText: "Agregar signos",
+        variant: "danger",
+      });
+      if (!seguir) return;
+    }
     const prof = usuario?.profesion;
     const nombreProf = usuario.nombre || usuario.email;
 
@@ -148,6 +166,9 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       paciente_pasaporte:      esPasaporte ? (form.paciente_pasaporte || null) : null,
       tipo_identificacion:     esPasaporte ? "pasaporte" : "rut",
       estado_atencion:         form.estado_atencion || "alta",
+      alergias:                (form.alergias || "").trim() || null,
+      datos_extra:             limpiarExtra(form.datos_extra),
+      derivacion:              form.estado_atencion === "derivado" ? limpiarDerivacion(form.derivacion) : null,
       estado_cambio_at:        new Date().toISOString(),
       paciente_edad:           form.paciente_edad  ? parseInt(form.paciente_edad) : null,
       categoria_paciente:      form.categoria_paciente || "Jugador",
@@ -222,9 +243,12 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               {atencionesHoy.length} atenciones hoy
             </p>
           </div>
-          <Button variant="teal" size="sm" onClick={abrirNuevaAtencion}>
-            <Plus size={14} /> Nueva Atención
-          </Button>
+          <div className="flex gap-2 flex-wrap justify-end">
+            <BotonIngresoRapido onClick={() => setRapido(true)} />
+            <Button variant="teal" size="sm" onClick={abrirNuevaAtencion}>
+              <Plus size={14} /> Nueva Atención
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -373,6 +397,8 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               </div>
             )}
 
+            <CampoAlergias value={form.alergias} onChange={v => setForm(f => ({ ...f, alergias: v }))} ficha={pacienteFicha} />
+
             <div className="grid grid-cols-3 gap-4">
               <Field label="Edad">
                 <Input type="number" value={form.paciente_edad || ""} onChange={e => setForm(f => ({ ...f, paciente_edad: e.target.value }))} placeholder="35" />
@@ -390,40 +416,19 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               </Field>
             </div>
 
+            <CamposExtra value={form.datos_extra} onChange={d => setForm(f => ({ ...f, datos_extra: d }))} />
+
             <Separator />
 
-            {/* Signos Vitales */}
-            <div className="rounded-lg border p-4 space-y-3" style={{ borderColor: C.border }}>
-              <p className="text-sm font-semibold flex items-center gap-2" style={{ color: C.blue }}>
-                <Heart size={14} /> Signos Vitales
-              </p>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Presión Arterial (mmHg)</Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input type="number" placeholder="120" className="w-20" value={form.presion_sistolica || ""} onChange={e => setForm(f => ({ ...f, presion_sistolica: e.target.value }))} />
-                    <span className="text-muted-foreground">/</span>
-                    <Input type="number" placeholder="80" className="w-20" value={form.presion_diastolica || ""} onChange={e => setForm(f => ({ ...f, presion_diastolica: e.target.value }))} />
-                  </div>
-                </div>
-                <Field label="Frec. Cardíaca (lpm)">
-                  <Input type="number" placeholder="72" value={form.frecuencia_cardiaca || ""} onChange={e => setForm(f => ({ ...f, frecuencia_cardiaca: e.target.value }))} />
-                </Field>
-                <Field label="Temperatura (°C)">
-                  <Input type="number" step="0.1" placeholder="36.5" value={form.temperatura || ""} onChange={e => setForm(f => ({ ...f, temperatura: e.target.value }))} />
-                </Field>
-                <Field label="Sat. Oxígeno (%)">
-                  <Input type="number" placeholder="98" value={form.saturacion_oxigeno || ""} onChange={e => setForm(f => ({ ...f, saturacion_oxigeno: e.target.value }))} />
-                </Field>
-                <Field label="Frec. Respiratoria (rpm)">
-                  <Input type="number" placeholder="16" value={form.frecuencia_respiratoria || ""} onChange={e => setForm(f => ({ ...f, frecuencia_respiratoria: e.target.value }))} />
-                </Field>
-              </div>
-            </div>
+            <SignosVitales form={form} setForm={setForm} />
+
 
             {/* Clínico */}
+            <PlantillasAtencion usuario={usuario} form={form} onAplicar={p => setForm(f => aplicarPlantilla(f, p))} />
+
             <Field label="Motivo de Consulta" required>
-              <Textarea value={form.motivo_consulta || ""} onChange={e => setForm(f => ({ ...f, motivo_consulta: e.target.value }))} placeholder="Descripción del motivo de consulta..." />
+              <MotivosRapidos value={form.motivo_consulta} onChange={v => setForm(f => ({ ...f, motivo_consulta: v }))} />
+              <Textarea className="mt-2" value={form.motivo_consulta || ""} onChange={e => setForm(f => ({ ...f, motivo_consulta: e.target.value }))} placeholder="Descripción del motivo de consulta..." />
             </Field>
             <Field label="Diagnóstico">
               <Textarea value={form.diagnostico || ""} onChange={e => setForm(f => ({ ...f, diagnostico: e.target.value }))} placeholder="Evaluación / Diagnóstico..." />
@@ -458,7 +463,13 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               <Textarea value={form.observaciones || ""} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} placeholder="Observaciones adicionales..." />
             </Field>
 
-            <EstadoPaciente value={form.estado_atencion} onChange={v => setForm(f => ({ ...f, estado_atencion: v }))} />
+            <EstadoPaciente value={form.estado_atencion} onChange={v => setForm(f => ({
+              ...f, estado_atencion: v,
+              derivacion: v === "derivado" && !f.derivacion?.hora_salida ? { ...(f.derivacion || {}), hora_salida: horaAhora() } : f.derivacion,
+            }))} />
+            {form.estado_atencion === "derivado" && (
+              <CamposDerivacion value={form.derivacion} onChange={d => setForm(f => ({ ...f, derivacion: d }))} />
+            )}
 
             {historialPaciente.length > 0 && (
               <div className="rounded-lg border p-4 space-y-2" style={{ background: C.surface2, borderColor: C.border }}>
@@ -509,6 +520,13 @@ export function VistaAtencionesEnfermeria({ usuario }) {
                   {form.codigo_triaje}
                 </span>
               )}
+              {(form.alergias || form.derivacion || Object.keys(form.datos_extra || {}).length > 0) && (
+                <div className="rounded-lg p-3 text-xs space-y-1" style={{ background: C.surface2 }}>
+                  {form.alergias && <p><strong style={{ color: form.alergias === SIN_ALERGIAS ? C.textMuted : C.red }}>Alergias:</strong> {form.alergias}</p>}
+                  {Object.entries(form.datos_extra || {}).map(([k, v]) => <p key={k}><strong>{k}:</strong> {String(v)}</p>)}
+                  {form.derivacion && <p><strong style={{ color: "#3b82f6" }}>Derivación:</strong> {resumenDerivacion(form.derivacion) || "registrada"}</p>}
+                </div>
+              )}
               <div><p className="font-semibold mb-1">Motivo de Consulta</p><p>{form.motivo_consulta}</p></div>
               {form.diagnostico  && <div><p className="font-semibold mb-1">Diagnóstico</p><p>{form.diagnostico}</p></div>}
               {form.tratamiento  && <div><p className="font-semibold mb-1">Tratamiento</p><p>{form.tratamiento}</p></div>}
@@ -523,6 +541,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
           )}
         </DialogContent>
       </Dialog>
+      <IngresoRapido abierto={rapido} onCerrar={() => setRapido(false)} usuario={usuario} eventos={eventos} eventoActual={eventoActual} onGuardado={() => cargarDatos()} />
     </div>
   );
 }
