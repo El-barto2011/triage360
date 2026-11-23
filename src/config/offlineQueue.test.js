@@ -1,4 +1,4 @@
-import { enqueue, getAll, remove, count, esEncolable, esRpcEncolable, conClientUuid, endpointIdempotente, nuevoUuid, __resetMem, SAFELIST } from "./offlineQueue";
+import { enqueue, getAll, remove, count, esEncolable, esRpcEncolable, conClientUuid, endpointIdempotente, nuevoUuid, __resetMem, SAFELIST, filtrarDe, pendientesDe, descartarDe, subscribe, setUsuarioCola } from "./offlineQueue";
 
 // En el entorno de test (jsdom sin IndexedDB) la cola usa el fallback en memoria.
 
@@ -78,5 +78,62 @@ describe("idempotencia offline", () => {
     expect(esRpcEncolable("rpc/fn_descontar_stock", "POST")).toBe(true);
     expect(esRpcEncolable("rpc/fn_descontar_stock", "GET")).toBe(false);
     expect(esRpcEncolable("rpc/fn_fusionar_pacientes", "POST")).toBe(false);
+  });
+});
+
+describe("aislamiento por usuario (equipo compartido)", () => {
+  const A = "usuario-a", B = "usuario-b";
+
+  it("pendientesDe devuelve solo los registros del usuario, en orden", async () => {
+    await enqueue({ endpoint: "atenciones_medicas", body: '{"x":1}', user_id: A });
+    await enqueue({ endpoint: "atenciones_medicas", body: '{"x":2}', user_id: B });
+    await enqueue({ endpoint: "rpc/fn_descontar_stock", body: "{}", rpc: true, user_id: A });
+    expect((await pendientesDe(A)).map(i => i.body)).toEqual(['{"x":1}', "{}"]);
+    expect((await pendientesDe(B)).map(i => i.body)).toEqual(['{"x":2}']);
+  });
+
+  it("sin usuario no hay pendientes visibles", async () => {
+    await enqueue({ endpoint: "atenciones_medicas", body: "{}", user_id: A });
+    expect(await pendientesDe(null)).toEqual([]);
+  });
+
+  it("descartarDe borra solo los del usuario", async () => {
+    await enqueue({ endpoint: "atenciones_medicas", body: '{"x":1}', user_id: A });
+    await enqueue({ endpoint: "atenciones_medicas", body: '{"x":2}', user_id: B });
+    await descartarDe(A);
+    expect(await pendientesDe(A)).toEqual([]);
+    expect(await count()).toBe(1);
+    expect((await getAll())[0].user_id).toBe(B);
+  });
+
+  it("registros antiguos sin user_id se asignan por el autor del cuerpo", () => {
+    const items = [
+      { id: 1, endpoint: "atenciones_medicas", body: JSON.stringify({ enfermero_id: A }) },
+      { id: 2, endpoint: "rpc/fn_descontar_stock", body: "{}", rpc: true },       // sigue a la atención 1
+      { id: 3, endpoint: "atenciones_kinesiologia", body: JSON.stringify({ kinesiologo_id: B }) },
+      { id: 4, endpoint: "rpc/fn_descontar_stock", body: "{}", rpc: true },       // sigue a la atención 3
+      { id: 5, endpoint: "fichas_masoterapia", body: "no-json" },                 // sin dueño reconocible
+    ];
+    expect(filtrarDe(items, A).map(i => i.id)).toEqual([1, 2]);
+    expect(filtrarDe(items, B).map(i => i.id)).toEqual([3, 4]);
+  });
+
+  it("el contador de la UI muestra solo los pendientes del usuario conectado", async () => {
+    await enqueue({ endpoint: "atenciones_medicas", body: "{}", user_id: A });
+    await enqueue({ endpoint: "atenciones_medicas", body: "{}", user_id: B });
+    await enqueue({ endpoint: "atenciones_medicas", body: "{}", user_id: B });
+    let ultimo = null;
+    const unsub = subscribe(n => { ultimo = n; });
+    const esperar = () => new Promise(r => setTimeout(r, 0));
+    setUsuarioCola(B);
+    await esperar();
+    expect(ultimo).toBe(2);
+    setUsuarioCola(A);
+    await esperar();
+    expect(ultimo).toBe(1);
+    setUsuarioCola(null);
+    await esperar();
+    expect(ultimo).toBe(0);
+    unsub();
   });
 });

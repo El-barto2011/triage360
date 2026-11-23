@@ -33,9 +33,9 @@ import { HistorialPaciente } from "./components/pacientes/HistorialPaciente";
 import { GestionPacientes } from "./components/pacientes/GestionPacientes";
 import { HistorialMedicamentos } from "./components/atenciones/HistorialMedicamentos";
 import { Toaster } from "./components/ui/toaster";
-import { ConfirmHost } from "./components/ui/confirm";
+import { ConfirmHost, confirmDialog } from "./components/ui/confirm";
 import { OfflineBanner } from "./components/common/OfflineBanner";
-import { flushOfflineQueue } from "./config/supabase";
+import { flushOfflineQueue, prepararCierreSesion, descartarPendientesUsuario } from "./config/supabase";
 import { toast } from "./components/ui/use-toast";
 
 const PERMISOS_TAB = {
@@ -95,7 +95,22 @@ export default function App() {
     try { localStorage.setItem("triage360_user", JSON.stringify({ ...user, token: undefined })); } catch (_) {}
     setUsuario(user);
   };
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Atenciones guardadas sin conexión: intentar enviarlas antes de salir. Si no se puede,
+    // la salida se bloquea; solo se descartan si el usuario lo confirma explícitamente.
+    const { pendientes, atenciones } = await prepararCierreSesion();
+    if (pendientes > 0) {
+      const n = atenciones || pendientes;
+      const descartar = await confirmDialog({
+        title: "Atenciones sin enviar",
+        description: `Tienes ${n} atención(es) sin enviar. Conéctate a internet para enviarlas antes de salir.\n\nSi descartas, se perderán y no se podrán recuperar.`,
+        confirmText: `Descartar ${n} atención(es) y salir`,
+        cancelText: "Quedarme",
+        variant: "danger",
+      });
+      if (!descartar) return;
+      await descartarPendientesUsuario();
+    }
     clearSession();
     try { localStorage.removeItem("triage360_user"); } catch (_) {}
     setUsuario(null);

@@ -11,6 +11,8 @@
    - Cada creación lleva un client_uuid: si se reenvía dos veces, la base
      ignora la segunda (índice único) en vez de duplicar la atención.
    - El reintento es SECUENCIAL y se detiene al primer fallo.
+   - Cada registro guarda el user_id de quien lo creó: solo ese usuario lo
+     reenvía, ve su contador o puede descartarlo (equipos compartidos).
    ════════════════════════════════════════════════════════════ */
 
 const DB_NAME = "t360_offline";
@@ -76,10 +78,39 @@ let _mem = [];
 let _memSeq = 1;
 const _hasIDB = typeof indexedDB !== "undefined";
 
+/* ── Dueño de cada registro ──────────────────────────────────── */
+/** Campos de autor que usan las vistas al crear una atención (= id del usuario). */
+const AUTOR_CAMPOS = ["medico_id", "enfermero_id", "paramedico_id", "kinesiologo_id", "masoterapeuta_id"];
+
+/** Filtra (en orden FIFO) los registros que pertenecen a userId.
+    - Con user_id: pertenece si coincide.
+    - Atención antigua sin user_id: pertenece si userId figura como autor en el cuerpo.
+    - Descuento de stock antiguo sin user_id: sigue al dueño de la atención anterior. */
+export function filtrarDe(items, userId) {
+  if (!userId) return [];
+  let previoEsDe = false;
+  return items.filter((it) => {
+    let es;
+    if (it.user_id) es = it.user_id === userId;
+    else if (it.rpc) es = previoEsDe;
+    else {
+      try { const b = JSON.parse(it.body) || {}; es = AUTOR_CAMPOS.some((c) => b[c] === userId); }
+      catch (_) { es = false; }
+    }
+    if (!it.rpc) previoEsDe = es;
+    return es;
+  });
+}
+
+/** Usuario cuya cola muestra el contador de la UI (lo fija supabase.js al cambiar la sesión). */
+let _usuarioCola = null;
+export function setUsuarioCola(userId) { _usuarioCola = userId || null; _notify(); }
+
 /* ── Suscriptores del contador (para la UI) ──────────────────── */
 const _subs = new Set();
-function _notify() { count().then(n => _subs.forEach(cb => { try { cb(n); } catch (_) {} })); }
-export function subscribe(cb) { _subs.add(cb); count().then(cb); return () => _subs.delete(cb); }
+const _countMio = async () => (await pendientesDe(_usuarioCola)).length;
+function _notify() { _countMio().then(n => _subs.forEach(cb => { try { cb(n); } catch (_) {} })).catch(() => {}); }
+export function subscribe(cb) { _subs.add(cb); _countMio().then(cb).catch(() => {}); return () => _subs.delete(cb); }
 
 /* ── Acceso IndexedDB ────────────────────────────────────────── */
 function _openDB() {
@@ -153,5 +184,15 @@ export async function count() {
   });
 }
 
+/** Pendientes del usuario, en orden FIFO. */
+export async function pendientesDe(userId) {
+  return filtrarDe(await getAll(), userId);
+}
+
+/** Descarta SOLO los pendientes del usuario (los de otros usuarios no se tocan). */
+export async function descartarDe(userId) {
+  for (const it of await pendientesDe(userId)) await remove(it.id);
+}
+
 /* Test helper: limpiar cola en memoria. */
-export function __resetMem() { _mem = []; _memSeq = 1; }
+export function __resetMem() { _mem = []; _memSeq = 1; _usuarioCola = null; }
