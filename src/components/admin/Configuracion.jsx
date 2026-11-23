@@ -1,16 +1,78 @@
+import { useState } from "react";
 import { C, S, TEMA_ACTUAL, cambiarTema } from "../../config/theme";
 import { INDUSTRIAS, getIndustria } from "../../config/permisos";
+import { saveSession } from "../../config/supabase";
+import { validarPassword, verificarPasswordActual, actualizarPassword, PASSWORD_MIN } from "../../config/password";
+
+/* Cambiar la contraseña del usuario conectado. Pide la actual para que nadie
+   pueda cambiarla desde una sesión abierta y desatendida. */
+export function CambiarPassword({ email }) {
+  const [actual, setActual] = useState("");
+  const [nueva, setNueva] = useState("");
+  const [confirmar, setConfirmar] = useState("");
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    setError(""); setOk("");
+    if (!actual) { setError("Ingresa tu contraseña actual."); return; }
+    const err = validarPassword(nueva, confirmar);
+    if (err) { setError(err); return; }
+    setGuardando(true);
+    const sesion = await verificarPasswordActual(email, actual);
+    if (!sesion) { setGuardando(false); setError("La contraseña actual no es correcta."); return; }
+    saveSession(sesion); // la verificación abre una sesión nueva: se usa en adelante
+    const r = await actualizarPassword(sesion.access_token, nueva);
+    setGuardando(false);
+    if (!r.ok) { setError(r.error); return; }
+    setActual(""); setNueva(""); setConfirmar("");
+    setOk("Contraseña actualizada. Úsala la próxima vez que ingreses.");
+  };
+
+  const label = { display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 };
+  return (
+    <div style={S.card}>
+      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>🔒 Cambiar contraseña</div>
+      <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>
+        Mínimo {PASSWORD_MIN} caracteres, con al menos una letra y un número.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <div>
+          <label style={label} htmlFor="cp-actual">Contraseña actual</label>
+          <input id="cp-actual" style={S.input} type="password" autoComplete="current-password" value={actual} onChange={e => setActual(e.target.value)} />
+        </div>
+        <div>
+          <label style={label} htmlFor="cp-nueva">Nueva contraseña</label>
+          <input id="cp-nueva" style={S.input} type="password" autoComplete="new-password" value={nueva} onChange={e => setNueva(e.target.value)} />
+        </div>
+        <div>
+          <label style={label} htmlFor="cp-confirmar">Repite la nueva</label>
+          <input id="cp-confirmar" style={S.input} type="password" autoComplete="new-password" value={confirmar} onChange={e => setConfirmar(e.target.value)} onKeyDown={e => e.key === "Enter" && guardar()} />
+        </div>
+      </div>
+      {error && <div role="alert" style={{ background: C.redDim, border: `1px solid ${C.red}30`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.red, marginBottom: 12 }}>{error}</div>}
+      {ok && <div role="status" style={{ background: C.accentDim, border: `1px solid ${C.accent}30`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.accent, marginBottom: 12 }}>{ok}</div>}
+      <button style={{ ...S.btn("primary"), opacity: guardando ? 0.7 : 1 }} onClick={guardar} disabled={guardando}>
+        {guardando ? "Guardando..." : "Cambiar contraseña"}
+      </button>
+    </div>
+  );
+}
 
 export function Configuracion({ industriaKey, setIndustriaKey, usuario }) {
   const industria = getIndustria(industriaKey);
+  const esAdmin = usuario?.rol === "admin";
 
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
         <div style={S.title}>Configuración ⚙️</div>
-        <div style={S.subtitle}>Personaliza TRIAGE360 para tu organización</div>
+        <div style={S.subtitle}>{esAdmin ? "Personaliza TRIAGE360 para tu organización" : "Tu cuenta"}</div>
       </div>
 
+      {/* Apariencia, tipo de organización y vista previa: solo administradores */}
+      {esAdmin && (<>
       {/* Apariencia: modo oscuro / modo terreno */}
       <div style={S.card}>
         <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>🎨 Apariencia</div>
@@ -109,6 +171,8 @@ export function Configuracion({ industriaKey, setIndustriaKey, usuario }) {
         </div>
       </div>
 
+      </>)}
+
       {/* Info cuenta */}
       <div style={S.card}>
         <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>👤 Información de Cuenta</div>
@@ -124,6 +188,8 @@ export function Configuracion({ industriaKey, setIndustriaKey, usuario }) {
           </div>
         ))}
       </div>
+
+      {usuario?.email && <CambiarPassword email={usuario.email} />}
     </div>
   );
 }

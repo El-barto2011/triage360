@@ -1,13 +1,28 @@
 import { useState, useEffect } from "react";
 import { C, S } from "../../config/theme";
 import { SUPABASE_URL, SUPABASE_KEY, saveSession, clearSession } from "../../config/supabase";
+import { solicitarRecuperacion } from "../../config/password";
 
-export function Login({ onLogin }) {
+export function Login({ onLogin, aviso = "" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [anima, setAnima] = useState(false);
+  const [modo, setModo] = useState("login");        // "login" | "recuperar"
+  const [mensaje, setMensaje] = useState(aviso);    // avisos de éxito (verde)
+
+  const pedirRecuperacion = async () => {
+    if (!email) { setError("Ingresa tu email"); return; }
+    setLoading(true); setError(""); setMensaje("");
+    const r = await solicitarRecuperacion(email, window.location.origin);
+    setLoading(false);
+    if (!r.ok) { setError(r.error); return; }
+    // Mismo mensaje exista o no la cuenta: no revela qué correos están registrados.
+    setMensaje("Si el correo está registrado, te enviamos un enlace para crear una nueva contraseña. Revisa tu bandeja (y la carpeta de spam).");
+  };
+
+  const cambiarModo = (m) => { setModo(m); setError(""); setMensaje(""); };
 
   // La animación del logo parte SOLO si el navegador está renderizando frames
   // de verdad (2 rAF seguidos). Si no, el logo queda visible estático.
@@ -19,7 +34,7 @@ export function Login({ onLogin }) {
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Ingresa tu email y contraseña"); return; }
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setMensaje("");
     try {
       const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
         method: "POST",
@@ -101,20 +116,40 @@ export function Login({ onLogin }) {
             </g>
           </svg>
         </div>
+        {modo === "recuperar" && (
+          <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>
+            Escribe tu email y te enviaremos un enlace para crear una nueva contraseña.
+          </div>
+        )}
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Email</label>
-          <input style={S.input} type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
+          <label htmlFor="login-email" style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Email</label>
+          <input id="login-email" style={S.input} type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && (modo === "login" ? handleLogin() : pedirRecuperacion())} />
         </div>
-        <div style={{ marginBottom: 24 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Contraseña</label>
-          <input style={S.input} type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
+        {modo === "login" && (
+          <div style={{ marginBottom: 8 }}>
+            <label htmlFor="login-password" style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Contraseña</label>
+            <input id="login-password" style={S.input} type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
+          </div>
+        )}
+        <div style={{ textAlign: "right", marginBottom: 16 }}>
+          <button type="button" onClick={() => cambiarModo(modo === "login" ? "recuperar" : "login")}
+            style={{ background: "none", border: "none", padding: 0, color: C.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            {modo === "login" ? "¿Olvidaste tu contraseña?" : "← Volver a ingresar"}
+          </button>
         </div>
-        {error && <div style={{ background: C.redDim, border: `1px solid ${C.red}30`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.red, marginBottom: 16 }}>{error}</div>}
-        <button style={{ ...S.btn("primary"), width: "100%", padding: "12px", fontSize: 15, opacity: loading ? 0.7 : 1 }} onClick={handleLogin} disabled={loading}>
-          {loading ? "Ingresando..." : "Ingresar"}
-        </button>
+        {mensaje && <div role="status" style={{ background: C.accentDim, border: `1px solid ${C.accent}30`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.accent, marginBottom: 16 }}>{mensaje}</div>}
+        {error && <div role="alert" style={{ background: C.redDim, border: `1px solid ${C.red}30`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.red, marginBottom: 16 }}>{error}</div>}
+        {modo === "login" ? (
+          <button style={{ ...S.btn("primary"), width: "100%", padding: "12px", fontSize: 15, opacity: loading ? 0.7 : 1 }} onClick={handleLogin} disabled={loading}>
+            {loading ? "Ingresando..." : "Ingresar"}
+          </button>
+        ) : (
+          <button style={{ ...S.btn("primary"), width: "100%", padding: "12px", fontSize: 15, opacity: loading ? 0.7 : 1 }} onClick={pedirRecuperacion} disabled={loading}>
+            {loading ? "Enviando..." : "Enviar enlace"}
+          </button>
+        )}
         <div style={{ marginTop: 20, padding: "12px 14px", background: C.surface2, borderRadius: 8, fontSize: 12, color: C.textMuted }}>
-          <strong>💡 ¿Primera vez o olvidaste tu contraseña?</strong> Pide tu acceso al administrador de tu organización.
+          <strong>💡 ¿Primera vez?</strong> Pide tu acceso al administrador de tu organización.
         </div>
       </div>
     </div>

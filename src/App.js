@@ -6,6 +6,8 @@ import { sb, restoreSession, clearSession } from "./config/supabase";
 import { useIsMobile } from "./hooks/useIsMobile";
 
 import { Login } from "./components/auth/Login";
+import { RecuperarPassword } from "./components/auth/RecuperarPassword";
+import { leerRecuperacion } from "./config/password";
 import { SinPermiso } from "./components/common/SinPermiso";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import { VistaCarrosClinicosDB } from "./components/inventario/VistaCarrosClinicosDB";
@@ -47,7 +49,8 @@ const PERMISOS_TAB = {
   preciosMeds:       (_u, admin) => admin,
   preciosKine:       (_u, admin) => admin,
   insumosGrales:     (_u, admin) => admin,
-  configuracion:     (_u, admin) => admin,
+  // Configuración: todos (cuenta y cambio de contraseña); lo de la organización es solo admin, dentro de la vista
+  configuracion:     (u) => !!u,
   historialMeds:     (_u, admin) => admin,
   logsAuditoria:     (_u, admin) => admin,
   gestionPacientes:  (_u, admin) => admin,
@@ -77,6 +80,9 @@ export default function App() {
   const [carros] = useState(CARROS_INICIALES);
   const [usuario, setUsuario] = useState(null);
   const [restaurando, setRestaurando] = useState(true);
+  // Enlace del correo de recuperación (#...&type=recovery): tiene prioridad sobre todo lo demás
+  const [recuperacion, setRecuperacion] = useState(() => leerRecuperacion(window.location.hash));
+  const [avisoLogin, setAvisoLogin] = useState("");
   const [industriaKey, setIndustriaKey] = useState(() => localStorage.getItem("industriaKey") || "eventos");
   const [gruposCerrados, setGruposCerrados] = useState(() => {
     try { return JSON.parse(localStorage.getItem("t360_nav_cerrados") || "{}"); } catch (_) { return {}; }
@@ -99,6 +105,22 @@ export default function App() {
     clearSession();
     try { localStorage.removeItem("triage360_user"); } catch (_) {}
     setUsuario(null);
+  };
+
+  // Quitar los tokens del enlace de recuperación de la barra de direcciones (y del historial)
+  useEffect(() => {
+    if (recuperacion && window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Al terminar la recuperación: se cierra cualquier sesión y se vuelve al login normal
+  const terminarRecuperacion = (mensaje) => {
+    clearSession();
+    try { localStorage.removeItem("triage360_user"); } catch (_) {}
+    setUsuario(null);
+    setAvisoLogin(mensaje || "");
+    setRecuperacion(null);
   };
 
   // Restaurar sesión al cargar (sobrevive recargas y pestañas cerradas)
@@ -154,8 +176,9 @@ export default function App() {
       });
   }, [usuario]);
 
+  if (recuperacion) return <RecuperarPassword recuperacion={recuperacion} onTerminar={terminarRecuperacion} />;
   if (restaurando) return null; // evita parpadeo del login mientras se restaura la sesión
-  if (!usuario) return <Login onLogin={handleLogin} />;
+  if (!usuario) return <Login onLogin={handleLogin} aviso={avisoLogin} />;
 
   const esAdmin = usuario?.rol === "admin";
   const permisos = getPermisos(usuario);
