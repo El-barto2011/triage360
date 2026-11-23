@@ -1,4 +1,4 @@
-import { enqueue, getAll, remove, esEncolable, esRpcEncolable, conClientUuid, endpointIdempotente } from "./offlineQueue";
+import { enqueue, remove, esEncolable, esRpcEncolable, conClientUuid, endpointIdempotente, pendientesDe, descartarDe, setUsuarioCola } from "./offlineQueue";
 
 export const SUPABASE_URL = "https://dnlvzwrujosuckdzmffx.supabase.co";
 export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubHZ6d3J1am9zdWNrZHptZmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NTg0MzAsImV4cCI6MjA5MDIzNDQzMH0.Bhw_ws8XNzWxJXBn1TzLjNppBD9CRWDTuEb_t92G9ZE";
@@ -37,15 +37,30 @@ export const saveSession = (data) => {
   };
   _persist();
   _scheduleRefresh();
+  setUsuarioCola(usuarioActual());
 };
 
 export const clearSession = () => {
   _session = null;
   if (_refreshTimer) clearTimeout(_refreshTimer);
   _persist();
+  setUsuarioCola(null);
 };
 
 export const getToken = () => _session?.access_token || null;
+
+/** id del usuario de la sesión activa (claim `sub` del token), o null. */
+export const usuarioActual = () => {
+  const t = _session?.access_token;
+  if (!t) return null;
+  try {
+    let p = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (p.length % 4) p += "=";
+    return JSON.parse(atob(p))?.sub || null;
+  } catch (_) {
+    return null;
+  }
+};
 
 export const refreshSession = async () => {
   if (_refreshing) return _refreshing;           // ya hay un refresh en curso
@@ -86,6 +101,7 @@ export const restoreSession = async () => {
     return await refreshSession();
   }
   _scheduleRefresh();
+  setUsuarioCola(usuarioActual());
   return _session;
 };
 
@@ -157,7 +173,7 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
     // ── Cola offline: si es una creación de atención, guardar local y reintentar al reconectar ──
     if (esEncolable(endpoint, options.method) && options.body) {
       try {
-        await enqueue({ endpoint, body: options.body });
+        await enqueue({ endpoint, body: options.body, user_id: usuarioActual() });
         if (typeof window !== "undefined" && window.__toastOffline) {
           window.__toastOffline("Sin conexión — atención guardada localmente, se sincronizará al reconectar");
         }
@@ -172,7 +188,7 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
     // ── Descuento de stock sin red: se encola detrás de su atención y se aplica al reconectar ──
     if (esRpcEncolable(endpoint, options.method) && options.body) {
       try {
-        await enqueue({ endpoint, body: options.body, rpc: true });
+        await enqueue({ endpoint, body: options.body, rpc: true, user_id: usuarioActual() });
         return [{ __offline: true }];
       } catch (e) {
         console.error("No se pudo encolar el descuento de stock:", e);
@@ -187,17 +203,19 @@ export const sb = async (endpoint, options = {}, token = null, _retry = true) =>
 
 /* ════════════════════════════════════════════════════════════
    REPLAY DE LA COLA OFFLINE
-   Reintenta secuencialmente las escrituras encoladas. Se detiene
-   al primer fallo (probablemente sigue sin red). Devuelve
-   { enviados, pendientes }.
+   Reintenta secuencialmente las escrituras encoladas DEL USUARIO
+   CONECTADO (las de otros usuarios del mismo equipo se saltan y se
+   conservan). Se detiene al primer fallo (probablemente sigue sin
+   red). Devuelve { enviados, pendientes } del usuario conectado.
    ════════════════════════════════════════════════════════════ */
 let _flushing = false;
 export const flushOfflineQueue = async () => {
   if (_flushing) return { enviados: 0, pendientes: null };
   _flushing = true;
   let enviados = 0;
+  const uid = usuarioActual();
   try {
-    const pendientes = await getAll();
+    const pendientes = await pendientesDe(uid);
     for (const item of pendientes) {
       const auth = getToken();
       const esRpc = !!item.rpc;
@@ -225,7 +243,7 @@ export const flushOfflineQueue = async () => {
         break; // 401/5xx: reintentar más tarde
       }
     }
-    const restantes = await getAll();
+    const restantes = await pendientesDe(uid);
     if (enviados > 0 && typeof window !== "undefined" && window.__toastOffline) {
       window.__toastOffline(`${enviados} atención(es) sincronizada(s)${restantes.length ? `, ${restantes.length} pendiente(s)` : ""}`);
     }
@@ -234,6 +252,31 @@ export const flushOfflineQueue = async () => {
     _flushing = false;
   }
 };
+
+/* ════════════════════════════════════════════════════════════
+   CIERRE DE SESIÓN CON PENDIENTES
+   Antes de salir se intenta enviar lo pendiente del usuario (con
+   tope de tiempo). Devuelve lo que sigue sin enviar para que la UI
+   bloquee la salida; descartar solo ocurre si el usuario lo confirma.
+   ════════════════════════════════════════════════════════════ */
+export const prepararCierreSesion = async (timeoutMs = 10000) => {
+  const uid = usuarioActual();
+  const resumen = (items) => ({
+    pendientes: items.length,
+    atenciones: items.filter((i) => !i.rpc).length,
+  });
+  if ((await pendientesDe(uid)).length === 0) return resumen([]);
+  let timer;
+  await Promise.race([
+    flushOfflineQueue(),
+    new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); }),
+  ]);
+  clearTimeout(timer);
+  return resumen(await pendientesDe(uid));
+};
+
+/** Descarta SOLO los pendientes del usuario conectado (requiere confirmación previa en la UI). */
+export const descartarPendientesUsuario = async () => descartarDe(usuarioActual());
 
 // Auto-sincronizar al recuperar conexión
 if (typeof window !== "undefined") {
