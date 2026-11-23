@@ -11,8 +11,18 @@ const h = (v) => String(v ?? '')
 const hList = (arr) => (Array.isArray(arr) ? arr : []).map(h);
 const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
 
+// Destinatarios de reportes y alertas internas: SOLO desde la variable REPORT_RECIPIENTS
+// (correos separados por coma). Sin valor por defecto: si falta, no se envía el correo.
+function destinatariosReporte() {
+  const lista = String(process.env.REPORT_RECIPIENTS || '').split(',').map(s => s.trim()).filter(Boolean);
+  const validos = lista.filter(s => EMAIL_RE.test(s));
+  if (validos.length !== lista.length) console.error('REPORT_RECIPIENTS contiene correos inválidos; se ignoran.');
+  if (validos.length === 0) console.error('REPORT_RECIPIENTS no está configurada en Vercel: correo NO enviado.');
+  return validos;
+}
+
 // Tipos de correo que solo puede disparar un administrador (se generan desde Eventos y Reportes).
-const SOLO_ADMIN = new Set(['asignacion_evento', 'reporte_evento']);
+const SOLO_ADMIN = new Set(['asignacion_evento', 'reporte_evento', 'alerta_stock']);
 
 async function esAdmin(userId) {
   try {
@@ -64,13 +74,19 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Solo un administrador puede enviar este correo' });
   }
 
-  /* ══════════ REPORTE DE CIERRE DE EVENTO (con CSV adjunto) ══════════ */
+  /* ══════════ REPORTE DE CIERRE DE EVENTO (solo totales, sin datos de pacientes) ══════════
+     El detalle clínico por paciente ya NO viaja por correo: el admin lo descarga desde
+     Reportes → "Detalle clínico (CSV)", con su propia sesión. */
   if (tipo === 'reporte_evento') {
     try {
       const { evento_id: eventoIdRaw, evento_nombre, fecha_cierre } = req.body.data || req.body;
       const evento_id = Number(eventoIdRaw);
       if (!Number.isInteger(evento_id) || evento_id <= 0) {
         return res.status(400).json({ error: 'evento_id inválido' });
+      }
+      const destinatarios = destinatariosReporte();
+      if (destinatarios.length === 0) {
+        return res.status(500).json({ error: 'REPORT_RECIPIENTS no está configurada: correo no enviado' });
       }
       const SB = process.env.SUPABASE_URL;
       const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -81,31 +97,18 @@ export default async function handler(req, res) {
       };
 
       const [medicas, kines, fichas, masivas, consumos] = await Promise.all([
-        get(`atenciones_medicas?evento_id=eq.${evento_id}&deleted_at=is.null&select=created_at,paciente_nombre,paciente_rut,paciente_edad,codigo_triaje,motivo_consulta,diagnostico,tratamiento,medico_nombre,es_emergencia&order=created_at`),
-        get(`atenciones_kinesiologia?evento_id=eq.${evento_id}&deleted_at=is.null&select=created_at,paciente_nombre,paciente_rut,motivo_consulta,evaluacion_inicial,tratamiento_realizado,kinesiologo_nombre&order=created_at`),
-        get(`fichas_masoterapia?evento_id=eq.${evento_id}&deleted_at=is.null&select=created_at,paciente_nombre,zona_afectada,dolor_inicial,dolor_posterior,duracion_minutos,masoterapeuta_nombre&order=created_at`),
-        get(`atenciones_masoterapia_masiva?evento_id=eq.${evento_id}&select=fecha,masajes_realizados,masoterapeuta_nombre`),
-        get(`consumos_evento?evento_id=eq.${evento_id}&origen=neq.prescripcion&select=item_nombre,cantidad,precio_unitario`),
+        // Solo se piden ids para contar: ningún dato de paciente pasa por este endpoint.
+        get(`atenciones_medicas?evento_id=eq.${evento_id}&deleted_at=is.null&select=id`),
+        get(`atenciones_kinesiologia?evento_id=eq.${evento_id}&deleted_at=is.null&select=id`),
+        get(`fichas_masoterapia?evento_id=eq.${evento_id}&deleted_at=is.null&select=id`),
+        get(`atenciones_masoterapia_masiva?evento_id=eq.${evento_id}&select=masajes_realizados`),
+        get(`consumos_evento?evento_id=eq.${evento_id}&origen=neq.prescripcion&select=cantidad,precio_unitario`),
       ]);
 
       const masajesTotal = masivas.reduce((a, m) => a + (Number(m.masajes_realizados) || 0), 0);
       const costoInsumos = consumos.reduce((a, c) => a + Number(c.cantidad || 0) * Number(c.precio_unitario || 0), 0);
       const clp = (n) => '$' + Math.round(n).toLocaleString('es-CL');
       const fmtF = (d) => d ? new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-
-      // ── CSV adjunto ──
-      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      let csv = '﻿REPORTE DE EVENTO;' + esc(evento_nombre) + '\nCerrado;' + esc(fmtF(fecha_cierre)) + '\n\n';
-      csv += 'ATENCIONES MEDICAS (' + medicas.length + ')\nFecha;Paciente;RUT;Edad;Triaje;Emergencia;Motivo;Diagnostico;Tratamiento;Profesional\n';
-      medicas.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.paciente_rut, a.paciente_edad, a.codigo_triaje, a.es_emergencia ? 'SI' : 'NO', a.motivo_consulta, a.diagnostico, a.tratamiento, a.medico_nombre].map(esc).join(';') + '\n'; });
-      csv += '\nKINESIOLOGIA (' + kines.length + ')\nFecha;Paciente;RUT;Motivo;Evaluacion;Tratamiento;Profesional\n';
-      kines.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.paciente_rut, a.motivo_consulta, a.evaluacion_inicial, a.tratamiento_realizado, a.kinesiologo_nombre].map(esc).join(';') + '\n'; });
-      csv += '\nMASOTERAPIA FICHAS (' + fichas.length + ')\nFecha;Paciente;Zona;Dolor inicial;Dolor final;Duracion (min);Profesional\n';
-      fichas.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.zona_afectada, a.dolor_inicial, a.dolor_posterior, a.duracion_minutos, a.masoterapeuta_nombre].map(esc).join(';') + '\n'; });
-      csv += '\nMASAJES MASIVOS;' + masajesTotal + '\n';
-      csv += '\nINSUMOS CONSUMIDOS (' + consumos.length + ')\nItem;Cantidad;Precio unitario;Total\n';
-      consumos.forEach(c => { csv += [c.item_nombre, c.cantidad, c.precio_unitario ?? 'sin precio', c.precio_unitario ? Number(c.cantidad) * Number(c.precio_unitario) : ''].map(esc).join(';') + '\n'; });
-      csv += '\nCOSTO TOTAL INSUMOS;' + clp(costoInsumos) + '\n';
 
       const totalAt = medicas.length + kines.length + fichas.length;
       const htmlContent = `
@@ -121,19 +124,15 @@ export default async function handler(req, res) {
               <tr><td style="padding:9px 0;border-bottom:1px solid #1e2d3d">📦 Insumos consumidos (costo)</td><td style="text-align:right;font-weight:700">${clp(costoInsumos)}</td></tr>
               <tr><td style="padding:9px 0">Σ Total atenciones individuales</td><td style="text-align:right;font-weight:800;color:#00c2a8;font-size:18px">${totalAt}</td></tr>
             </table>
-            <p style="color:#9fb3c8;font-size:13px">El detalle completo va adjunto en CSV (se abre con Excel). Generado automáticamente por TRIAGE360.</p>
+            <p style="color:#9fb3c8;font-size:13px">El detalle por paciente se descarga en <a href="https://app.triage360.cl" style="color:#00c2a8">app.triage360.cl</a> → Reportes → "Detalle clínico (CSV)" (solo administradores). Generado automáticamente por TRIAGE360.</p>
           </div>
         </div>`;
 
       const { data, error } = await resend.emails.send({
         from: 'TRIAGE360 <alfredo.jara@sgtrumao.cl>',
-        to: ['alfredo.jara@sgtrumao.cl', 'francia.munoz@sgtrumao.cl'],
+        to: destinatarios,
         subject: `📊 Reporte de cierre: ${evento_nombre} (${totalAt} atenciones)`,
         html: htmlContent,
-        attachments: [{
-          filename: `reporte-${String(evento_nombre).replace(/[^a-zA-Z0-9]+/g, '-').slice(0, 40)}.csv`,
-          content: Buffer.from(csv, 'utf-8').toString('base64'),
-        }],
       });
       if (error) { console.error('Error reporte_evento:', error); return res.status(400).json({ error }); }
       return res.status(200).json({ success: true, data });
@@ -376,9 +375,13 @@ export default async function handler(req, res) {
 </body>
 </html>`;
 
+      const destinatarios = destinatariosReporte();
+      if (destinatarios.length === 0) {
+        return res.status(500).json({ error: 'REPORT_RECIPIENTS no está configurada: correo no enviado' });
+      }
       const { data, error } = await resend.emails.send({
         from: 'TRIAGE360 <alfredo.jara@sgtrumao.cl>',
-        to: ['alfredo.jara@sgtrumao.cl', 'francia.munoz@sgtrumao.cl'],
+        to: destinatarios,
         subject: `🚨 Stock bajo mínimo en evento: ${evento}`,
         html: htmlContent
       });
