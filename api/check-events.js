@@ -5,6 +5,16 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Destinatarios SOLO desde REPORT_RECIPIENTS (correos separados por coma). Sin valor por defecto.
+const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
+function destinatariosReporte() {
+  const lista = String(process.env.REPORT_RECIPIENTS || '').split(',').map(s => s.trim()).filter(Boolean);
+  const validos = lista.filter(s => EMAIL_RE.test(s));
+  if (validos.length !== lista.length) console.error('REPORT_RECIPIENTS contiene correos inválidos; se ignoran.');
+  if (validos.length === 0) console.error('REPORT_RECIPIENTS no está configurada en Vercel: correo NO enviado.');
+  return validos;
+}
+
 export default async function handler(req, res) {
   // Verificar autorización (cron de Vercel)
   const authHeader = req.headers.authorization;
@@ -84,13 +94,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. Enviar email si hay eventos cerrados
-    if (eventosCerrados.length > 0) {
+    // 3. Enviar email si hay eventos cerrados (solo si REPORT_RECIPIENTS está configurada;
+    //    el cierre de los eventos ya quedó hecho igual)
+    const destinatarios = eventosCerrados.length > 0 ? destinatariosReporte() : [];
+    if (eventosCerrados.length > 0 && destinatarios.length > 0) {
       const htmlContent = generarEmailHTML(eventosCerrados);
 
       const { data, error } = await resend.emails.send({
         from: 'TRIAGE360 <alfredo.jara@sgtrumao.cl>',
-        to: ['alfredo.jara@sgtrumao.cl', 'francia.munoz@sgtrumao.cl'],
+        to: destinatarios,
         subject: `🔒 ${eventosCerrados.length} evento${eventosCerrados.length > 1 ? 's' : ''} cerrado${eventosCerrados.length > 1 ? 's' : ''} automáticamente`,
         html: htmlContent
       });

@@ -230,6 +230,52 @@ export function VistaReportes({ usuario, esAdmin }) {
     document.body.removeChild(link);
   };
 
+  /* ── Detalle clínico por paciente (solo admin) ───────────
+     Antes viajaba como CSV adjunto en el correo de cierre. Ahora se genera aquí,
+     en el navegador, con la sesión del admin (las reglas de la base deciden qué ve). */
+  const exportarDetalleClinico = async () => {
+    if (!esAdmin) return;
+    const eventoObj = eventos.find(e => e.nombre_evento === eventoSeleccionado);
+    if (!eventoObj) return;
+    const id = Number(eventoObj.id);
+    const opts = { _silent: true };
+    const [medicas, kines, fichas, masivas, consumos] = await Promise.all([
+      sb(`atenciones_medicas?evento_id=eq.${id}&deleted_at=is.null&select=created_at,paciente_nombre,paciente_rut,paciente_edad,codigo_triaje,motivo_consulta,diagnostico,tratamiento,medico_nombre,es_emergencia&order=created_at`, opts, usuario?.token),
+      sb(`atenciones_kinesiologia?evento_id=eq.${id}&deleted_at=is.null&select=created_at,paciente_nombre,paciente_rut,motivo_consulta,evaluacion_inicial,tratamiento_realizado,kinesiologo_nombre&order=created_at`, opts, usuario?.token),
+      sb(`fichas_masoterapia?evento_id=eq.${id}&deleted_at=is.null&select=created_at,paciente_nombre,zona_afectada,dolor_inicial,dolor_posterior,duracion_minutos,masoterapeuta_nombre&order=created_at`, opts, usuario?.token),
+      sb(`atenciones_masoterapia_masiva?evento_id=eq.${id}&select=masajes_realizados`, opts, usuario?.token),
+      sb(`consumos_evento?evento_id=eq.${id}&origen=neq.prescripcion&select=item_nombre,cantidad,precio_unitario`, opts, usuario?.token),
+    ]);
+    if ([medicas, kines, fichas, masivas, consumos].some(r => r === null)) {
+      toast({ title: "No se pudo generar el detalle", description: "Revisa tu conexión e intenta nuevamente", variant: "destructive" });
+      return;
+    }
+    const fmtF = (d) => d ? new Date(d).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const masajesTotal = masivas.reduce((a, m) => a + (Number(m.masajes_realizados) || 0), 0);
+    const costoInsumos = consumos.reduce((a, c) => a + Number(c.cantidad || 0) * Number(c.precio_unitario || 0), 0);
+    let csv = "﻿DETALLE CLINICO DEL EVENTO;" + esc(eventoObj.nombre_evento) + "\nGenerado;" + esc(fmtF(new Date().toISOString())) + "\n\n";
+    csv += "ATENCIONES MEDICAS (" + medicas.length + ")\nFecha;Paciente;RUT;Edad;Triaje;Emergencia;Motivo;Diagnostico;Tratamiento;Profesional\n";
+    medicas.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.paciente_rut, a.paciente_edad, a.codigo_triaje, a.es_emergencia ? "SI" : "NO", a.motivo_consulta, a.diagnostico, a.tratamiento, a.medico_nombre].map(esc).join(";") + "\n"; });
+    csv += "\nKINESIOLOGIA (" + kines.length + ")\nFecha;Paciente;RUT;Motivo;Evaluacion;Tratamiento;Profesional\n";
+    kines.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.paciente_rut, a.motivo_consulta, a.evaluacion_inicial, a.tratamiento_realizado, a.kinesiologo_nombre].map(esc).join(";") + "\n"; });
+    csv += "\nMASOTERAPIA FICHAS (" + fichas.length + ")\nFecha;Paciente;Zona;Dolor inicial;Dolor final;Duracion (min);Profesional\n";
+    fichas.forEach(a => { csv += [fmtF(a.created_at), a.paciente_nombre, a.zona_afectada, a.dolor_inicial, a.dolor_posterior, a.duracion_minutos, a.masoterapeuta_nombre].map(esc).join(";") + "\n"; });
+    csv += "\nMASAJES MASIVOS;" + masajesTotal + "\n";
+    csv += "\nINSUMOS CONSUMIDOS (" + consumos.length + ")\nItem;Cantidad;Precio unitario;Total\n";
+    consumos.forEach(c => { csv += [c.item_nombre, c.cantidad, c.precio_unitario ?? "sin precio", c.precio_unitario ? Number(c.cantidad) * Number(c.precio_unitario) : ""].map(esc).join(";") + "\n"; });
+    csv += "\nCOSTO TOTAL INSUMOS;" + esc("$" + Math.round(costoInsumos).toLocaleString("es-CL")) + "\n";
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `detalle_clinico_${String(eventoObj.nombre_evento).replace(/[^a-zA-Z0-9]+/g, "_").slice(0, 40)}_${hoyLocal()}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   /* ── Export Excel (.xlsx) ───────────────────────────── */
   const exportarExcel = () => {
     if (!datosReporte) return;
@@ -495,13 +541,17 @@ export function VistaReportes({ usuario, esAdmin }) {
           total_profesionales: new Set([...(datosReporte?.atencionesMedicas || []).map(a => a.medico), ...(datosReporte?.atencionesKine || []).map(a => a.kinesiologo)]).size,
           por_profesional: [],
         };
-        await fetch("/api/send-email", {
+        const r = await fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
           body: JSON.stringify({ tipo: "reporte_evento", data: { evento_id: eventoObj.id, evento_nombre: eventoObj.nombre_evento || eventoSeleccionado, fecha_cierre: new Date().toISOString(), stats } }),
         });
-      } catch (err) { console.error("Error al enviar email:", err); }
-      toast({ title: "Evento cerrado ✓", description: "El reporte con CSV adjunto fue enviado por correo" });
+        if (r.ok) toast({ title: "Evento cerrado ✓", description: "El resumen fue enviado por correo. El detalle clínico se descarga con \"Detalle clínico (CSV)\"." });
+        else toast({ title: "Evento cerrado ✓", description: "No se pudo enviar el correo de resumen. Avisa al administrador del sistema.", variant: "destructive" });
+      } catch (err) {
+        console.error("Error al enviar email:", err);
+        toast({ title: "Evento cerrado ✓", description: "No se pudo enviar el correo de resumen (sin conexión).", variant: "destructive" });
+      }
       cargarDatos();
     }
   };
@@ -651,6 +701,11 @@ export function VistaReportes({ usuario, esAdmin }) {
                 <Button variant="outline" size="sm" onClick={exportarPDF}>
                   <FileText size={13} /> PDF
                 </Button>
+                {esAdmin && (
+                  <Button variant="outline" size="sm" onClick={exportarDetalleClinico}>
+                    <Download size={13} /> Detalle clínico (CSV)
+                  </Button>
+                )}
                 {esAdmin && eventoActivo && (
                   <Button variant="destructive" size="sm" onClick={cerrarEvento}>
                     <Lock size={13} /> Cerrar Evento
