@@ -15,7 +15,7 @@ import { toast } from "../ui/use-toast";
 import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
-import { fechaLocal, hoyLocal } from "../../config/fechas";
+import { fechaLocal, hoyLocal, momentoAtencion, fechaDeAtencion, horaDeAtencion, fechaCortaAtencion } from "../../config/fechas";
 
 export function VistaAtencionesKinesiologia({ usuario }) {
   const [atenciones, setAtenciones] = useState([]);
@@ -193,8 +193,8 @@ export function VistaAtencionesKinesiologia({ usuario }) {
   if (loading) return <div className="p-10 text-center text-sm" style={{ color: C.textMuted }}>Cargando atenciones...</div>;
 
   const hoy = hoyLocal();
-  const atencionesHoy      = atenciones.filter(a => fechaLocal(a.created_at) === hoy);
-  const atencionesAnteriores = atenciones.filter(a => fechaLocal(a.created_at) !== hoy);
+  const atencionesHoy      = [...atenciones].sort((x, y) => momentoAtencion(y) - momentoAtencion(x)).filter(a => fechaDeAtencion(a) === hoy);
+  const atencionesAnteriores = [...atenciones].sort((x, y) => momentoAtencion(y) - momentoAtencion(x)).filter(a => fechaDeAtencion(a) !== hoy);
   const insumosAlerta      = insumos.filter(i => i.stock <= i.minimo);
 
   return (
@@ -236,7 +236,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
                   {a.paciente_edad && <span className="font-normal text-xs ml-2" style={{ color: C.textMuted }}>({a.paciente_edad} años)</span>}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: C.textMuted }}>
-                  {new Date(a.created_at).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })} · {a.evento}
+                  {horaDeAtencion(a)} · {a.evento}
                 </p>
                 <p className="text-xs mt-1"><strong>Motivo:</strong> {a.motivo_consulta}</p>
                 {a.insumos_usados?.length > 0 && (
@@ -275,7 +275,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold truncate">{a.paciente_nombre}</p>
-                            <p className="mt-0.5 truncate" style={{ color: C.textMuted }}>{new Date(a.created_at).toLocaleDateString("es-CL")} · {a.motivo_consulta?.substring(0, 30)}{a.motivo_consulta?.length > 30 ? "…" : ""}</p>
+                            <p className="mt-0.5 truncate" style={{ color: C.textMuted }}>{fechaCortaAtencion(a)} · {a.motivo_consulta?.substring(0, 30)}{a.motivo_consulta?.length > 30 ? "…" : ""}</p>
                           </div>
                           <span className="shrink-0 rounded px-1.5 py-0.5" style={{ background: C.surface2, color: C.textMuted }}>{a.kinesiologo_nombre?.split("@")[0] || "N/A"}</span>
                         </div>
@@ -384,7 +384,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
                 <div className="max-h-40 overflow-y-auto space-y-2">
                   {historialPaciente.map((at, idx) => (
                     <div key={idx} className="rounded p-2 text-xs" style={{ background: C.surface }}>
-                      <p className="font-semibold">{new Date(at.created_at).toLocaleDateString("es-CL")} · {at.evento}</p>
+                      <p className="font-semibold">{fechaCortaAtencion(at)} · {at.evento}</p>
                       <p style={{ color: C.textMuted }}>Kinesiólogo/a: {at.kinesiologo_nombre?.split("@")[0]}</p>
                       {at.motivo_consulta && <p><strong>Motivo:</strong> {at.motivo_consulta}</p>}
                     </div>
@@ -413,7 +413,7 @@ export function VistaAtencionesKinesiologia({ usuario }) {
                 <p className="font-bold text-base">{form.paciente_nombre}</p>
                 {form.paciente_rut && <p style={{ color: C.textMuted }}>RUT: {form.paciente_rut}</p>}
                 {form.paciente_edad && <p style={{ color: C.textMuted }}>Edad: {form.paciente_edad} años</p>}
-                <p className="mt-1" style={{ color: C.textMuted }}>Evento: {form.evento} · {new Date(form.created_at).toLocaleString("es-CL")}</p>
+                <p className="mt-1" style={{ color: C.textMuted }}>Evento: {form.evento} · {fechaCortaAtencion(form)} {horaDeAtencion(form)}</p>
               </div>
               <Separator />
               <div><p className="font-semibold mb-1">Motivo de Consulta</p><p>{form.motivo_consulta}</p></div>

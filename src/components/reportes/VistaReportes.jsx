@@ -18,7 +18,7 @@ import { Separator } from "../ui/separator";
 import { cn } from "../../lib/utils";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls } from "../common/FormControls";
-import { hoyLocal } from "../../config/fechas";
+import { hoyLocal, momentoAtencion, horaDeAtencion, fechaCortaAtencion } from "../../config/fechas";
 import {
   BarChart2, Download, Lock, Search, ArrowUpDown,
   Pill, Package, Stethoscope, Activity, Waves,
@@ -231,8 +231,8 @@ export function VistaReportes({ usuario, esAdmin }) {
   };
 
   /* ── Export Excel (.xlsx) ───────────────────────────── */
-  const exportarExcel = () => {
-    if (!datosReporte) return;
+  const construirExcelInterno = () => {
+    if (!datosReporte) return null;
     const wb   = XLSX.utils.book_new();
     const slug = datosReporte.evento.replace(/\s/g, "_");
     const hoy  = new Date().toLocaleDateString("es-CL");
@@ -262,7 +262,7 @@ export function VistaReportes({ usuario, esAdmin }) {
           Motivo:           a.motivo_consulta  || "",
           "Médico/Enfermero": (a.medico_nombre || a.enfermero_nombre || "").split("@")[0],
           Diagnóstico:      a.diagnostico      || "",
-          Fecha:            a.created_at ? new Date(a.created_at).toLocaleString("es-CL") : "",
+          Fecha:            fechaCortaAtencion(a) + " " + horaDeAtencion(a),
         }))
       );
       XLSX.utils.book_append_sheet(wb, ws, "Atenciones Médicas");
@@ -276,7 +276,7 @@ export function VistaReportes({ usuario, esAdmin }) {
           Edad:          a.paciente_edad   || "",
           "Kinesiólogo/a": (a.kinesiologo_nombre || "").split("@")[0],
           Motivo:        a.motivo_consulta || "",
-          Fecha:         a.created_at ? new Date(a.created_at).toLocaleString("es-CL") : "",
+          Fecha:         fechaCortaAtencion(a) + " " + horaDeAtencion(a),
         }))
       );
       XLSX.utils.book_append_sheet(wb, ws, "Kinesiología");
@@ -327,7 +327,118 @@ export function VistaReportes({ usuario, esAdmin }) {
       XLSX.utils.book_append_sheet(wb, ws, "Costos");
     }
 
-    XLSX.writeFile(wb, `reporte_${slug}_${hoyLocal()}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["USO INTERNO — CONFIDENCIAL"],["Contiene datos personales y datos de salud (datos sensibles, Ley 20.584 y Ley 19.628)."],["No enviar a clientes, organizadores ni terceros."],["Para entregar a terceros use el Excel anonimizado."]]), "AVISO");
+    return { wb, slug };
+  };
+
+
+  /* ── Excel ANONIMIZADO (por defecto; apto para entregar al cliente) ──
+     Sin nombre, RUT/pasaporte ni texto clínico libre (motivo, diagnóstico,
+     tratamiento). Edad en tramos. Paciente = código correlativo. */
+  const tramoEdad = (e) => {
+    const n = parseInt(e, 10);
+    if (!n && n !== 0) return "s/d";
+    if (n < 18) return "<18";
+    if (n < 30) return "18-29";
+    if (n < 40) return "30-39";
+    if (n < 50) return "40-49";
+    if (n < 60) return "50-59";
+    return "60+";
+  };
+  const etiquetaEstado = (e) => ({ alta: "Alta", en_espera: "En espera", en_atencion: "En atención", derivado: "Derivado", trasladado: "Trasladado" }[e] || (e ? String(e) : "Alta"));
+  const contar = (arr, fn) => {
+    const m = new Map();
+    arr.forEach(x => { const k = fn(x); m.set(k, (m.get(k) || 0) + 1); });
+    return [...m.entries()].sort((x, y) => String(x[0]).localeCompare(String(y[0]), "es"));
+  };
+
+  const construirExcelAnonimo = () => {
+    if (!datosReporte) return null;
+    const wb   = XLSX.utils.book_new();
+    const slug = datosReporte.evento.replace(/\s/g, "_");
+    const med  = [...(datosReporte.atencionesMed  || [])].sort((x, y) => momentoAtencion(x) - momentoAtencion(y));
+    const kine = [...(datosReporte.atencionesKine || [])].sort((x, y) => momentoAtencion(x) - momentoAtencion(y));
+
+    const resumen = [
+      ["REPORTE DE EVENTO (DATOS ANONIMIZADOS)", datosReporte.evento],
+      ["Fecha de generación", new Date().toLocaleDateString("es-CL")],
+      [],
+      ["RESUMEN GENERAL", ""],
+      ["Atenciones Médicas / Enfermería", datosReporte.totalMedicas],
+      ["Atenciones Kinesiología",         datosReporte.totalKine],
+      ["Masajes Masivos",                 datosReporte.totalMasajes],
+      ["Fichas Masoterapia",              datosReporte.totalFichasMasoterapia],
+      [],
+      ["ATENCIONES POR CÓDIGO DE TRIAJE", ""],
+      ...contar(med, a => a.codigo_triaje || "s/d"),
+      [],
+      ["ATENCIONES POR DESTINO / ESTADO", ""],
+      ...contar(med, a => etiquetaEstado(a.estado_atencion)),
+      [],
+      ["ATENCIONES POR TRAMO DE EDAD", ""],
+      ...contar([...med, ...kine], a => tramoEdad(a.paciente_edad)),
+      [],
+      ["Nota", "Este archivo no contiene nombres, RUT/pasaporte, diagnósticos ni descripciones clínicas. Se entrega solo para fines estadísticos y de control del servicio."],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+
+    const filas = [
+      ...med.map(a  => ({ t: "Médica/Enfermería", a, prof: (a.medico_nombre || a.enfermero_nombre || a.paramedico_nombre || "").split("@")[0] })),
+      ...kine.map(a => ({ t: "Kinesiología",       a, prof: (a.kinesiologo_nombre || "").split("@")[0] })),
+    ].sort((x, y) => momentoAtencion(x.a) - momentoAtencion(y.a));
+    if (filas.length > 0) {
+      const ws = XLSX.utils.json_to_sheet(filas.map((r, i) => ({
+        "N°":            `A-${String(i + 1).padStart(3, "0")}`,
+        Fecha:           fechaCortaAtencion(r.a),
+        Hora:            horaDeAtencion(r.a),
+        Tipo:            r.t,
+        Triaje:          r.a.codigo_triaje || "",
+        "Tramo de edad": tramoEdad(r.a.paciente_edad),
+        Categoría:       r.a.categoria_paciente || "",
+        "Destino/Estado": r.t === "Médica/Enfermería" ? etiquetaEstado(r.a.estado_atencion) : "",
+        Profesional:     r.prof,
+      })));
+      XLSX.utils.book_append_sheet(wb, ws, "Atenciones");
+    }
+
+    const medRows = [
+      ["MEDICAMENTOS UTILIZADOS (TOTALES)"], ["Nombre", "Cantidad", "Vía"],
+      ...datosReporte.medicamentosUsados.map(m => [m.nombre, m.cantidad, m.via || ""]),
+      [],
+      ["INSUMOS UTILIZADOS (TOTALES)"], ["Nombre", "Cantidad", "Unidad"],
+      ...datosReporte.insumosUsados.map(i => [i.nombre, i.cantidad, i.unidad || ""]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(medRows), "Medicamentos e insumos");
+    return { wb, slug };
+  };
+
+  /* Descarga con aviso de confidencialidad + registro de auditoría */
+  const exportarExcel = async (modo = "anonimo") => {
+    if (!datosReporte) return;
+    const interno = modo === "interno" && esAdmin;
+    const ok = await confirmDialog({
+      title: interno ? "Descargar versión INTERNA (con datos personales)" : "Descargar Excel anonimizado",
+      description: interno
+        ? "Este archivo contiene nombres, edades y datos clínicos de pacientes (datos sensibles, Ley 20.584). Es de uso interno y NO debe enviarse a clientes ni terceros. La descarga quedará registrada a tu nombre."
+        : "Este archivo no incluye nombres, RUT ni datos clínicos de los pacientes; solo estadísticas y atenciones identificadas con un código. La descarga quedará registrada.",
+      confirmText: "Descargar",
+      cancelText: "Cancelar",
+      variant: interno ? "danger" : undefined,
+    });
+    if (!ok) return;
+    const r = interno ? construirExcelInterno() : construirExcelAnonimo();
+    if (!r) return;
+    XLSX.writeFile(r.wb, `reporte_${interno ? "INTERNO_" : ""}${r.slug}_${hoyLocal()}.xlsx`);
+    try {
+      await sb("rpc/fn_registrar_descarga", {
+        method: "POST",
+        body: JSON.stringify({
+          p_evento: datosReporte.evento,
+          p_tipo: interno ? "excel_interno" : "excel_anonimo",
+          p_detalle: { atenciones_medicas: datosReporte.totalMedicas, atenciones_kine: datosReporte.totalKine },
+        }),
+      }, usuario?.token);
+    } catch (e) { /* el registro es best-effort; no bloquea la descarga */ }
   };
 
   /* ── Export PDF ─────────────────────────────────────── */
@@ -382,13 +493,13 @@ export function VistaReportes({ usuario, esAdmin }) {
       y += 4;
       autoTable(doc, {
         startY: y,
-        head: [["Paciente", "Triaje", "Motivo", "Médico", "Fecha"]],
-        body: datosReporte.atencionesMed.map(a => [
-          a.paciente_nombre || "",
+        head: [["N°", "Triaje", "Tramo edad", "Profesional", "Fecha"]],
+        body: datosReporte.atencionesMed.map((a, i) => [
+          `A-${String(i + 1).padStart(3, "0")}`,
           a.codigo_triaje   || "",
-          (a.motivo_consulta || "").substring(0, 35),
-          (a.medico_nombre || a.enfermero_nombre || "").split("@")[0],
-          a.created_at ? new Date(a.created_at).toLocaleDateString("es-CL") : "",
+          tramoEdad(a.paciente_edad),
+          (a.medico_nombre || a.enfermero_nombre || a.paramedico_nombre || "").split("@")[0],
+          fechaCortaAtencion(a),
         ]),
         theme: "striped",
         headStyles: { fillColor: [88, 166, 255] },
@@ -406,12 +517,12 @@ export function VistaReportes({ usuario, esAdmin }) {
       y += 4;
       autoTable(doc, {
         startY: y,
-        head: [["Paciente", "Kinesiólogo/a", "Motivo", "Fecha"]],
-        body: datosReporte.atencionesKine.map(a => [
-          a.paciente_nombre || "",
+        head: [["N°", "Kinesiólogo/a", "Tramo edad", "Fecha"]],
+        body: datosReporte.atencionesKine.map((a, i) => [
+          `K-${String(i + 1).padStart(3, "0")}`,
           (a.kinesiologo_nombre || "").split("@")[0],
-          (a.motivo_consulta || "").substring(0, 45),
-          a.created_at ? new Date(a.created_at).toLocaleDateString("es-CL") : "",
+          tramoEdad(a.paciente_edad),
+          fechaCortaAtencion(a),
         ]),
         theme: "striped",
         headStyles: { fillColor: [0, 194, 168] },
@@ -645,9 +756,14 @@ export function VistaReportes({ usuario, esAdmin }) {
                 <Button variant="outline" size="sm" onClick={exportarCSV}>
                   <Download size={13} /> CSV
                 </Button>
-                <Button variant="outline" size="sm" onClick={exportarExcel}>
-                  <FileSpreadsheet size={13} /> Excel
+                <Button variant="outline" size="sm" onClick={() => exportarExcel("anonimo")}>
+                  <FileSpreadsheet size={13} /> Excel anónimo
                 </Button>
+                {esAdmin && (
+                  <Button variant="outline" size="sm" onClick={() => exportarExcel("interno")}>
+                    <FileSpreadsheet size={13} /> Excel interno
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={exportarPDF}>
                   <FileText size={13} /> PDF
                 </Button>

@@ -34,3 +34,33 @@ export function inicioMesLocalISO(valor = new Date()) {
 
 /** ¿El valor cae en el día local de hoy? */
 export const esHoyLocal = (valor) => fechaLocal(valor) === hoyLocal();
+
+/* ── Momento REAL de la atención ──────────────────────────────
+   created_at es cuándo se registró en el sistema; la atención
+   ocurrió en fecha_atencion + hora_atencion (que el profesional
+   puede ingresar a mano al cargar atenciones pasadas). Todo lo
+   que se muestra, ordena o agrupa debe usar este momento. */
+export function momentoAtencion(a) {
+  if (!a) return new Date(NaN);
+  if (a.fecha_atencion) {
+    const hora = (a.hora_atencion || "").slice(0, 5) || "00:00";
+    const d = new Date(`${String(a.fecha_atencion).slice(0, 10)}T${hora}:00`);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date(a.created_at);
+}
+
+/** YYYY-MM-DD local de la atención. */
+export const fechaDeAtencion = (a) => fechaLocal(momentoAtencion(a));
+
+/** HH:MM de la atención (la hora ingresada, no la del registro). */
+export function horaDeAtencion(a) {
+  const d = momentoAtencion(a);
+  return isNaN(d.getTime()) ? "" : `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+
+/** Fecha corta es-CL de la atención. */
+export const fechaCortaAtencion = (a) => {
+  const d = momentoAtencion(a);
+  return isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-CL");
+};

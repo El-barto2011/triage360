@@ -16,8 +16,8 @@ import { useEvento } from "../common/SelectorEvento";
 import { fetchPaciente, identFilter, validarRut } from "../../config/pacientes";
 import { confirmDialog } from "../ui/confirm";
 import { selectCls, Field } from "../common/FormControls";
-import { EstadoPaciente, IdentificacionPaciente, useInsumosEvento, DatalistInsumos } from "../common/CamposAtencion";
-import { fechaLocal, hoyLocal } from "../../config/fechas";
+import { EstadoPaciente, IdentificacionPaciente, useInsumosEvento, InsumoCombobox, CantidadInput } from "../common/CamposAtencion";
+import { fechaLocal, hoyLocal, momentoAtencion, fechaDeAtencion, horaDeAtencion, fechaCortaAtencion } from "../../config/fechas";
 
 const TRIAJE = [
   { codigo: "VERDE",    color: "#10b981", emoji: "🟢", label: "VERDE",    espera: 60   },
@@ -143,6 +143,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       temperatura:             form.temperatura             ? parseFloat(form.temperatura)            : null,
       saturacion_oxigeno:      form.saturacion_oxigeno      ? parseInt(form.saturacion_oxigeno)      : null,
       frecuencia_respiratoria: form.frecuencia_respiratoria ? parseInt(form.frecuencia_respiratoria) : null,
+      glicemia_capilar: form.glicemia_capilar ? parseFloat(form.glicemia_capilar) : null,
       paciente_nombre:         form.paciente_nombre,
       paciente_rut:            esPasaporte ? null : (form.paciente_rut || null),
       paciente_pasaporte:      esPasaporte ? (form.paciente_pasaporte || null) : null,
@@ -154,11 +155,14 @@ export function VistaAtencionesEnfermeria({ usuario }) {
       evento_id:               form.evento_id || null,
       evento:                  form.evento,
       motivo_consulta:         form.motivo_consulta,
+      estado_general:    form.estado_general    || null,
+      examen_fisico:     form.examen_fisico     || null,
+      indicaciones_alta: form.indicaciones_alta || null,
       diagnostico:             form.diagnostico   || null,
       tratamiento:             form.tratamiento   || null,
       observaciones:           form.observaciones || null,
       medicamentos_prescritos: [],
-      insumos_medico:          form.insumos_medico || [],
+      insumos_medico: (form.insumos_medico || []).map(x => ({ ...x, cantidad: Math.max(1, parseInt(x.cantidad, 10) || 1) })),
       requiere_administracion: false,
       administracion_completada: false,
       fecha_atencion: form.fecha_atencion || null,
@@ -205,8 +209,8 @@ export function VistaAtencionesEnfermeria({ usuario }) {
   if (loading) return <div className="p-10 text-center text-sm" style={{ color: C.textMuted }}>Cargando atenciones...</div>;
 
   const hoy = hoyLocal();
-  const atencionesHoy        = atenciones.filter(a => fechaLocal(a.created_at) === hoy);
-  const atencionesAnteriores = atenciones.filter(a => fechaLocal(a.created_at) !== hoy);
+  const atencionesHoy        = [...atenciones].sort((x, y) => momentoAtencion(y) - momentoAtencion(x)).filter(a => fechaDeAtencion(a) === hoy);
+  const atencionesAnteriores = [...atenciones].sort((x, y) => momentoAtencion(y) - momentoAtencion(x)).filter(a => fechaDeAtencion(a) !== hoy);
   const triajeColor = (c) => c === "ROJO" ? "#ef4444" : c === "AMARILLO" ? "#f59e0b" : c === "NEGRO" ? "#374151" : "#10b981";
 
   return (
@@ -245,7 +249,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
                       {a.paciente_edad && <span className="font-normal text-xs ml-2" style={{ color: C.textMuted }}>({a.paciente_edad} años)</span>}
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: C.textMuted }}>
-                      {new Date(a.created_at).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })} · {a.evento}
+                      {horaDeAtencion(a)} · {a.evento}
                     </p>
                     <p className="text-xs mt-1"><strong>Motivo:</strong> {a.motivo_consulta}</p>
                     {a.diagnostico && <p className="text-xs mt-0.5" style={{ color: C.blue }}><strong>Dx:</strong> {a.diagnostico}</p>}
@@ -293,7 +297,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
                         style={{ background: C.surface, borderColor: C.border }} onClick={() => verDetalle(a)}>
                         <p className="font-semibold truncate">{a.paciente_nombre}</p>
                         <p className="text-xs mt-0.5 truncate" style={{ color: C.textMuted }}>
-                          {new Date(a.created_at).toLocaleDateString("es-CL")} · {a.diagnostico?.substring(0, 30)}{a.diagnostico?.length > 30 ? "…" : ""}
+                          {fechaCortaAtencion(a)} · {a.diagnostico?.substring(0, 30)}{a.diagnostico?.length > 30 ? "…" : ""}
                         </p>
                       </div>
                     ))}
@@ -364,7 +368,6 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               </Field>
               <IdentificacionPaciente form={form} setForm={setForm} onBuscar={buscarPacientePorRut} previas={historialPaciente.length} />
             </div>
-            <DatalistInsumos id="dl-insumos-evento-enf" insumos={insumosEvento} />
 
             {pacienteFicha && (pacienteFicha.alergias || pacienteFicha.antecedentes) && (
               <div style={{ borderRadius: 8, padding: "10px 14px", background: pacienteFicha.alergias ? C.redDim : C.surface2, border: `1px solid ${pacienteFicha.alergias ? C.red : C.border}` }}>
@@ -418,6 +421,9 @@ export function VistaAtencionesEnfermeria({ usuario }) {
                 <Field label="Frec. Respiratoria (rpm)">
                   <Input type="number" placeholder="16" value={form.frecuencia_respiratoria || ""} onChange={e => setForm(f => ({ ...f, frecuencia_respiratoria: e.target.value }))} />
                 </Field>
+                <Field label="Glicemia capilar (mg/dL)">
+                  <Input type="number" placeholder="95" value={form.glicemia_capilar || ""} onChange={e => setForm(f => ({ ...f, glicemia_capilar: e.target.value }))} />
+                </Field>
               </div>
             </div>
 
@@ -425,11 +431,20 @@ export function VistaAtencionesEnfermeria({ usuario }) {
             <Field label="Motivo de Consulta" required>
               <Textarea value={form.motivo_consulta || ""} onChange={e => setForm(f => ({ ...f, motivo_consulta: e.target.value }))} placeholder="Descripción del motivo de consulta..." />
             </Field>
+            <Field label="Estado general del paciente">
+              <Textarea value={form.estado_general || ""} onChange={e => setForm(f => ({ ...f, estado_general: e.target.value }))} placeholder="Ej: vigil, orientado, colaborador, hidratado, sin compromiso de conciencia..." />
+            </Field>
+            <Field label="Examen físico">
+              <Textarea value={form.examen_fisico || ""} onChange={e => setForm(f => ({ ...f, examen_fisico: e.target.value }))} placeholder="Hallazgos del examen físico por segmento / sistema..." />
+            </Field>
             <Field label="Diagnóstico">
               <Textarea value={form.diagnostico || ""} onChange={e => setForm(f => ({ ...f, diagnostico: e.target.value }))} placeholder="Evaluación / Diagnóstico..." />
             </Field>
             <Field label="Tratamiento">
               <Textarea value={form.tratamiento || ""} onChange={e => setForm(f => ({ ...f, tratamiento: e.target.value }))} placeholder="Tratamiento realizado..." />
+            </Field>
+            <Field label="Indicaciones para el alta">
+              <Textarea value={form.indicaciones_alta || ""} onChange={e => setForm(f => ({ ...f, indicaciones_alta: e.target.value }))} placeholder="Reposo, hidratación, signos de alarma, control con su médico..." />
             </Field>
 
             <Separator />
@@ -442,8 +457,8 @@ export function VistaAtencionesEnfermeria({ usuario }) {
               </div>
               {(form.insumos_medico || []).map((ins, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: C.border }}>
-                  <Input className="flex-1" placeholder="Escribe y elige el insumo del carro" list="dl-insumos-evento-enf" value={ins.nombre} onChange={e => actualizarInsumo(i, "nombre", e.target.value)} />
-                  <Input type="number" className="w-20" placeholder="Cant." value={ins.cantidad} onChange={e => actualizarInsumo(i, "cantidad", parseInt(e.target.value) || 1)} />
+                  <InsumoCombobox className="flex-1" insumos={insumosEvento} value={ins.nombre} onChange={v => actualizarInsumo(i, "nombre", v)} onSelect={it => it.unidad && actualizarInsumo(i, "unidad", it.unidad)} />
+                  <CantidadInput value={ins.cantidad} onChange={v => actualizarInsumo(i, "cantidad", v)} />
                   <select className={cn(selectCls, "w-24")} value={ins.unidad} onChange={e => actualizarInsumo(i, "unidad", e.target.value)}>
                     <option>unid.</option><option>ml</option><option>mg</option><option>amp.</option>
                   </select>
@@ -468,7 +483,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
                 <div className="max-h-40 overflow-y-auto space-y-2">
                   {historialPaciente.map((at, idx) => (
                     <div key={idx} className="rounded p-2 text-xs" style={{ background: C.surface }}>
-                      <p className="font-semibold">{new Date(at.created_at).toLocaleDateString("es-CL")} · {at.evento}</p>
+                      <p className="font-semibold">{fechaCortaAtencion(at)} · {at.evento}</p>
                       {at.diagnostico && <p><strong>Dx:</strong> {at.diagnostico}</p>}
                     </div>
                   ))}
@@ -498,7 +513,7 @@ export function VistaAtencionesEnfermeria({ usuario }) {
                 <p className="font-bold text-base">{form.paciente_nombre}</p>
                 {form.paciente_rut && <p style={{ color: C.textMuted }}>RUT: {form.paciente_rut}</p>}
                 {form.paciente_edad && <p style={{ color: C.textMuted }}>Edad: {form.paciente_edad} años</p>}
-                <p className="mt-1" style={{ color: C.textMuted }}>{form.evento} · {form.created_at ? new Date(form.created_at).toLocaleString("es-CL") : ""}</p>
+                <p className="mt-1" style={{ color: C.textMuted }}>{form.evento} · {fechaCortaAtencion(form)} {horaDeAtencion(form)}</p>
                 <p style={{ color: C.textMuted }}>
                   {form.enfermero_nombre || form.paramedico_nombre || form.kinesiologo_nombre || ""}
                 </p>
@@ -510,8 +525,12 @@ export function VistaAtencionesEnfermeria({ usuario }) {
                 </span>
               )}
               <div><p className="font-semibold mb-1">Motivo de Consulta</p><p>{form.motivo_consulta}</p></div>
+              {form.estado_general && <div><p className="font-semibold mb-1">Estado general</p><p>{form.estado_general}</p></div>}
+              {form.examen_fisico && <div><p className="font-semibold mb-1">Examen físico</p><p>{form.examen_fisico}</p></div>}
+              {form.glicemia_capilar != null && <div><p className="font-semibold mb-1">Glicemia capilar</p><p>{form.glicemia_capilar} mg/dL</p></div>}
               {form.diagnostico  && <div><p className="font-semibold mb-1">Diagnóstico</p><p>{form.diagnostico}</p></div>}
               {form.tratamiento  && <div><p className="font-semibold mb-1">Tratamiento</p><p>{form.tratamiento}</p></div>}
+              {form.indicaciones_alta && <div><p className="font-semibold mb-1">Indicaciones para el alta</p><p>{form.indicaciones_alta}</p></div>}
               {form.insumos_medico?.length > 0 && (
                 <div>
                   <p className="font-semibold mb-1">Insumos Utilizados</p>

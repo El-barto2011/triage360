@@ -3,6 +3,7 @@ import { C, S, Icon } from "../../config/theme";
 import { sb } from "../../config/supabase";
 import { PROFESIONES } from "../../config/permisos";
 import { useEvento } from "../common/SelectorEvento";
+import { momentoAtencion, horaDeAtencion, fechaCortaAtencion } from "../../config/fechas";
 
 export function VistaAtenciones({ usuario, industria }) {
   const [atenciones, setAtenciones] = useState([]);
@@ -35,7 +36,7 @@ export function VistaAtenciones({ usuario, industria }) {
         const todasMaso = maso.map(a => ({ ...a, tipo_atencion: 'Masoterapia', profesion_real: 'Masoterapeuta' }));
 
         const unificadas = [...todasMedicas, ...todasKines, ...todasMaso].sort((a, b) =>
-          new Date(b.created_at) - new Date(a.created_at)
+          momentoAtencion(b) - momentoAtencion(a)
         );
 
         setAtenciones(unificadas);
@@ -127,7 +128,7 @@ export function VistaAtenciones({ usuario, industria }) {
                   </td>
                   <td style={S.td}>
                     <div style={{ fontSize: 13 }}>{a.evento}</div>
-                    <div style={{ fontSize: 11, color: C.textFaint }}>{new Date(a.created_at).toLocaleDateString("es-CL")}</div>
+                    <div style={{ fontSize: 11, color: C.textFaint }}>{fechaCortaAtencion(a)}</div>
                   </td>
                   <td style={S.td}>
                     <div style={{ fontSize: 12 }}>
@@ -162,7 +163,7 @@ export function VistaAtenciones({ usuario, industria }) {
                     </div>
                   </td>
                   <td style={S.td}>
-                    <div style={{ fontSize: 13 }}>{new Date(a.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</div>
+                    <div style={{ fontSize: 13 }}>{horaDeAtencion(a)}</div>
                   </td>
                   <td style={S.td}>
                     <span style={{ fontSize: 13, color: C.textMuted }}>
@@ -191,8 +192,8 @@ export function VistaAtenciones({ usuario, industria }) {
         const esMedica  = f.tipo_atencion === 'Médica';
         const esKine    = f.tipo_atencion === 'Kinesiología';
         const esMaso    = f.tipo_atencion === 'Masoterapia';
-        const fechaStr  = new Date(f.created_at).toLocaleDateString("es-CL");
-        const horaStr   = new Date(f.created_at).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+        const fechaStr  = fechaCortaAtencion(f);
+        const horaStr   = horaDeAtencion(f);
 
         /* ── nombre profesional correcto según tipo ─── */
         const profNombre = esMedica

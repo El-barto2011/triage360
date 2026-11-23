@@ -6,7 +6,7 @@ import { normIdent, esPasaporte } from '../../config/pacientes'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { hoyLocal } from "../../config/fechas";
+import { hoyLocal, momentoAtencion } from "../../config/fechas";
 
 /* ── Helpers de presentación ──────────────────────────────── */
 const TIPO_COLORES = { 'Médica': C.red, 'Kinesiología': C.green, 'Masoterapia': C.purple }
@@ -76,7 +76,7 @@ function Tendencias({ historial }) {
     .filter(a => a.tipo === 'Masoterapia' && (a.dolor_inicial != null || a.dolor_posterior != null))
     .slice().reverse()
     .map(a => ({
-      fecha: fechaCorta(a.created_at),
+      fecha: fechaCorta(momentoAtencion(a)),
       'Dolor inicial':   a.dolor_inicial ?? null,
       'Dolor posterior': a.dolor_posterior ?? null,
     }))
@@ -86,7 +86,7 @@ function Tendencias({ historial }) {
     .filter(a => a.tipo === 'Médica' && (a.presion_sistolica || a.frecuencia_cardiaca || a.saturacion_oxigeno))
     .slice().reverse()
     .map(a => ({
-      fecha: fechaCorta(a.created_at),
+      fecha: fechaCorta(momentoAtencion(a)),
       'PA sist.': a.presion_sistolica || null,
       'PA diast.': a.presion_diastolica || null,
       'FC': a.frecuencia_cardiaca || null,
@@ -231,7 +231,7 @@ export function HistorialPaciente({ usuario }) {
         ...medicasArr.map(a => ({ ...a, tipo: 'Médica'       })),
         ...kines.map(a      => ({ ...a, tipo: 'Kinesiología'  })),
         ...maso.map(a       => ({ ...a, tipo: 'Masoterapia'   })),
-      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      ].sort((a, b) => momentoAtencion(b) - momentoAtencion(a))
 
       if (todo.length > 0) {
         const p = todo[0]
@@ -293,7 +293,7 @@ export function HistorialPaciente({ usuario }) {
         Array.isArray(a.zonas_trabajadas) && a.zonas_trabajadas.length && `Zonas: ${a.zonas_trabajadas.join(', ')}`,
         a.codigo_triaje && a.tipo === 'Médica' && `Triaje: ${a.codigo_triaje}`,
       ].filter(Boolean).join(' · ')
-      return [formatFecha(a.created_at), a.tipo, a.evento || '—', prof, detalle || '—']
+      return [formatFecha(momentoAtencion(a)), a.tipo, a.evento || '—', prof, detalle || '—']
     })
 
     autoTable(doc, {
@@ -473,7 +473,7 @@ export function HistorialPaciente({ usuario }) {
                     {a.codigo_triaje && (
                       <span style={S.badge(color, color + '25')}>{a.codigo_triaje}</span>
                     )}
-                    <span style={{ fontSize: 12, color: C.textMuted }}>{formatFecha(a.created_at)}</span>
+                    <span style={{ fontSize: 12, color: C.textMuted }}>{formatFecha(momentoAtencion(a))}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {profesional && (
