@@ -344,7 +344,7 @@ export default function App() {
           <div>
             <div style={{ marginBottom: 24 }}>
               <div style={S.title}>Atenciones Mensuales 🏥</div>
-              <div style={S.subtitle}>Registro mensual · Todas las atenciones del sistema</div>
+              <div style={S.subtitle}>Atenciones del evento seleccionado (por defecto, el evento activo)</div>
             </div>
             <VistaAtenciones usuario={usuario} industria={industria} />
           </div>

@@ -8,7 +8,7 @@ import { momentoAtencion, horaDeAtencion, fechaCortaAtencion } from "../../confi
 export function VistaAtenciones({ usuario, industria }) {
   const [atenciones, setAtenciones] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtroEvento, setFiltroEvento] = useState("Todos");
+  const [filtroEvento, setFiltroEvento] = useState("todos");
   const [filtroProfesion, setFiltroProfesion] = useState("Todas");
   const [fichaVer, setFichaVer] = useState(null);
   const { eventoActual, eventos: eventosGlobal } = useEvento();
@@ -17,18 +17,20 @@ export function VistaAtenciones({ usuario, industria }) {
   useEffect(() => {
     const cargar = async () => {
       if (!usuario) return;
+      // El filtro por evento se aplica en el servidor (por id, no por nombre)
+      const filtroSrv = filtroEvento !== "todos" ? `&evento_id=eq.${filtroEvento}` : "";
 
       try {
         setLoading(true);
 
         // Traer atenciones médicas
-        const medicas = await sb("atenciones_medicas?deleted_at=is.null&order=created_at.desc&limit=500", {}, usuario?.token) || [];
+        const medicas = await sb(`atenciones_medicas?deleted_at=is.null${filtroSrv}&order=created_at.desc&limit=500`, {}, usuario?.token) || [];
 
         // Traer atenciones de kinesiología
-        const kines = await sb("atenciones_kinesiologia?deleted_at=is.null&order=created_at.desc&limit=500", {}, usuario?.token) || [];
+        const kines = await sb(`atenciones_kinesiologia?deleted_at=is.null${filtroSrv}&order=created_at.desc&limit=500`, {}, usuario?.token) || [];
 
         // Traer fichas de masoterapia
-        const maso = await sb("fichas_masoterapia?deleted_at=is.null&order=created_at.desc&limit=500", {}, usuario?.token) || [];
+        const maso = await sb(`fichas_masoterapia?deleted_at=is.null${filtroSrv}&order=created_at.desc&limit=500`, {}, usuario?.token) || [];
 
         // Unificar todas en un solo array con el tipo de atención
         const todasMedicas = medicas.map(a => ({ ...a, tipo_atencion: 'Médica', profesion_real: a.medico_nombre ? 'Médico' : a.enfermero_nombre ? 'Enfermero/a' : 'Paramédico' }));
@@ -48,25 +50,19 @@ export function VistaAtenciones({ usuario, industria }) {
       }
     };
     cargar();
-  }, [usuario]);
+  }, [usuario, filtroEvento]);
 
   // Sincronizar filtro con evento global
   useEffect(() => {
-    if (eventoActual) {
-      const ev = eventosGlobal.find(e => e.id === eventoActual);
-      if (ev) setFiltroEvento(ev.nombre_evento);
-    } else {
-      setFiltroEvento("Todos");
-    }
-  }, [eventoActual, eventosGlobal]);
+    setFiltroEvento(eventoActual ? String(eventoActual) : "todos");
+  }, [eventoActual]);
 
-  const eventos = ["Todos", ...new Set(atenciones.map(a => a.evento).filter(Boolean))];
+  const activos  = eventosGlobal.filter(e => e.estado === "activo");
+  const cerrados = eventosGlobal.filter(e => e.estado !== "activo");
 
-  const filtradas = atenciones.filter(a => {
-    const matchEv = filtroEvento === "Todos" || a.evento === filtroEvento;
-    const matchProf = filtroProfesion === "Todas" || a.profesion_real === filtroProfesion;
-    return matchEv && matchProf;
-  });
+  const filtradas = atenciones.filter(a =>
+    filtroProfesion === "Todas" || a.profesion_real === filtroProfesion
+  );
 
   const coloresProfesion = {
     "Médico": C.red, "Enfermero/a": C.blue, "Paramédico": C.orange,
@@ -98,7 +94,13 @@ export function VistaAtenciones({ usuario, industria }) {
       {/* Filtros y botón */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <select style={S.select} value={filtroEvento} onChange={e => setFiltroEvento(e.target.value)}>
-          {eventos.map(e => <option key={e}>{e}</option>)}
+          <option value="todos">Todos los eventos (histórico)</option>
+          {activos.map(e => <option key={e.id} value={String(e.id)}>🟢 {e.nombre_evento}</option>)}
+          {cerrados.length > 0 && (
+            <optgroup label="Cerrados">
+              {cerrados.map(e => <option key={e.id} value={String(e.id)}>⚪ {e.nombre_evento}</option>)}
+            </optgroup>
+          )}
         </select>
         <select style={S.select} value={filtroProfesion} onChange={e => setFiltroProfesion(e.target.value)}>
           {["Todas", ...PROFESIONES].map(p => <option key={p}>{p}</option>)}

@@ -158,14 +158,18 @@ export function VistaGestionEventos({ usuario }) {
     }
 
     // Enviar emails a los profesionales
+    let resumenEmail = "";
     if (eventoGuardado && profesionalesANotificar.length > 0) {
-      await enviarEmailsAsignacion(eventoGuardado, profesionalesANotificar);
+      const r = await enviarEmailsAsignacion(eventoGuardado, profesionalesANotificar);
+      resumenEmail = r.fallidos.length === 0
+        ? ` · ${r.enviados} correo${r.enviados !== 1 ? "s" : ""} de designación enviado${r.enviados !== 1 ? "s" : ""}`
+        : ` · ⚠️ No se pudo enviar correo a: ${r.fallidos.join(", ")} (usa "Reenviar correos")`;
     }
 
       toast({
         title: modal === "nuevo" ? "Evento creado" : "Evento actualizado",
-        description: form.nombre_evento,
-        variant: "default",
+        description: `${form.nombre_evento}${resumenEmail}`,
+        variant: resumenEmail.includes("⚠️") ? "warning" : "default",
       });
       setModal(null);
     } catch (error) {
@@ -176,23 +180,22 @@ export function VistaGestionEventos({ usuario }) {
     }
   };
 
+  /* Envía el correo de designación a cada profesional. Un fallo no detiene
+     a los demás y se informa cuáles no llegaron (antes se perdían en silencio). */
   const enviarEmailsAsignacion = async (evento, profesionalesIds) => {
-    try {
-      // Obtener datos completos de los profesionales a notificar
-      const profesionalesNotificar = profesionales.filter(p => profesionalesIds.includes(p.id));
-
-      // Obtener datos completos del equipo para mostrar en el email
-      const equipoCompleto = {
-        medicos: profesionales.filter(p => evento.medicos?.includes(p.id)).map(p => p.nombre),
-        enfermeros: profesionales.filter(p => evento.enfermeros?.includes(p.id)).map(p => p.nombre),
-        paramedicos: profesionales.filter(p => evento.paramedicos?.includes(p.id)).map(p => p.nombre),
-        kinesiologos: profesionales.filter(p => evento.kinesiologos?.includes(p.id)).map(p => p.nombre),
-        masoterapeutas: profesionales.filter(p => evento.masoterapeutas?.includes(p.id)).map(p => p.nombre)
-      };
-
-      // Enviar email a cada profesional
-      for (const prof of profesionalesNotificar) {
-        // Determinar el rol del profesional
+    const resultado = { enviados: 0, fallidos: [] };
+    const ids = [...new Set(profesionalesIds)];
+    const profesionalesNotificar = profesionales.filter(p => ids.includes(p.id));
+    const equipoCompleto = {
+      medicos: profesionales.filter(p => evento.medicos?.includes(p.id)).map(p => p.nombre),
+      enfermeros: profesionales.filter(p => evento.enfermeros?.includes(p.id)).map(p => p.nombre),
+      paramedicos: profesionales.filter(p => evento.paramedicos?.includes(p.id)).map(p => p.nombre),
+      kinesiologos: profesionales.filter(p => evento.kinesiologos?.includes(p.id)).map(p => p.nombre),
+      masoterapeutas: profesionales.filter(p => evento.masoterapeutas?.includes(p.id)).map(p => p.nombre)
+    };
+    for (const prof of profesionalesNotificar) {
+      try {
+        if (!prof.email) throw new Error("sin email");
         let rol = "";
         if (evento.medicos?.includes(prof.id)) rol = "Médico";
         else if (evento.enfermeros?.includes(prof.id)) rol = "Enfermero/a";
@@ -200,14 +203,14 @@ export function VistaGestionEventos({ usuario }) {
         else if (evento.kinesiologos?.includes(prof.id)) rol = "Kinesiólogo/a";
         else if (evento.masoterapeutas?.includes(prof.id)) rol = "Masoterapeuta";
 
-        await fetch("/api/send-email", {
+        const res = await fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
           body: JSON.stringify({
             tipo: "asignacion_evento",
             destinatario: prof.email,
             nombreProfesional: prof.nombre,
-            rol: rol,
+            rol,
             evento: {
               nombre: evento.nombre_evento,
               fecha: evento.fecha_evento,
@@ -222,12 +225,28 @@ export function VistaGestionEventos({ usuario }) {
             equipo: equipoCompleto
           })
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        resultado.enviados++;
+      } catch (error) {
+        console.error("Email de designación falló:", prof.nombre, error);
+        resultado.fallidos.push(prof.nombre || prof.email || "profesional");
       }
-
-      console.log(`Emails enviados a ${profesionalesNotificar.length} profesionales`);
-    } catch (error) {
-      console.error("Error al enviar emails:", error);
     }
+    return resultado;
+  };
+
+  const reenviarDesignaciones = async (evento) => {
+    const ids = [
+      ...(evento.medicos || []), ...(evento.enfermeros || []), ...(evento.paramedicos || []),
+      ...(evento.kinesiologos || []), ...(evento.masoterapeutas || []),
+    ];
+    if (ids.length === 0) { toast({ title: "Sin profesionales asignados", variant: "warning" }); return; }
+    const r = await enviarEmailsAsignacion(evento, ids);
+    toast({
+      title: r.fallidos.length === 0 ? "Correos enviados" : "Algunos correos fallaron",
+      description: r.fallidos.length === 0 ? `${r.enviados} profesional(es) notificados` : `Fallaron: ${r.fallidos.join(", ")}`,
+      variant: r.fallidos.length === 0 ? "default" : "warning",
+    });
   };
 
   const toggleProfesional = (tipo, profesionalId) => {
@@ -319,12 +338,20 @@ export function VistaGestionEventos({ usuario }) {
                     )}
                   </div>
                 </div>
-                <button
-                  style={{ ...S.btn("ghost"), padding: "6px 12px" }}
-                  onClick={() => abrirEditarEvento(evento)}
-                >
-                  Editar
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <button
+                    style={{ ...S.btn("ghost"), padding: "6px 12px" }}
+                    onClick={() => abrirEditarEvento(evento)}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    style={{ ...S.btn("ghost"), padding: "6px 12px", fontSize: 11 }}
+                    onClick={() => reenviarDesignaciones(evento)}
+                  >
+                    ✉️ Reenviar correos
+                  </button>
+                </div>
               </div>
             </div>
           ))}
