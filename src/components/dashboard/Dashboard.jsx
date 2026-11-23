@@ -14,7 +14,7 @@ import {
   Backpack, CheckCircle2, XCircle, ChevronRight, Activity,
   ShieldAlert, CalendarDays, Zap,
 } from "lucide-react";
-import { inicioDiaLocalISO, inicioMesLocalISO } from "../../config/fechas";
+import { hoyLocal, fechaLocal, inicioMesLocalISO } from "../../config/fechas";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip,
   ResponsiveContainer, Cell,
@@ -116,12 +116,13 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
   useEffect(() => {
     if (!usuario?.token) return;
     // Límites en hora local (no UTC) para que "hoy" y "este mes" coincidan con el turno real
-    const hoyISO    = encodeURIComponent(inicioDiaLocalISO());
-    const inicioMes = encodeURIComponent(inicioMesLocalISO());
+    // Se cuenta por fecha REAL de la atención (fecha_atencion), no por la de registro
+    const hoyFecha  = hoyLocal();
+    const inicioMes = fechaLocal(inicioMesLocalISO());
     Promise.all([
       sb("contenedores_medicamentos?deleted_at=is.null&select=tipo,nombre,stock,minimo,fecha_vencimiento,nombre_insumo,cajon,unidad", {}, usuario.token),
-      sb(`atenciones_medicas?created_at=gte.${hoyISO}&deleted_at=is.null&select=id`, {}, usuario.token),
-      sb(`atenciones_medicas?created_at=gte.${inicioMes}&deleted_at=is.null&select=id`, {}, usuario.token),
+      sb(`atenciones_medicas?fecha_atencion=eq.${hoyFecha}&deleted_at=is.null&select=id`, {}, usuario.token),
+      sb(`atenciones_medicas?fecha_atencion=gte.${inicioMes}&deleted_at=is.null&select=id`, {}, usuario.token),
     ]).then(([data, hoy, mes]) => {
       if (data) {
         setCarrosDB(data.filter(i => i.tipo === "carro"));
@@ -317,14 +318,14 @@ export function Dashboard({ carros, usuario, esAdmin, permisos, onNavigate }) {
       {/* ── KPI operacional — todos los usuarios ───────────── */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
-          label="Atenciones hoy"
+          label="Atenciones hoy (todos los eventos)"
           value={atencionesHoy ?? "—"}
           icon={CalendarDays}
           accent={C.green}
           onClick={() => onNavigate?.("atenciones")}
         />
         <StatCard
-          label="Atenciones este mes"
+          label="Atenciones este mes (todos los eventos)"
           value={atencionesMes ?? "—"}
           icon={CalendarDays}
           accent={C.blue}
