@@ -17,7 +17,6 @@ export function VistaBolsosMedicamentos({ usuario }) {
     // Si es admin, cargar todos los bolsos
     if (esAdmin) {
       const data = await sb('contenedores_medicamentos?tipo=eq.bolso&select=*', {}, usuario?.token);
-      console.log("DEBUG Bolsos (Admin):", data);
       if (data) {
         setBolsos(data);
         setBolsosPermitidos(['Bolso 1', 'Bolso 2', 'Bolso 3']);
@@ -26,7 +25,6 @@ export function VistaBolsosMedicamentos({ usuario }) {
     } else {
       // Si es profesional, obtener eventos donde está asignado
       const eventos = await sb('equipos_evento?estado=eq.activo', {}, usuario?.token);
-      console.log("DEBUG Eventos activos:", eventos);
 
       let bolsosAsignados = [];
       if (eventos) {
@@ -45,7 +43,6 @@ export function VistaBolsosMedicamentos({ usuario }) {
 
       // Eliminar duplicados
       bolsosAsignados = [...new Set(bolsosAsignados)];
-      console.log("DEBUG Bolsos asignados al usuario:", bolsosAsignados);
       setBolsosPermitidos(bolsosAsignados);
 
       // Cargar solo los bolsos asignados
