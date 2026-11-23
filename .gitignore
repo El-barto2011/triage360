@@ -27,3 +27,7 @@ src/_backups/
 src/*.backup
 src/*.backup_email
 src/*.bak*
+
+# configuración local de Claude Code (permisos por máquina)
+.claude/settings.local.json
+.claude/settings.local.json.copia-antes-de-actualizar
